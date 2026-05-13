@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Питання з безпеки
+    url: https://github.com/OlexiyOdarchuk/go-monobank-sdk/security/advisories/new
+    about: Приватний звіт про вразливість через GitHub Security Advisories
+  - name: Документація monobank API
+    url: https://api.monobank.ua/docs/
+    about: Питання про сам API (а не SDK) — звертайтеся до monobank

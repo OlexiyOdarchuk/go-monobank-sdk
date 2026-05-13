@@ -7,6 +7,15 @@
 
 ## [Unreleased]
 
+### Added
+
+- `CONTRIBUTING.md` — гайд для зовнішніх контриб'юторів.
+- `.github/CODEOWNERS` — авто-reviewer на всі PR.
+- `.github/dependabot.yml` — щотижневі апдейти Go-модулів і GitHub Actions.
+- `.github/ISSUE_TEMPLATE/` — шаблони для bug report / feature request
+  + конфіг із посиланням на приватний звіт безпеки.
+- `.github/PULL_REQUEST_TEMPLATE.md` — чек-лист для PR.
+
 ## [0.1.1] — 2026-05-14
 
 ### Added
