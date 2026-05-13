@@ -293,13 +293,67 @@ short, _ := cli.ByShortID(ctx, "clientIdFromShareLink")
 ### Базовий клієнт ([root])
 
 - `monobank.New(opts...)` — `*http.Client`, `HTTPDoer`, base URL, retry,
-  auth, slog-логер, request/response hooks.
+  auth, slog-логер, request/response hooks, клієнтський rate limiter.
 - `WithRetry(attempts, base, max)` — експонентний бекоф з full jitter,
   повага до `Retry-After`, ретраїться лише на 5xx/429.
+- `WithRateLimiter(RateLimiter)` — клієнтський throttle (див. розділ
+  «Rate limits» нижче).
 - `APIError` — типізована помилка з методом, URL, отриманим/очікуваним
-  статусом і першими 256 байтами body.
+  статусом, розпарсеним `ErrorDescription` і сирим body.
 - `WithRequestHook` / `WithResponseHook` — підключіть власні метрики чи
   трейсинг без замін транспорту.
+
+### Rate limits
+
+Mono обмежує більшість endpoint-ів — наприклад, `/personal/client-info`
+і `/personal/statement/{account}/…` дозволяють лише 1 виклик на 60 секунд
+(на токен/акаунт відповідно). Поза лімітом сервер повертає `429` з
+`Retry-After`, який `WithRetry` поважає автоматично.
+
+Щоб не вистрілити в `429` з самого початку, додайте `WithRateLimiter`:
+
+```go
+import (
+    "time"
+
+    monobank "github.com/OlexiyOdarchuk/go-monobank-sdk"
+    "github.com/OlexiyOdarchuk/go-monobank-sdk/personal"
+)
+
+lim := monobank.NewLimiter(time.Minute, 1) // 1 запит / 60 с
+cli := personal.New(token,
+    monobank.WithRateLimiter(lim),
+    monobank.WithRetry(3, 0, 0), // на випадок, якщо все одно прилетить 429
+)
+```
+
+`Wait` викликається один раз на логічний `Do` (а не на кожен retry),
+тож токен не витрачається повторно. Сигнатура `RateLimiter.Wait(ctx)`
+сумісна з `*golang.org/x/time/rate.Limiter` — підставляйте, якщо вам
+потрібні дрібніші налаштування.
+
+Для per-account обмежень (виписка по кожному рахунку — окремий ліміт)
+тримайте окремий `*Limiter` на акаунт, або реалізуйте власний
+`RateLimiter` із dispatch-логікою.
+
+### Структуровані помилки
+
+Усі personal/corporate/business/acquiring API повертають помилки у форматі
+`{"errorDescription": "..."}`. SDK розпарсює їх у поле `APIError.ErrorDescription`:
+
+```go
+_, err := cli.ClientInfo(ctx)
+var apiErr *monobank.APIError
+if errors.As(err, &apiErr) {
+    if apiErr.StatusCode == http.StatusForbidden {
+        log.Printf("token rejected: %s", apiErr.ErrorDescription)
+    }
+    // apiErr.Body — оригінальні байти, якщо потрібен власний парсинг.
+}
+```
+
+`installment` має власний формат і власний `installment.APIError` з полями
+`Message`, `TraceID`.
 
 ### `bank` — публічні endpoint-и
 
@@ -389,6 +443,9 @@ sub-module, щоб OTel не тягнувся у проєкти, які його
 
 Wire-ідентифікатори (HTTP-заголовки, JSON-ключі) лишаються англійською —
 як це бачить власне API.
+
+- [`CHANGELOG.md`](CHANGELOG.md) — історія релізів (Keep a Changelog).
+- [`SECURITY.md`](SECURITY.md) — як приватно повідомити про вразливість.
 
 ## Сумісність
 
