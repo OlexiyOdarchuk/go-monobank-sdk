@@ -1,0 +1,50 @@
+name: CI
+on:
+  push:
+    branches: [main]
+    tags: [v*]
+  pull_request:
+
+jobs:
+  test:
+    name: test (${{ matrix.go }})
+    strategy:
+      fail-fast: false
+      matrix:
+        go: ['1.23.x', '1.24.x', '1.25.x', '1.26.x']
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ matrix.go }}
+          cache: true
+      - name: gofmt
+        run: |
+          files=$(gofmt -l .)
+          if [ -n "$files" ]; then
+            echo "::error::Unformatted files (run gofmt -w):"
+            echo "$files"
+            exit 1
+          fi
+      - run: go vet ./...
+      - name: build examples
+        # Surface example-program breakage as a distinct step even though
+        # `go test ./...` already compiles them — keeps the signal obvious
+        # and fast-fails before the (slower) test run.
+        run: go build ./examples/...
+      - run: go test -race -coverprofile=coverage.txt ./...
+      - name: test otelmonobank sub-module
+        # otelmonobank tracks go.opentelemetry.io/otel which requires
+        # Go 1.25+; older toolchains skip this step.
+        if: matrix.go == '1.25.x' || matrix.go == '1.26.x'
+        run: |
+          cd otelmonobank
+          go vet ./...
+          go test -race ./...
+      - if: matrix.go == '1.24.x'
+        uses: codecov/codecov-action@v5
+        with:
+          files: ./coverage.txt
+          token: ${{ secrets.CODECOV_TOKEN }}
+          fail_ci_if_error: false

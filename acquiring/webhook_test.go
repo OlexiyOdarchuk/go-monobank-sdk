@@ -1,0 +1,145 @@
+package acquiring_test
+
+import (
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/sha256"
+	"crypto/x509"
+	"encoding/base64"
+	"encoding/pem"
+	"testing"
+
+	"github.com/OlexiyOdarchuk/go-monobank-sdk/acquiring"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
+
+// genKey генерує тестовий ECDSA P-256 keypair і повертає приватний ключ
+// разом зі значенням, яке Mono кладе у поле `key` відповіді
+// /api/merchant/pubkey: base64(PEM(SPKI)).
+func genKey(t *testing.T) (*ecdsa.PrivateKey, []byte) {
+	t.Helper()
+	priv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	require.NoError(t, err)
+	derPub, err := x509.MarshalPKIXPublicKey(&priv.PublicKey)
+	require.NoError(t, err)
+	pemPub := pem.EncodeToMemory(&pem.Block{Type: "PUBLIC KEY", Bytes: derPub})
+	keyField := []byte(base64.StdEncoding.EncodeToString(pemPub))
+	return priv, keyField
+}
+
+// signBody підписує body тим самим алгоритмом, який ми очікуємо від Mono.
+func signBody(t *testing.T, priv *ecdsa.PrivateKey, body []byte) string {
+	t.Helper()
+	hash := sha256.Sum256(body)
+	sig, err := ecdsa.SignASN1(rand.Reader, priv, hash[:])
+	require.NoError(t, err)
+	return base64.StdEncoding.EncodeToString(sig)
+}
+
+func TestParsePubKey_roundTrip(t *testing.T) {
+	priv, keyField := genKey(t)
+
+	pub, err := acquiring.ParsePubKey(keyField)
+	require.NoError(t, err)
+	assert.True(t, pub.Equal(&priv.PublicKey))
+}
+
+func TestServerKey_Public(t *testing.T) {
+	priv, keyField := genKey(t)
+
+	sk := &acquiring.ServerKey{Key: string(keyField)}
+	pub, err := sk.Public()
+	require.NoError(t, err)
+	assert.True(t, pub.Equal(&priv.PublicKey))
+}
+
+func TestServerKey_Public_nil(t *testing.T) {
+	var sk *acquiring.ServerKey
+	_, err := sk.Public()
+	assert.ErrorIs(t, err, acquiring.ErrMissingPubKey)
+}
+
+func TestParsePubKey_emptyInput(t *testing.T) {
+	_, err := acquiring.ParsePubKey(nil)
+	assert.ErrorIs(t, err, acquiring.ErrInvalidPubKey)
+}
+
+func TestParsePubKey_notBase64(t *testing.T) {
+	_, err := acquiring.ParsePubKey([]byte("!!!not base64!!!"))
+	assert.ErrorIs(t, err, acquiring.ErrInvalidPubKey)
+}
+
+func TestParsePubKey_notPEM(t *testing.T) {
+	// Валідна base64 ("abc"), але всередині немає PEM-блоку.
+	_, err := acquiring.ParsePubKey([]byte(base64.StdEncoding.EncodeToString([]byte("not a PEM"))))
+	assert.ErrorIs(t, err, acquiring.ErrInvalidPubKey)
+}
+
+func TestParsePubKey_wrongAlgorithm(t *testing.T) {
+	// PEM з RSA-ключем — не ECDSA, має падати.
+	rsaPriv, err := rsa.GenerateKey(rand.Reader, 2048)
+	require.NoError(t, err)
+	derPub, err := x509.MarshalPKIXPublicKey(&rsaPriv.PublicKey)
+	require.NoError(t, err)
+	pemPub := pem.EncodeToMemory(&pem.Block{Type: "PUBLIC KEY", Bytes: derPub})
+	keyField := []byte(base64.StdEncoding.EncodeToString(pemPub))
+
+	_, err = acquiring.ParsePubKey(keyField)
+	assert.ErrorIs(t, err, acquiring.ErrInvalidPubKey)
+}
+
+func TestVerifyWebhook_validSignature(t *testing.T) {
+	priv, _ := genKey(t)
+	body := []byte(`{"invoiceId":"i-1","status":"success","amount":1000,"ccy":980}`)
+
+	sig := signBody(t, priv, body)
+	require.NoError(t, acquiring.VerifyWebhook(&priv.PublicKey, body, sig))
+}
+
+func TestVerifyWebhook_tamperedBody(t *testing.T) {
+	priv, _ := genKey(t)
+	body := []byte(`{"invoiceId":"i-1","status":"success","amount":1000,"ccy":980}`)
+	sig := signBody(t, priv, body)
+
+	tampered := []byte(`{"invoiceId":"i-1","status":"success","amount":9999,"ccy":980}`)
+	err := acquiring.VerifyWebhook(&priv.PublicKey, tampered, sig)
+	assert.ErrorIs(t, err, acquiring.ErrBadSignature)
+}
+
+func TestVerifyWebhook_garbageSignature(t *testing.T) {
+	priv, _ := genKey(t)
+	body := []byte(`{}`)
+
+	// Validна base64, але невалідний підпис.
+	err := acquiring.VerifyWebhook(&priv.PublicKey, body, "AAAA")
+	assert.ErrorIs(t, err, acquiring.ErrBadSignature)
+}
+
+func TestVerifyWebhook_badBase64(t *testing.T) {
+	priv, _ := genKey(t)
+	err := acquiring.VerifyWebhook(&priv.PublicKey, []byte(`{}`), "!!!not base64!!!")
+	assert.ErrorIs(t, err, acquiring.ErrBadSignatureEncoding)
+}
+
+func TestVerifyWebhook_nilKey(t *testing.T) {
+	err := acquiring.VerifyWebhook(nil, []byte(`{}`), "AAAA")
+	assert.ErrorIs(t, err, acquiring.ErrMissingPubKey)
+}
+
+func TestParseWebhook(t *testing.T) {
+	body := []byte(`{"invoiceId":"i-42","status":"success","amount":4200,"ccy":980,"finalAmount":4200,"createdDate":"2026-01-15T10:00:00Z"}`)
+
+	out, err := acquiring.ParseWebhook(body)
+	require.NoError(t, err)
+	assert.Equal(t, "i-42", out.InvoiceID)
+	assert.Equal(t, acquiring.InvoiceSuccess, out.Status)
+	assert.Equal(t, int64(4200), out.Amount.Minor)
+}
+
+func TestParseWebhook_malformed(t *testing.T) {
+	_, err := acquiring.ParseWebhook([]byte(`{not json}`))
+	require.Error(t, err)
+}
