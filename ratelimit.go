@@ -91,3 +91,83 @@ func (l *Limiter) Wait(ctx context.Context) error {
 		}
 	}
 }
+
+// limiterKeyType — приватний тип ключа контексту, щоб уникнути колізій
+// з ключами інших пакетів.
+type limiterKeyType struct{}
+
+// WithLimiterKey повертає копію ctx із key, який [KeyedLimiter] використає
+// для вибору відповідної per-key корзини. Якщо ключа в контексті нема,
+// KeyedLimiter трактує запит як "" (спільна дефолтна корзина).
+//
+//	ctx = monobank.WithLimiterKey(ctx, accountID)
+//	cli.Transactions(ctx, accountID, from, to)
+func WithLimiterKey(ctx context.Context, key string) context.Context {
+	return context.WithValue(ctx, limiterKeyType{}, key)
+}
+
+// limiterKeyFrom повертає ключ, прокладений [WithLimiterKey], або "".
+func limiterKeyFrom(ctx context.Context) string {
+	v, _ := ctx.Value(limiterKeyType{}).(string)
+	return v
+}
+
+// KeyedLimiter ліниво створює окремий [Limiter] на кожен ключ — типово
+// це accountID, бо Mono обмежує /personal/statement/{account}/… незалежно
+// для кожного рахунку. Реалізує [RateLimiter]: ключ береться з контексту
+// через [WithLimiterKey].
+//
+//	klim := monobank.NewKeyedLimiter(time.Minute, 1)
+//	cli := personal.New(token, monobank.WithRateLimiter(klim))
+//
+//	for _, acc := range info.Accounts {
+//	    ctx := monobank.WithLimiterKey(ctx, acc.ID)
+//	    txs, err := cli.Transactions(ctx, acc.ID, from, to)
+//	    // …
+//	}
+//
+// Безпечний для конкурентного використання.
+type KeyedLimiter struct {
+	every time.Duration
+	burst int
+
+	mu       sync.Mutex
+	limiters map[string]*Limiter
+}
+
+// NewKeyedLimiter повертає лімітер, що для кожного унікального ключа
+// створює власну корзину з параметрами every / burst (як [NewLimiter]).
+func NewKeyedLimiter(every time.Duration, burst int) *KeyedLimiter {
+	if burst < 1 {
+		burst = 1
+	}
+	return &KeyedLimiter{
+		every:    every,
+		burst:    burst,
+		limiters: make(map[string]*Limiter),
+	}
+}
+
+// WaitKey блокує до моменту, коли в корзині для key буде доступний токен.
+// Зручно, коли користувач не хоче пробрасувати ключ через контекст.
+func (k *KeyedLimiter) WaitKey(ctx context.Context, key string) error {
+	return k.bucket(key).Wait(ctx)
+}
+
+// Wait — реалізація [RateLimiter]. Витягує ключ із контексту через
+// [WithLimiterKey]; якщо ключа нема — використовує спільну корзину з
+// ключем "".
+func (k *KeyedLimiter) Wait(ctx context.Context) error {
+	return k.WaitKey(ctx, limiterKeyFrom(ctx))
+}
+
+func (k *KeyedLimiter) bucket(key string) *Limiter {
+	k.mu.Lock()
+	defer k.mu.Unlock()
+	lim, ok := k.limiters[key]
+	if !ok {
+		lim = NewLimiter(k.every, k.burst)
+		k.limiters[key] = lim
+	}
+	return lim
+}

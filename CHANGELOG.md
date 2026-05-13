@@ -9,6 +9,12 @@
 
 ### Added
 
+- `monobank.KeyedLimiter` — per-key token bucket для endpoint-ів із
+  per-account/per-resource лімітами (наприклад,
+  `/personal/statement/{account}/…`). Реалізує `RateLimiter`; ключ
+  береться з контексту через `monobank.WithLimiterKey`.
+- `monobank.WithLimiterKey(ctx, key)` — context helper для прокидання
+  ключа в `KeyedLimiter`.
 - `CONTRIBUTING.md` — гайд для зовнішніх контриб'юторів.
 - `.github/CODEOWNERS` — авто-reviewer на всі PR.
 - `.github/dependabot.yml` — щотижневі апдейти Go-модулів і GitHub Actions.

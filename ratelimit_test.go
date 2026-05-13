@@ -4,6 +4,8 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -140,4 +142,70 @@ func TestWithRateLimiter_PropagatesError(t *testing.T) {
 func TestWithRateLimiter_NilIgnored(t *testing.T) {
 	c := New(WithRateLimiter(nil))
 	assert.Nil(t, c.limiter)
+}
+
+// --- KeyedLimiter ---
+
+func TestKeyedLimiter_PerKeyIndependent(t *testing.T) {
+	klim := NewKeyedLimiter(time.Hour, 1)
+	require.NoError(t, klim.WaitKey(context.Background(), "a"))
+	// Different key → different bucket, must not block.
+	require.NoError(t, klim.WaitKey(context.Background(), "b"))
+
+	// Same key again → would block. Use short ctx to confirm.
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
+	defer cancel()
+	assert.ErrorIs(t, klim.WaitKey(ctx, "a"), context.DeadlineExceeded)
+}
+
+func TestKeyedLimiter_ReadsKeyFromContext(t *testing.T) {
+	klim := NewKeyedLimiter(time.Hour, 1)
+	ctxA := WithLimiterKey(context.Background(), "acc-A")
+	ctxB := WithLimiterKey(context.Background(), "acc-B")
+
+	require.NoError(t, klim.Wait(ctxA))
+	require.NoError(t, klim.Wait(ctxB)) // separate bucket
+}
+
+func TestKeyedLimiter_NoKeyUsesDefault(t *testing.T) {
+	klim := NewKeyedLimiter(time.Hour, 2)
+	// Both calls share the "" bucket; burst=2 covers them.
+	require.NoError(t, klim.Wait(context.Background()))
+	require.NoError(t, klim.Wait(context.Background()))
+}
+
+func TestKeyedLimiter_LazyCreation(t *testing.T) {
+	klim := NewKeyedLimiter(time.Second, 1)
+	assert.Empty(t, klim.limiters, "no buckets created until first Wait")
+	_ = klim.WaitKey(context.Background(), "x")
+	assert.Len(t, klim.limiters, 1)
+	_ = klim.WaitKey(context.Background(), "y")
+	assert.Len(t, klim.limiters, 2)
+}
+
+func TestKeyedLimiter_ImplementsRateLimiter(t *testing.T) {
+	var _ RateLimiter = (*KeyedLimiter)(nil)
+}
+
+func TestKeyedLimiter_ConcurrentSafe(t *testing.T) {
+	klim := NewKeyedLimiter(0, 1) // unlimited, just stress map access
+	var wg sync.WaitGroup
+	for i := range 50 {
+		wg.Add(1)
+		go func(n int) {
+			defer wg.Done()
+			key := "k" + strconv.Itoa(n%5)
+			for range 10 {
+				_ = klim.WaitKey(context.Background(), key)
+			}
+		}(i)
+	}
+	wg.Wait()
+	assert.LessOrEqual(t, len(klim.limiters), 5)
+}
+
+func TestWithLimiterKey_RoundTrip(t *testing.T) {
+	ctx := WithLimiterKey(context.Background(), "abc")
+	assert.Equal(t, "abc", limiterKeyFrom(ctx))
+	assert.Equal(t, "", limiterKeyFrom(context.Background()))
 }
