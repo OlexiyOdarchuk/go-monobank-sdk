@@ -67,6 +67,7 @@ type Client struct {
 	auth    auth.Authorizer
 	baseURL *url.URL
 	retry   retryPolicy
+	limiter RateLimiter
 
 	logger *slog.Logger
 	onReq  func(*http.Request)
@@ -126,6 +127,12 @@ func (c Client) Do(req *http.Request, v any, expectedStatusCodes ...int) error {
 	if c.auth != nil {
 		if err := c.auth.SetAuth(req); err != nil {
 			return fmt.Errorf("SetAuth: %w", err)
+		}
+	}
+
+	if c.limiter != nil {
+		if err := c.limiter.Wait(req.Context()); err != nil {
+			return err
 		}
 	}
 

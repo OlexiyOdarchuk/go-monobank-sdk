@@ -155,6 +155,29 @@ func WithRetry(attempts int, baseDelay, maxDelay time.Duration) Option {
 	}
 }
 
+// WithRateLimiter ставить клієнтський throttle. [RateLimiter.Wait]
+// викликається ОДИН раз на логічний запит (до retry-циклу) — токен не
+// витрачається повторно при ретраях. nil ігнорується.
+//
+// Mono має жорсткі ліміти (наприклад, /personal/client-info — 1 виклик
+// на 60 с); без лімітера SDK покладається лише на серверні 429
+// + [WithRetry] backoff. Локальний лімітер допомагає не вистрілити в
+// 429 з самого початку.
+//
+//	lim := monobank.NewLimiter(time.Minute, 1)
+//	cli := personal.New(token, monobank.WithRateLimiter(lim))
+//
+// Можна підставити будь-який *golang.org/x/time/rate.Limiter — його
+// сигнатура Wait(ctx) збігається з [RateLimiter].
+func WithRateLimiter(l RateLimiter) Option {
+	return func(c *Client) {
+		if l == nil {
+			return
+		}
+		c.limiter = l
+	}
+}
+
 // New повертає базовий [Client], зібраний із переданих опцій. Без
 // [WithAuth] клієнт використовує [auth.Public] (no-op) — підходить для
 // публічних bank-endpoint-ів через підпакет bank, але не для personal,
