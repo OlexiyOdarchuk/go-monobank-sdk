@@ -32,6 +32,7 @@
   `parseErrorDescription`, `bank.Transaction.UnmarshalJSON`,
   `money.Money.{Add,Scale,String}`, `webhook.{Verify,Parse}`. Запуск —
   `go test -bench=. -benchmem ./...`.
+- Англомовний `README.en.md` із language switcher на верху обох README.
 - `CONTRIBUTING.md` — гайд для зовнішніх контриб'юторів.
 - `.github/CODEOWNERS` — авто-reviewer на всі PR.
 - `.github/dependabot.yml` — щотижневі апдейти Go-модулів і GitHub Actions.
