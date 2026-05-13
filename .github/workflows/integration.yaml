@@ -1,0 +1,21 @@
+name: Integration
+
+# Runs only on a weekly schedule and on manual dispatch — NOT on every PR.
+# These tests hit the live api.monobank.ua. /bank/currency is rate-limited
+# at ~1 req per 5 min per IP, so we keep cadence low.
+on:
+  schedule:
+    - cron: '17 6 * * 1'  # every Monday 06:17 UTC
+  workflow_dispatch:
+
+jobs:
+  integration:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25.x'
+          cache: true
+      - name: bank — live smoke
+        run: go test -tags=integration -race -timeout=2m -run Integration ./bank/...

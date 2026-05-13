@@ -15,6 +15,10 @@
   береться з контексту через `monobank.WithLimiterKey`.
 - `monobank.WithLimiterKey(ctx, key)` — context helper для прокидання
   ключа в `KeyedLimiter`.
+- `bank/integration_test.go` (`//go:build integration`) — smoke-тести
+  `Rates` і `ServerKey` проти живого `api.monobank.ua`.
+- `.github/workflows/integration.yaml` — щотижневий cron + ручний
+  `workflow_dispatch` для інтеграційних тестів (поза основним PR-pipeline).
 - `CONTRIBUTING.md` — гайд для зовнішніх контриб'юторів.
 - `.github/CODEOWNERS` — авто-reviewer на всі PR.
 - `.github/dependabot.yml` — щотижневі апдейти Go-модулів і GitHub Actions.
