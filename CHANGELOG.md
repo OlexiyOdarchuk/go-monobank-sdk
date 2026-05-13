@@ -28,6 +28,10 @@
   `parseErrorDescription`, `parseRetryAfter`, `webhook.Parse`,
   `webhook.Verify`, `money.Money.UnmarshalJSON`, `acquiring.ParsePubKey`,
   `acquiring.ParseWebhook`. Запуск — `go test -fuzz=Fuzz... -fuzztime=30s`.
+- Бенчмарки гарячих шляхів: `Limiter.Wait`/`KeyedLimiter.Wait`,
+  `parseErrorDescription`, `bank.Transaction.UnmarshalJSON`,
+  `money.Money.{Add,Scale,String}`, `webhook.{Verify,Parse}`. Запуск —
+  `go test -bench=. -benchmem ./...`.
 - `CONTRIBUTING.md` — гайд для зовнішніх контриб'юторів.
 - `.github/CODEOWNERS` — авто-reviewer на всі PR.
 - `.github/dependabot.yml` — щотижневі апдейти Go-модулів і GitHub Actions.
