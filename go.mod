@@ -5,7 +5,7 @@ go 1.23
 require (
 	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.4.1
 	github.com/stretchr/testify v1.11.1
-	github.com/vtopc/epoch v1.3.0
+	github.com/vtopc/epoch v1.6.0
 )
 
 require (
