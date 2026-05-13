@@ -3,6 +3,7 @@
 [![Go Reference](https://pkg.go.dev/badge/github.com/OlexiyOdarchuk/go-monobank-sdk.svg)](https://pkg.go.dev/github.com/OlexiyOdarchuk/go-monobank-sdk)
 [![CI](https://github.com/OlexiyOdarchuk/go-monobank-sdk/actions/workflows/ci.yaml/badge.svg)](https://github.com/OlexiyOdarchuk/go-monobank-sdk/actions/workflows/ci.yaml)
 [![codecov](https://codecov.io/gh/OlexiyOdarchuk/go-monobank-sdk/branch/main/graph/badge.svg)](https://codecov.io/gh/OlexiyOdarchuk/go-monobank-sdk)
+[![Go Report Card](https://goreportcard.com/badge/github.com/OlexiyOdarchuk/go-monobank-sdk)](https://goreportcard.com/report/github.com/OlexiyOdarchuk/go-monobank-sdk)
 [![MIT License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 Повноцінний Go SDK для всіх публічних API monobank: **personal**, **corporate**
