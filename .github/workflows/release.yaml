@@ -1,0 +1,47 @@
+name: Release
+
+# Runs on every v* tag push. Extracts the matching section from
+# CHANGELOG.md and creates a GitHub Release with that body. The tag must
+# already point at the commit you want released — this workflow does not
+# create tags.
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Extract changelog section
+        id: changelog
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          # Pull lines between the matching version header and the next ##.
+          # Example match: ## [0.1.1] — 2026-05-14
+          awk -v v="$version" '
+            $0 ~ "^## \\[" v "\\]" { found = 1; next }
+            found && /^## \[/ { exit }
+            found { print }
+          ' CHANGELOG.md > release_notes.md
+
+          if [ ! -s release_notes.md ]; then
+            echo "::warning::No CHANGELOG section for $version — using fallback body"
+            printf 'Release %s.\n\nSee [CHANGELOG.md](CHANGELOG.md) for details.\n' "$version" > release_notes.md
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            --title "v${{ steps.changelog.outputs.version }}" \
+            --notes-file release_notes.md \
+            --verify-tag

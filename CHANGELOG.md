@@ -33,6 +33,14 @@
   `money.Money.{Add,Scale,String}`, `webhook.{Verify,Parse}`. Запуск —
   `go test -bench=. -benchmem ./...`.
 - Англомовний `README.en.md` із language switcher на верху обох README.
+- `.github/workflows/release.yaml` — на push тегу `v*` створює GitHub
+  Release з body, витягнутим із відповідної секції `CHANGELOG.md`.
+- `.editorconfig` для уніфікованого indentation/EOL у редакторах.
+
+### Changed
+
+- `.codecov.yml` — patch threshold піднятий з 75% до 80%; додано
+  виключення `**/*_test.go` і `monobanktest/**` з обчислення покриття.
 - `CONTRIBUTING.md` — гайд для зовнішніх контриб'юторів.
 - `.github/CODEOWNERS` — авто-reviewer на всі PR.
 - `.github/dependabot.yml` — щотижневі апдейти Go-модулів і GitHub Actions.

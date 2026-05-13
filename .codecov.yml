@@ -1,15 +1,17 @@
 ignore:
   - "examples/**"
+  - "**/*_test.go"
+  - "monobanktest/**"
 
 coverage:
   status:
     project:
       default:
         target: auto
-        threshold: 1%
+        threshold: 0.5%
     patch:
       default:
-        target: 75%
+        target: 80%
         threshold: 5%
 
 comment:
