@@ -19,6 +19,11 @@
   `Rates` і `ServerKey` проти живого `api.monobank.ua`.
 - `.github/workflows/integration.yaml` — щотижневий cron + ручний
   `workflow_dispatch` для інтеграційних тестів (поза основним PR-pipeline).
+- Godoc `Example`-функції для root (`NewLimiter`, `NewKeyedLimiter`,
+  `APIError`), `bank` (`Rates`, `Rates.Convert`, `ServerKey`), `jar`
+  (`ByLongID`, `ByShortID`), `installment` (`New`, `VerifyCallback`),
+  `money` (`New`, `Add`, `MarshalJSON`) — рендеряться інлайн на
+  pkg.go.dev поруч із сигнатурами.
 - `CONTRIBUTING.md` — гайд для зовнішніх контриб'юторів.
 - `.github/CODEOWNERS` — авто-reviewer на всі PR.
 - `.github/dependabot.yml` — щотижневі апдейти Go-модулів і GitHub Actions.
