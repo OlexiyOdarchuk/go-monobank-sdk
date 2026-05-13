@@ -17,10 +17,14 @@
 git clone git@github.com:OlexiyOdarchuk/go-monobank-sdk.git
 cd go-monobank-sdk
 go mod download
-go test -race ./...
+make ci          # fmt-check + vet + test-race
 ```
 
 Потрібен Go 1.23+. Для `otelmonobank` (окремий submodule) — Go 1.25+.
+
+`make help` (або просто `make`) — список усіх dev-таргетів: `test`,
+`test-race`, `cover`, `cover-html`, `lint`, `fmt`, `vet`, `bench`,
+`fuzz`, `fuzz-all`, `tidy`, `integration`.
 
 Опційно: `flake.nix` дає готове середовище через `nix develop` (Go,
 golangci-lint, gh, jq).

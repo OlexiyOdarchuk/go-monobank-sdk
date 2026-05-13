@@ -1,0 +1,20 @@
+# Force LF line endings on all text files regardless of the host OS.
+# Stops Windows clones from injecting CRLF, which would break gofmt
+# checks and the integration.yaml `awk` extractor in the release flow.
+* text=auto eol=lf
+
+# Binary types — never touch.
+*.png  binary
+*.jpg  binary
+*.jpeg binary
+*.gif  binary
+*.pdf  binary
+*.ico  binary
+*.zip  binary
+*.gz   binary
+
+# Linguist hints for GitHub: testdata and fixtures shouldn't dominate
+# the repo's "Languages" stats.
+**/testdata/** linguist-vendored
+**/fixtures/** linguist-vendored
+examples/**    linguist-documentation=false

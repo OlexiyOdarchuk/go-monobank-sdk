@@ -9,6 +9,13 @@
 
 ### Added
 
+- `Makefile` із загальними dev-таргетами: `make test`/`test-race`/`cover`/
+  `cover-html`/`bench`/`fuzz`/`fuzz-all`/`lint`/`fmt`/`vet`/`tidy`/`ci`/
+  `integration`. `make help` (default) — список усіх.
+- `.gitattributes` — фіксує `eol=lf` для всіх текстових файлів і
+  виключає `examples/` зі статистики мов GitHub.
+- `RELEASING.md` — гайд по випуску версії: чек-лист, SemVer, що робити
+  з поламаним тегом (`retract` directive).
 - `monobank.KeyedLimiter` — per-key token bucket для endpoint-ів із
   per-account/per-resource лімітами (наприклад,
   `/personal/statement/{account}/…`). Реалізує `RateLimiter`; ключ
@@ -36,17 +43,24 @@
 - `.github/workflows/release.yaml` — на push тегу `v*` створює GitHub
   Release з body, витягнутим із відповідної секції `CHANGELOG.md`.
 - `.editorconfig` для уніфікованого indentation/EOL у редакторах.
-
-### Changed
-
-- `.codecov.yml` — patch threshold піднятий з 75% до 80%; додано
-  виключення `**/*_test.go` і `monobanktest/**` з обчислення покриття.
 - `CONTRIBUTING.md` — гайд для зовнішніх контриб'юторів.
 - `.github/CODEOWNERS` — авто-reviewer на всі PR.
 - `.github/dependabot.yml` — щотижневі апдейти Go-модулів і GitHub Actions.
 - `.github/ISSUE_TEMPLATE/` — шаблони для bug report / feature request
   + конфіг із посиланням на приватний звіт безпеки.
 - `.github/PULL_REQUEST_TEMPLATE.md` — чек-лист для PR.
+
+### Changed
+
+- `.codecov.yml` — patch threshold піднятий з 75% до 80%; додано
+  виключення `**/*_test.go` і `monobanktest/**` з обчислення покриття.
+
+### Fixed
+
+- Деflake `auth.TestCorpSuite/Test_sign`: тест чекав фіксовану довжину
+  base64 (96 символів), але ASN.1 DER підпис ECDSA — змінної довжини
+  (8-72 байт), тож ~1% запусків падало. Тепер декодуємо і перевіряємо
+  структуру через `asn1.Unmarshal`.
 
 ## [0.1.1] — 2026-05-14
 
