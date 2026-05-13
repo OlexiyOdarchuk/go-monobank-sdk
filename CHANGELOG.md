@@ -24,6 +24,10 @@
   (`ByLongID`, `ByShortID`), `installment` (`New`, `VerifyCallback`),
   `money` (`New`, `Add`, `MarshalJSON`) — рендеряться інлайн на
   pkg.go.dev поруч із сигнатурами.
+- Fuzz-тести для парсерів і верифікаторів підпису:
+  `parseErrorDescription`, `parseRetryAfter`, `webhook.Parse`,
+  `webhook.Verify`, `money.Money.UnmarshalJSON`, `acquiring.ParsePubKey`,
+  `acquiring.ParseWebhook`. Запуск — `go test -fuzz=Fuzz... -fuzztime=30s`.
 - `CONTRIBUTING.md` — гайд для зовнішніх контриб'юторів.
 - `.github/CODEOWNERS` — авто-reviewer на всі PR.
 - `.github/dependabot.yml` — щотижневі апдейти Go-модулів і GitHub Actions.
