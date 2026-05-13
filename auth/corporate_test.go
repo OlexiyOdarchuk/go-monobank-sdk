@@ -1,7 +1,10 @@
 package auth
 
 import (
+	"encoding/asn1"
+	"encoding/base64"
 	"errors"
+	"math/big"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -75,7 +78,21 @@ func (s *CorpSuite) Test_sign() {
 
 	got, err := a.sign("1136239445", "p", "/personal/auth/request")
 	s.Require().NoError(err)
-	// Signature length is fixed at 96 base64 chars; the bytes themselves
-	// vary because ECDSA uses a fresh random nonce per call.
-	s.Assert().Len(got, 96)
+
+	// ECDSA signature is ASN.1 DER {R, S}: 6 bytes of envelope + R + S.
+	// R and S are 1-33 bytes each (32-byte coordinate, plus an optional
+	// leading 0x00 when the high bit is set). So raw DER is 8-72 bytes,
+	// which base64-encodes to 12-96 chars. Asserting an exact length
+	// produces a ~1% flake whenever R or S happens to start with 0x00.
+	raw, err := base64.StdEncoding.DecodeString(got)
+	s.Require().NoError(err, "sign() must return valid base64")
+	s.Assert().GreaterOrEqual(len(raw), 8)
+	s.Assert().LessOrEqual(len(raw), 72)
+
+	var sig struct{ R, S *big.Int }
+	rest, err := asn1.Unmarshal(raw, &sig)
+	s.Require().NoError(err, "sign() must return ASN.1 DER")
+	s.Assert().Empty(rest, "no trailing bytes after the signature")
+	s.Assert().NotNil(sig.R)
+	s.Assert().NotNil(sig.S)
 }
