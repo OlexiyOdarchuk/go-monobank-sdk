@@ -36,17 +36,49 @@ type HTTPDoer interface {
 // жодним зі статусів, які очікував викликач. Зберігає метод, повний
 // URL, отриманий і очікуваний статус-коди, плюс перші 256 символів body
 // для діагностики.
+//
+// Якщо тіло відповіді — це JSON виду {"errorDescription": "..."} (стандартний
+// формат помилок Mono для personal/corporate/business/acquiring API), то
+// поле [APIError.ErrorDescription] містить розпарсене повідомлення; у інших
+// випадках воно порожнє, а оригінальні байти залишаються в [APIError.Body].
 type APIError struct {
 	Method              string
 	URL                 string
 	StatusCode          int
 	ExpectedStatusCodes []int
-	Body                []byte
+	// ErrorDescription — значення поля errorDescription з JSON-тіла
+	// відповіді Mono, якщо тіло вдалося розпарсити; інакше порожнє.
+	ErrorDescription string
+	Body             []byte
 }
 
 func (e *APIError) Error() string {
+	detail := e.ErrorDescription
+	if detail == "" {
+		detail = truncate(e.Body, 256)
+	}
 	return fmt.Sprintf("%s %s: HTTP %d (expected %v): %s",
-		e.Method, e.URL, e.StatusCode, e.ExpectedStatusCodes, truncate(e.Body, 256))
+		e.Method, e.URL, e.StatusCode, e.ExpectedStatusCodes, detail)
+}
+
+// errorBody — JSON-форма помилки, яку повертають personal/corporate/
+// business/acquiring API Mono. Інші підпакети (наприклад, installment)
+// мають власні формати й використовують власні типи помилок.
+type errorBody struct {
+	ErrorDescription string `json:"errorDescription"`
+}
+
+// parseErrorDescription витягує errorDescription з JSON-тіла. Повертає
+// "" якщо тіло не JSON або поле відсутнє/порожнє.
+func parseErrorDescription(body []byte) string {
+	if len(body) == 0 {
+		return ""
+	}
+	var e errorBody
+	if err := json.Unmarshal(body, &e); err != nil {
+		return ""
+	}
+	return e.ErrorDescription
 }
 
 func truncate(b []byte, n int) string {
@@ -186,6 +218,7 @@ func (c Client) attempt(req *http.Request, v any, expectedStatusCodes []int) err
 			URL:                 req.URL.String(),
 			StatusCode:          resp.StatusCode,
 			ExpectedStatusCodes: expectedStatusCodes,
+			ErrorDescription:    parseErrorDescription(body),
 			Body:                body,
 		}
 		if isTransientStatus(resp.StatusCode) {
