@@ -65,14 +65,14 @@ func main() {
 
 	// 2. Створюємо заявку.
 	//
-	// TotalSum/Sum are float64 in the current installment package —
-	// see the known limitation in CHANGELOG; a typed Money wrapper
-	// is planned for v2. For now, keep sums to 2 decimal places so
-	// JSON-marshalled values match what Mono's sandbox expects.
+	// TotalSum/Sum/etc are installment.Money — exact decimal
+	// representation, no float64 precision loss. Build via NewMoney
+	// (hryvnia, kopecks) or MoneyFromMajor() for one-off literals.
+	totalSum := installment.NewMoney(2499, 99) // 2499.99 UAH
 	order, err := cli.CreateOrder(ctx, &installment.CreateOrderRequest{
 		StoreOrderID: storeOrderID,
 		ClientPhone:  phone,
-		TotalSum:     2499.99,
+		TotalSum:     totalSum,
 		Invoice: installment.CreateOrderInvoice{
 			Number: "INV-" + storeOrderID,
 			Date:   time.Now().Format("2006-01-02"),
@@ -80,7 +80,7 @@ func main() {
 		},
 		AvailablePrograms: []installment.Program{{AvailablePartsCount: []int{3, 6, 10}}},
 		Products: []installment.Product{
-			{Name: "Кит-набір для розробника", Count: 1, Sum: 2499.99},
+			{Name: "Кит-набір для розробника", Count: 1, Sum: totalSum},
 		},
 	})
 	if err != nil {

@@ -54,7 +54,7 @@ const (
 type CreateOrderRequest struct {
 	StoreOrderID                 string                        `json:"store_order_id"`
 	ClientPhone                  string                        `json:"client_phone"`
-	TotalSum                     float64                       `json:"total_sum"`
+	TotalSum                     Money                         `json:"total_sum"`
 	Invoice                      CreateOrderInvoice            `json:"invoice"`
 	AvailablePrograms            []Program                     `json:"available_programs"`
 	Products                     []Product                     `json:"products"`
@@ -81,17 +81,17 @@ type Program struct {
 
 // Product is one item in the order.
 type Product struct {
-	Name  string  `json:"name"`
-	Count int     `json:"count"`
-	Sum   float64 `json:"sum"`
+	Name  string `json:"name"`
+	Count int    `json:"count"`
+	Sum   Money  `json:"sum"`
 }
 
 // CreateAdditionalParams holds optional parameters of the create
 // request.
 type CreateAdditionalParams struct {
-	SellerPhone   string  `json:"seller_phone,omitempty"`
-	NDS           float64 `json:"nds,omitempty"`
-	ExtInitialSum float64 `json:"ext_initial_sum,omitempty"`
+	SellerPhone   string `json:"seller_phone,omitempty"`
+	NDS           Money  `json:"nds,omitempty"`
+	ExtInitialSum Money  `json:"ext_initial_sum,omitempty"`
 }
 
 // FinancialCompanyMerchantInfo holds the merchant's details for the
@@ -125,7 +125,7 @@ type OrderStateInfo struct {
 // OrderShortInfo is the response of /api/order/info (deprecated) and
 // /api/order/data.
 type OrderShortInfo struct {
-	TotalSum        float64       `json:"total_sum"`
+	TotalSum        Money         `json:"total_sum"`
 	Source          InvoiceSource `json:"source,omitempty"`
 	InvoiceNumber   string        `json:"invoice_number,omitempty"`
 	InvoiceDate     string        `json:"invoice_date,omitempty"`
@@ -139,8 +139,8 @@ type OrderShortInfo struct {
 
 // Reverse is a single refund in the OrderShortInfo.ReverseList.
 type Reverse struct {
-	Sum       float64 `json:"sum"`
-	Timestamp string  `json:"timestamp"`
+	Sum       Money  `json:"sum"`
+	Timestamp string `json:"timestamp"`
 }
 
 // CheckInstallmentsResponse is the response of /api/order/check/paid.
@@ -152,7 +152,7 @@ type CheckInstallmentsResponse struct {
 // ReturnRequest is the body of /api/order/return.
 type ReturnRequest struct {
 	OrderID           string                  `json:"order_id"`
-	Sum               float64                 `json:"sum"`
+	Sum               Money                   `json:"sum"`
 	StoreReturnID     string                  `json:"store_return_id"`
 	ReturnMoneyToCard bool                    `json:"return_money_to_card"`
 	AdditionalParams  *ReturnAdditionalParams `json:"additional_params,omitempty"`
@@ -160,7 +160,7 @@ type ReturnRequest struct {
 
 // ReturnAdditionalParams holds optional return parameters.
 type ReturnAdditionalParams struct {
-	NDS float64 `json:"nds,omitempty"`
+	NDS Money `json:"nds,omitempty"`
 }
 
 // ReturnResponse is the response of /api/order/return.
@@ -244,10 +244,10 @@ type ReportOrder struct {
 	InvoiceNumber      string  `json:"invoice_number"`
 	OrderDate          string  `json:"order_date"`
 	PayParts           int     `json:"pay_parts"`
-	CommissionPercent  float64 `json:"commission_percent"`
-	TotalSum           float64 `json:"total_sum"`
-	TransferredSum     float64 `json:"transferred_sum"`
-	Commission         float64 `json:"commission"`
+	CommissionPercent  float64 `json:"commission_percent"` // % rate, not money
+	TotalSum           Money   `json:"total_sum"`
+	TransferredSum     Money   `json:"transferred_sum"`
+	Commission         Money   `json:"commission"`
 	OperationTimestamp string  `json:"operation_timestamp"`
 	ODBContractNumber  string  `json:"odb_contract_number"`
 }
@@ -342,9 +342,9 @@ type InternationalPassport struct {
 
 // Invoice is the invoice in the guarantee letter.
 type Invoice struct {
-	InvoiceNumber string  `json:"invoice_number,omitempty"`
-	InvoiceDate   string  `json:"invoice_date,omitempty"`
-	InvoiceAmount float64 `json:"invoice_amount,omitempty"`
+	InvoiceNumber string `json:"invoice_number,omitempty"`
+	InvoiceDate   string `json:"invoice_date,omitempty"`
+	InvoiceAmount Money  `json:"invoice_amount,omitempty"`
 }
 
 // Payment holds the recipient's payment details.
@@ -358,10 +358,10 @@ type Payment struct {
 
 // Bank holds the creditor-bank information.
 type Bank struct {
-	Agreement           string  `json:"agreement,omitempty"`
-	AgreementDate       string  `json:"agreement_date,omitempty"`
-	CreditAmount        float64 `json:"credit_amount,omitempty"`
-	CustomerPayAmount   float64 `json:"customer_pay_amount,omitempty"`
+	Agreement           string `json:"agreement,omitempty"`
+	AgreementDate       string `json:"agreement_date,omitempty"`
+	CreditAmount        Money  `json:"credit_amount,omitempty"`
+	CustomerPayAmount   Money  `json:"customer_pay_amount,omitempty"`
 	ProductTypes        string  `json:"product_types,omitempty"`
 	BankID              string  `json:"bank_id,omitempty"`
 	BankName            string  `json:"bank_name,omitempty"`

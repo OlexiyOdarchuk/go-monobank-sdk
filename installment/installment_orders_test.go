@@ -35,7 +35,7 @@ func TestOrderData(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "s-2", out.StoreOrderID)
 	assert.Equal(t, "UA12", out.IBAN)
-	assert.InDelta(t, 2500.0, out.TotalSum, 1e-9)
+	assert.Equal(t, int64(250000), out.TotalSum.Kopecks) // 2500.00 UAH
 }
 
 func TestWithHTTPClient_overridesDefault(t *testing.T) {

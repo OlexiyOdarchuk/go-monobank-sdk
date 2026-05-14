@@ -113,14 +113,16 @@ func TestCreateOrder_success(t *testing.T) {
 	resp, err := cli.CreateOrder(context.Background(), &installment.CreateOrderRequest{
 		StoreOrderID: "ORD-1",
 		ClientPhone:  "+380501234561",
-		TotalSum:     2499.99,
+		TotalSum:     installment.NewMoney(2499, 99),
 		Invoice: installment.CreateOrderInvoice{
 			Number: "INV-1",
 			Date:   "2026-05-13",
 			Source: installment.SourceInternet,
 		},
 		AvailablePrograms: []installment.Program{{AvailablePartsCount: []int{3, 6}}},
-		Products:          []installment.Product{{Name: "Cat food", Count: 1, Sum: 2499.99}},
+		Products: []installment.Product{
+			{Name: "Cat food", Count: 1, Sum: installment.NewMoney(2499, 99)},
+		},
 	})
 	require.NoError(t, err)
 	assert.Equal(t, "fa4a8249-336e-4e6d-9b85-79bc8be62377", resp.OrderID)
@@ -181,7 +183,7 @@ func TestReturnOrder(t *testing.T) {
 	})
 	resp, err := cli.ReturnOrder(context.Background(), &installment.ReturnRequest{
 		OrderID:           "o",
-		Sum:               500,
+		Sum:               installment.NewMoney(500, 0),
 		StoreReturnID:     "RET-1",
 		ReturnMoneyToCard: true,
 	})
@@ -234,7 +236,9 @@ func TestDailyReport(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, orders, 1)
 	assert.Equal(t, "o", orders[0].OrderID)
-	assert.InDelta(t, 100.5, orders[0].TotalSum, 0.001)
+	assert.Equal(t, int64(10050), orders[0].TotalSum.Kopecks) // 100.50 UAH
+	assert.Equal(t, int64(9799), orders[0].TransferredSum.Kopecks)
+	assert.Equal(t, int64(251), orders[0].Commission.Kopecks)
 }
 
 func TestGuaranteeLetterPDF(t *testing.T) {
@@ -262,7 +266,7 @@ func TestGuaranteeLetterData_v1AndV2(t *testing.T) {
 	assert.Equal(t, "/api/order/data/for/guarantee/letter", path)
 	assert.Equal(t, "Mono", data.Header.FromOrganization)
 	require.NotNil(t, data.Expansion.Bank)
-	assert.InDelta(t, 1234.56, data.Expansion.Bank.CreditAmount, 0.001)
+	assert.Equal(t, int64(123456), data.Expansion.Bank.CreditAmount.Kopecks) // 1234.56 UAH
 
 	_, err = cli.GuaranteeLetterDataV2(context.Background(), &installment.OrderDataRequest{OrderID: "o"})
 	require.NoError(t, err)

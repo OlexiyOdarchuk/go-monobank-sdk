@@ -230,9 +230,9 @@
   - Виправити: chain — викликати попередній hook після власного.
   - Resolution:
 
-- [ ] **installment/types.go** — `float64` для грошей по всьому пакету.
+- [x] **installment/types.go** — `float64` для грошей по всьому пакету.
   - Виправити: ввести типовану `Money` обгортку з `MarshalJSON`/`UnmarshalJSON` (рендерить як decimal-string без втрат), застосувати у структурах. Це breaking change → новий мажорний реліз.
-  - Resolution: відкладено до v2 — це масштабний breaking-refactor усього пакета installment. У v1.3.0 БАГ помічено (float64 у Sum, TotalSum, Returns, Bank.CreditAmount), у CHANGELOG включено як known limitation.
+  - Resolution: BREAKING — новий тип `installment.Money` (int64 Kopecks) із exact-decimal MarshalJSON / UnmarshalJSON (string-based parsing, БЕЗ float64 у hot path). Конструктори: `NewMoney(hr, kop)`, `MoneyFromKopecks`, `MoneyFromMajor`. Поля переведені: `CreateOrderRequest.TotalSum`, `Product.Sum`, `CreateAdditionalParams.{NDS, ExtInitialSum}`, `OrderShortInfo.TotalSum`, `Reverse.Sum`, `ReturnRequest.Sum`, `ReturnAdditionalParams.NDS`, `ReportOrder.{TotalSum, TransferredSum, Commission}`, `Invoice.InvoiceAmount`, `Bank.{CreditAmount, CustomerPayAmount}`. `ReportOrder.CommissionPercent` лишився float64 (% rate, не сума). Regression `TestMoney_*` (round-trip, helpers, wire format, no float precision loss).
 
 - [x] **currency/currency.go:30,80** — глобальні `var map` мутабельні.
   - Виправити: закрити за функціями `FromAlpha3(code) (Currency, bool)` / `Decimals(code) int`; саму мапу зробити пакетно-приватною.
