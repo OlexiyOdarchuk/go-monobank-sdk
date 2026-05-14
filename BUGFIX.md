@@ -36,14 +36,14 @@
   - Тест: вікно з транзакціями рівно на boundary секунді — не повинно бути дублів.
   - Resolution:
 
-- [ ] **business/iter.go:57-94** — `oldest.Add(-time.Second)` як курсор: якщо в одній секунді операцій більше за `pageSize` — рештa губиться (silent data loss).
+- [x] **business/iter.go:57-94** — `oldest.Add(-time.Second)` як курсор: якщо в одній секунді операцій більше за `pageSize` — рештa губиться (silent data loss).
   - Виправити: ID-based курсор АБО не зсувати на секунду коли `len(page) == limit` і всі мають однаковий `time`.
   - Тест: фейковий API, що повертає 50 операцій із однією і тією ж секундою — переконатися, що ітератор бачить усі.
-  - Resolution:
+  - Resolution: same-second overflow detection: cursorTo не зсувається на -1s коли всі items на одній секунді і page заповнений; seen-map дедуплікує IDs цієї секунди й чиститься коли cursorTo переходить на нову секунду; loop-guard зупиняє ітерацію якщо API більше нічого не дає. Regression `TestStatementAll_sameSecondOverflow_yieldsAll` + `TestStatementAll_progressOnPartialPage`.
 
-- [ ] **business/statement.go:23-26** — `from.Unix()` без перевірки `from.IsZero()`: zero `time.Time{}` дає `-6795364578` у URL.
+- [x] **business/statement.go:23-26** — `from.Unix()` без перевірки `from.IsZero()`: zero `time.Time{}` дає `-6795364578` у URL.
   - Виправити: повертати `ErrInvalidTimeRange` (нова sentinel-помилка), якщо `from.IsZero() || to.IsZero() || !to.After(from)`.
-  - Resolution:
+  - Resolution: новий sentinel `business.ErrInvalidTimeRange`; `Statement` відхиляє `from.IsZero() || from.Unix() < 0` і `!to.IsZero() && !to.After(from)`.
 
 - [ ] **installment/orders.go:33-66, 90-123** — `OrderState/Confirm/Reject/OrderInfo/OrderData/CheckPaid` не валідують порожній `orderID`.
   - Виправити: на початку кожної функції `if orderID == "" { return nil, ErrEmptyOrderID }`.

@@ -21,6 +21,17 @@ import (
 func (c *Client) Statement(ctx context.Context, account string, from, to time.Time,
 	direction StatementDirection, limit int) ([]StatementItem, error) {
 
+	// Refuse to construct a URL with the zero value of time.Time,
+	// which encodes to Unix=-6795364578 and silently asks the bank for
+	// a window stretching to the year -290308. A "to" of zero is
+	// allowed and means "up to now".
+	if from.IsZero() || from.Unix() < 0 {
+		return nil, fmt.Errorf("%w: from must be a real (post-epoch) time", ErrInvalidTimeRange)
+	}
+	if !to.IsZero() && !to.After(from) {
+		return nil, fmt.Errorf("%w: to must be strictly after from", ErrInvalidTimeRange)
+	}
+
 	uri := "/ext/v1/statement/" + url.PathEscape(account) + "/" + strconv.FormatInt(from.Unix(), 10)
 	if !to.IsZero() {
 		uri += "/" + strconv.FormatInt(to.Unix(), 10)

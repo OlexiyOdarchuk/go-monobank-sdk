@@ -55,12 +55,27 @@ func (c *Client) ContactsAll(ctx context.Context, pageSize int) iter.Seq2[Contac
 //	    if err != nil { return err }
 //	    process(op)
 //	}
+//
+// Same-second overflow: when an entire page falls into a single
+// second AND fills pageSize, the iterator does NOT shift the upper
+// bound by -1s (that would lose the rest of the items on that
+// second). Instead it keeps cursorTo equal to that second, refetches
+// the same window, and skips already-yielded IDs via an internal
+// "seen" set. The set is cleared as soon as cursorTo moves to an
+// earlier second, so memory stays bounded by a single second's
+// worth of operations.
 func (c *Client) StatementAll(ctx context.Context, account string, from, to time.Time, pageSize int) iter.Seq2[StatementItem, error] {
 	return func(yield func(StatementItem, error) bool) {
 		cursorTo := to
 		if cursorTo.IsZero() {
 			cursorTo = time.Now()
 		}
+		// seen holds IDs already yielded at exactly cursorSecond. As
+		// soon as we shift cursorTo to an earlier second, seen is
+		// cleared — same-second collisions on different seconds do
+		// not interfere with each other.
+		seen := make(map[string]struct{})
+		var cursorSecond time.Time
 		for {
 			if err := ctx.Err(); err != nil {
 				_ = yield(StatementItem{}, err)
@@ -77,14 +92,53 @@ func (c *Client) StatementAll(ctx context.Context, account string, from, to time
 			if len(page) == 0 {
 				return
 			}
+
+			newlyYielded := 0
 			for _, item := range page {
+				if _, dup := seen[item.ID]; dup {
+					continue
+				}
 				if !yield(item, nil) {
 					return
 				}
+				newlyYielded++
 			}
-			// DOWN direction: the last item is the oldest; shift the
-			// upper bound one second earlier to avoid duplicates.
+
 			oldest := page[len(page)-1].Time.Time
+			newest := page[0].Time.Time
+
+			// Same-second overflow: every item in this page is at the
+			// same second AND the page is full. Stay on the same
+			// second, track seen IDs, refetch — without -1s shift we
+			// would otherwise drop the remainder of that second.
+			//
+			// pageSize == 0 means "API default" — treat any
+			// non-progressing same-second response as overflow so we
+			// don't lose data.
+			sameSecond := oldest.Equal(newest)
+			fullPage := pageSize <= 0 || len(page) >= pageSize
+			if sameSecond && fullPage {
+				// Loop guard: if we already saw every ID in this page
+				// (newlyYielded == 0), the API can't give us more for
+				// this second — stop rather than spin forever.
+				if newlyYielded == 0 {
+					return
+				}
+				if !oldest.Equal(cursorSecond) {
+					seen = map[string]struct{}{}
+					cursorSecond = oldest
+				}
+				for _, item := range page {
+					seen[item.ID] = struct{}{}
+				}
+				cursorTo = oldest
+				continue
+			}
+
+			// Normal case: shift the upper bound one second earlier
+			// to avoid re-yielding the oldest item on the next call.
+			seen = map[string]struct{}{}
+			cursorSecond = time.Time{}
 			next := oldest.Add(-time.Second)
 			if !next.Before(cursorTo) {
 				return

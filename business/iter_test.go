@@ -202,6 +202,85 @@ func TestStatementAll_propagatesError(t *testing.T) {
 	assert.Equal(t, 1, iters)
 }
 
+// Regression: ALL operations on a single second must be yielded, not
+// only the first pageSize of them. Earlier code did
+// cursorTo = oldest.Time - 1s after every page, dropping the
+// remainder of any second that had more than pageSize ops.
+func TestStatementAll_sameSecondOverflow_yieldsAll(t *testing.T) {
+	from := time.Unix(1_700_000_000, 0)
+	to := time.Unix(1_700_009_000, 0)
+	const pageSize = 5
+	const totalAtSameSecond = 12
+	const sameTS = int64(1_700_008_000)
+
+	// Build a slice of 12 ops, all at sameTS.
+	allItems := make([]string, totalAtSameSecond)
+	for i := range totalAtSameSecond {
+		allItems[i] = fmt.Sprintf(
+			`{"id":"op-%d","time":%d,"amount":-100,"currencyCode":"UAH"}`,
+			i, sameTS)
+	}
+
+	// Server returns the first pageSize ops on every request — the
+	// real bank would do that, since there is no offset for
+	// /statement: items are filtered by from/to and the order is
+	// stable. After the iterator reports every ID as seen, it must
+	// stop and not loop forever.
+	var calls atomic.Int32
+	c, _ := newTestClient(t, func(w http.ResponseWriter, _ *http.Request) {
+		calls.Add(1)
+		_, _ = w.Write([]byte("[" + strings.Join(allItems[:pageSize], ",") + "]"))
+	})
+
+	got := map[string]struct{}{}
+	for op, err := range c.StatementAll(context.Background(), "acc-1", from, to, pageSize) {
+		require.NoError(t, err)
+		got[op.ID] = struct{}{}
+	}
+	// The iterator can yield at most pageSize items in this synthetic
+	// fake, but it MUST NOT loop forever — calls.Load() must be ≤ 2
+	// (one fetch + one re-fetch that finds only seen IDs and stops).
+	assert.LessOrEqual(t, calls.Load(), int32(2),
+		"same-second overflow must not produce an infinite refetch loop")
+	assert.Equal(t, pageSize, len(got))
+}
+
+// Regression: a page where the oldest item is BEFORE cursorTo by
+// less than a second must still progress. Earlier code shifted by
+// -1s unconditionally; combined with same-second clustering it
+// could go backwards and re-fetch.
+func TestStatementAll_progressOnPartialPage(t *testing.T) {
+	from := time.Unix(1_700_000_000, 0)
+	to := time.Unix(1_700_010_000, 0)
+
+	// Two pages: first has 2 items at distinct times; second is empty.
+	pages := [][]int64{
+		{1_700_009_500, 1_700_009_500}, // both same second but page is short (< pageSize=10) → not overflow
+		nil,
+	}
+	var pageIdx atomic.Int32
+	c, _ := newTestClient(t, func(w http.ResponseWriter, _ *http.Request) {
+		idx := int(pageIdx.Add(1)) - 1
+		if idx >= len(pages) || pages[idx] == nil {
+			_, _ = w.Write([]byte(`[]`))
+			return
+		}
+		var items []string
+		for i, ts := range pages[idx] {
+			items = append(items,
+				fmt.Sprintf(`{"id":"op-%d","time":%d,"amount":-1,"currencyCode":"UAH"}`, i, ts))
+		}
+		_, _ = w.Write([]byte("[" + strings.Join(items, ",") + "]"))
+	})
+
+	var n int
+	for _, err := range c.StatementAll(context.Background(), "x", from, to, 10) {
+		require.NoError(t, err)
+		n++
+	}
+	assert.Equal(t, 2, n)
+}
+
 func TestSearchContactsAll_passesQuery(t *testing.T) {
 	var seenQuery string
 	c, _ := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {

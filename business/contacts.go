@@ -15,6 +15,14 @@ import (
 // is passed.
 var ErrNilRequest = errors.New("request body is nil")
 
+// ErrInvalidTimeRange is returned by [Client.Statement] and
+// [Client.StatementAll] when the [from, to] window cannot be
+// represented in the API URL: from.IsZero(), to is non-zero and
+// not strictly after from, or any time is in the far past
+// (Unix < 0). Guards against accidentally querying the wrong window
+// with the zero value of time.Time, which encodes to -6795364578.
+var ErrInvalidTimeRange = errors.New("business: invalid time range")
+
 // Contacts returns a page of the payroll-contacts directory. Pass
 // limit=0 / offset=0 to use the API defaults (limit=100). For
 // free-form search use [Client.SearchContacts].
