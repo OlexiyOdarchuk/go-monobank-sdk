@@ -171,13 +171,24 @@ type Client struct {
 }
 
 // SetBaseURL overrides the base URL of an already-constructed client.
-// If uri does not parse as a URL, the previous value is kept. For
-// routine code use [WithBaseURL] when constructing through [New];
-// this method exists for sub-packages that assemble [Client]
-// incrementally.
+// On a parse failure it records the error in c.optErr (which surfaces
+// from the very first [Client.Do]) and leaves the previous value in
+// place. For routine code use [WithBaseURL] when constructing
+// through [New]; this method exists for sub-packages that assemble
+// [Client] incrementally.
+//
+// Previously SetBaseURL silently kept the old value — a fat-finger
+// in the URL would mean every request went to the default
+// production host, which is the worst kind of "works on my
+// machine" bug for staging configs.
 func (c *Client) SetBaseURL(uri string) {
 	u, err := url.Parse(uri)
 	if err != nil || u == nil {
+		// Preserve the first option error; subsequent failures are
+		// silenced so a later good SetBaseURL can recover state.
+		if c.optErr == nil {
+			c.optErr = fmt.Errorf("%w: %v", ErrInvalidURL, err)
+		}
 		return
 	}
 	c.baseURL = u

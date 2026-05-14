@@ -254,10 +254,12 @@ type WalletData struct {
 	Status    WalletStatus `json:"status"`
 }
 
-// TipsInfo is the tip amount/recipient on an invoice.
+// TipsInfo is the tip amount/recipient on an invoice. Amount is in
+// minor units of the invoice's currency (kopecks for UAH). int64
+// avoids the 32-bit-platform overflow trap on the bare int type.
 type TipsInfo struct {
 	EmployeeID string `json:"employeeId"`
-	Amount     int    `json:"amount,omitempty"`
+	Amount     int64  `json:"amount,omitempty"`
 }
 
 // ProcessingStatus is the state of an asynchronous operation

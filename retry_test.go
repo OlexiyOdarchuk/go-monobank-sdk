@@ -45,6 +45,30 @@ func TestParseRetryAfter(t *testing.T) {
 	})
 }
 
+// Regression: equal jitter must never return less than ~half of the
+// computed backoff. Full jitter (the previous policy) could return 0
+// after a 5xx, turning the retry loop into a tight spin that
+// hammered the bank instead of giving it slack.
+func TestBackoff_equalJitterHasFloor(t *testing.T) {
+	const base = 500 * time.Millisecond
+	const maxD = 30 * time.Second
+	// Run many samples — random distribution must always land in
+	// [d/2, d] for an attempt, clamped at max.
+	for i := 0; i < 200; i++ {
+		got := backoff(base, maxD, 2) // d = base << 2 = 2s
+		assert.GreaterOrEqual(t, got, time.Second,
+			"equal jitter must give at least d/2 (1s), got %s", got)
+		assert.LessOrEqual(t, got, 2*time.Second,
+			"equal jitter must not exceed d (2s), got %s", got)
+	}
+
+	// Smallest delay must respect the absolute floor even when the
+	// base is tiny (1ns).
+	tiny := backoff(time.Nanosecond, time.Second, 0)
+	assert.GreaterOrEqual(t, tiny, minBackoffFloor,
+		"backoff must respect the 50ms floor")
+}
+
 // дуже великий attempt не повинен переповнювати int64
 // і панікувати в jitter.
 func TestBackoff_NoOverflow(t *testing.T) {

@@ -81,10 +81,19 @@ func (rp retryPolicy) run(ctx context.Context, fn func() error) error {
 	return lastErr
 }
 
-// backoff returns the delay for attempt n (0-indexed) using exponential
-// growth with full jitter, clamped at max. Guarded against int64
-// overflow for large attempt values: as soon as the shift would
-// overflow the base, returns max.
+// minBackoffFloor is the smallest delay backoff ever returns when
+// the policy is enabled (base > 0). Without a floor, full or equal
+// jitter at very small bases can produce 0ns delays — a 5xx storm
+// would translate into an instant-retry storm against the bank.
+const minBackoffFloor = 50 * time.Millisecond
+
+// backoff returns the delay for attempt n (0-indexed) using
+// exponential growth with EQUAL jitter (d/2 + rand(d/2)), clamped
+// at max. The d/2 floor avoids the full-jitter degenerate case
+// where rand.Int64N(d+1) can produce 0 and turn the retry loop
+// into a tight spin. Guarded against int64 overflow for large
+// attempt values: as soon as the shift would overflow the base,
+// returns max.
 func backoff(base, max time.Duration, attempt int) time.Duration {
 	if base <= 0 {
 		return 0
@@ -108,9 +117,20 @@ func backoff(base, max time.Duration, attempt int) time.Duration {
 	if d <= 0 {
 		return 0
 	}
-	// math/rand/v2 has no global mutex (PCG per goroutine), safe for
-	// high RPS in retry.
-	return time.Duration(rand.Int64N(int64(d) + 1))
+	// Equal jitter — half deterministic, half random. math/rand/v2
+	// has no global mutex (PCG per goroutine), safe for high RPS.
+	half := int64(d) / 2
+	if half <= 0 {
+		half = 1
+	}
+	jitter := time.Duration(half + rand.Int64N(half))
+	if jitter < minBackoffFloor {
+		jitter = minBackoffFloor
+	}
+	if max > 0 && jitter > max {
+		jitter = max
+	}
+	return jitter
 }
 
 // transientStatus is the error type wrapped around responses that look

@@ -13,11 +13,20 @@ package money
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math"
+	"math/bits"
 
 	"github.com/OlexiyOdarchuk/go-monobank-sdk/currency"
 )
+
+// ErrOverflow is returned by [Money.Add], [Money.Sub] and
+// [Money.Mul] when the int64 result would overflow. Callers that
+// know their inputs are bounded (single transaction amounts, for
+// example) can ignore this safely — but aggregate sums over a
+// statement range should always check.
+var ErrOverflow = errors.New("money: arithmetic overflow")
 
 // Money is an amount in minor units (kopecks, cents) with its
 // currency attached. The zero value is 0 in an unknown currency.
@@ -40,37 +49,84 @@ func (m Money) Equal(other Money) bool {
 	return m.Minor == other.Minor && m.Code == other.Code
 }
 
-// Add adds another Money of the same currency. Returns an error when
-// the currencies differ (for cross-currency arithmetic use
-// [bank.Rates.Convert]).
+// Add adds another Money of the same currency. Returns an error
+// when the currencies differ (for cross-currency arithmetic use
+// [bank.Rates.Convert]) or when the int64 result overflows
+// ([ErrOverflow]). At the wire scale Mono uses (single-transaction
+// amounts well under MaxInt64) overflow is practically impossible,
+// but aggregating a multi-year statement can in theory reach the
+// limit — the explicit error makes that visible.
 func (m Money) Add(other Money) (Money, error) {
 	if m.Code != other.Code {
 		return Money{}, fmt.Errorf("money: cannot add %s + %s — different currencies", m.Code, other.Code)
 	}
-	return Money{Minor: m.Minor + other.Minor, Code: m.Code}, nil
+	sum, carry := bits.Add64(uint64(m.Minor), uint64(other.Minor), 0)
+	// Signed overflow check: the carry out of the high bit and the
+	// sign bit of the result must agree iff both inputs had the same
+	// sign as the result. The simple form: overflow when the signs
+	// of m and other agree but disagree with the result.
+	if (m.Minor < 0) == (other.Minor < 0) && (m.Minor < 0) != (int64(sum) < 0) {
+		_ = carry // silence linter; signed-overflow is what we care about
+		return Money{}, fmt.Errorf("%w: %d + %d", ErrOverflow, m.Minor, other.Minor)
+	}
+	return Money{Minor: int64(sum), Code: m.Code}, nil
 }
 
-// Sub subtracts another Money of the same currency. The error is
-// the same as for [Money.Add].
+// Sub subtracts another Money of the same currency. The currency
+// mismatch error is the same as for [Money.Add]; the overflow error
+// is [ErrOverflow].
 func (m Money) Sub(other Money) (Money, error) {
 	if m.Code != other.Code {
 		return Money{}, fmt.Errorf("money: cannot sub %s - %s — different currencies", m.Code, other.Code)
 	}
-	return Money{Minor: m.Minor - other.Minor, Code: m.Code}, nil
+	diff, _ := bits.Sub64(uint64(m.Minor), uint64(other.Minor), 0)
+	// Signed-subtraction overflow: when the signs of m and other
+	// differ AND the result disagrees with the sign of m.
+	if (m.Minor < 0) != (other.Minor < 0) && (m.Minor < 0) != (int64(diff) < 0) {
+		return Money{}, fmt.Errorf("%w: %d - %d", ErrOverflow, m.Minor, other.Minor)
+	}
+	return Money{Minor: int64(diff), Code: m.Code}, nil
 }
 
 // Neg returns Money with the sign flipped (the currency does not
-// change).
+// change). Note: math.MinInt64 has no positive counterpart in int64,
+// so Neg on that exact value returns the same MinInt64 (a known
+// two's-complement edge case). In practice no monetary value comes
+// close to that boundary.
 func (m Money) Neg() Money { return Money{Minor: -m.Minor, Code: m.Code} }
 
 // Mul multiplies the amount by an integer scalar. Handy for
-// aggregates like "10 units at this price". For fractional
-// multipliers (fees, percentages) use [Money.Scale].
-func (m Money) Mul(n int64) Money { return Money{Minor: m.Minor * n, Code: m.Code} }
+// aggregates like "10 units at this price". Returns [ErrOverflow]
+// when m.Minor*n would overflow int64. For fractional multipliers
+// (fees, percentages) use [Money.Scale].
+func (m Money) Mul(n int64) (Money, error) {
+	if m.Minor == 0 || n == 0 {
+		return Money{Minor: 0, Code: m.Code}, nil
+	}
+	prod := m.Minor * n
+	// Cheap overflow check that avoids 128-bit math: divide back and
+	// compare. Works for every input except the
+	// MinInt64 * -1 corner, which we detect explicitly.
+	if (m.Minor == math.MinInt64 && n == -1) || (n == math.MinInt64 && m.Minor == -1) {
+		return Money{}, fmt.Errorf("%w: %d * %d", ErrOverflow, m.Minor, n)
+	}
+	if prod/n != m.Minor {
+		return Money{}, fmt.Errorf("%w: %d * %d", ErrOverflow, m.Minor, n)
+	}
+	return Money{Minor: prod, Code: m.Code}, nil
+}
 
 // Scale multiplies the amount by a fractional factor (for example
 // 0.05 for a 5% fee), rounding to the nearest minor unit (banker's
 // rounding is not used — plain "round half away from zero").
+//
+// Precision: float64 is exact for integers up to 2^53. Mono's
+// per-transaction values comfortably fit, but aggregating across
+// many transactions can in theory push m.Minor past 2^53 — at that
+// point Scale silently loses precision in the low bits. For
+// accounting-grade arithmetic on aggregates, prefer
+// integer-only paths: [Money.Mul] for an integer multiplier, or
+// hand-rolled (numerator/denominator) scaling.
 func (m Money) Scale(factor float64) Money {
 	r := float64(m.Minor) * factor
 	if r >= 0 {

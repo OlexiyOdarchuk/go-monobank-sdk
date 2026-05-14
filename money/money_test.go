@@ -2,6 +2,7 @@ package money
 
 import (
 	"encoding/json"
+	"math"
 	"testing"
 
 	"github.com/OlexiyOdarchuk/go-monobank-sdk/currency"
@@ -59,9 +60,44 @@ func TestNeg(t *testing.T) {
 }
 
 func TestMul(t *testing.T) {
-	assert.Equal(t, New(300, currency.UAH), New(100, currency.UAH).Mul(3))
-	assert.Equal(t, New(0, currency.UAH), New(100, currency.UAH).Mul(0))
-	assert.Equal(t, New(-200, currency.UAH), New(100, currency.UAH).Mul(-2))
+	cases := []struct {
+		in   Money
+		n    int64
+		want Money
+	}{
+		{New(100, currency.UAH), 3, New(300, currency.UAH)},
+		{New(100, currency.UAH), 0, New(0, currency.UAH)},
+		{New(100, currency.UAH), -2, New(-200, currency.UAH)},
+	}
+	for _, c := range cases {
+		got, err := c.in.Mul(c.n)
+		require.NoError(t, err)
+		assert.Equal(t, c.want, got)
+	}
+}
+
+func TestMul_overflow(t *testing.T) {
+	_, err := New(math.MaxInt64, currency.UAH).Mul(2)
+	assert.ErrorIs(t, err, ErrOverflow)
+
+	_, err = New(math.MinInt64, currency.UAH).Mul(-1)
+	assert.ErrorIs(t, err, ErrOverflow)
+}
+
+func TestAdd_overflow(t *testing.T) {
+	_, err := New(math.MaxInt64, currency.UAH).Add(New(1, currency.UAH))
+	assert.ErrorIs(t, err, ErrOverflow)
+
+	_, err = New(math.MinInt64, currency.UAH).Add(New(-1, currency.UAH))
+	assert.ErrorIs(t, err, ErrOverflow)
+}
+
+func TestSub_overflow(t *testing.T) {
+	_, err := New(math.MinInt64, currency.UAH).Sub(New(1, currency.UAH))
+	assert.ErrorIs(t, err, ErrOverflow)
+
+	_, err = New(math.MaxInt64, currency.UAH).Sub(New(-1, currency.UAH))
+	assert.ErrorIs(t, err, ErrOverflow)
 }
 
 func TestScale(t *testing.T) {

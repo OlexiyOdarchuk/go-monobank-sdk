@@ -114,8 +114,11 @@ func (c *Client) SignatureCreate(ctx context.Context, in *SignatureCreateRequest
 // somebody has already signed.
 // https://api.monobank.ua/docs/corporate.html#tag/monoKEP/paths/~1personal~1signature~1status?requestId={requestId}/get
 func (c *Client) SignatureStatus(ctx context.Context, requestID string) (*SignatureStatusResponse, error) {
-	uri := "/personal/signature/status?requestId=" + url.QueryEscape(requestID)
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, uri, http.NoBody)
+	u := url.URL{
+		Path:     "/personal/signature/status",
+		RawQuery: url.Values{"requestId": {requestID}}.Encode(),
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.RequestURI(), http.NoBody)
 	if err != nil {
 		return nil, fmt.Errorf("create request: %w", err)
 	}
@@ -131,8 +134,11 @@ func (c *Client) SignatureStatus(ctx context.Context, requestID string) (*Signat
 // and the deeplink stops working.
 // https://api.monobank.ua/docs/corporate.html#tag/monoKEP/paths/~1personal~1signature~1cancel?requestId={requestId}/delete
 func (c *Client) SignatureCancel(ctx context.Context, requestID string) error {
-	uri := "/personal/signature/cancel?requestId=" + url.QueryEscape(requestID)
-	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, uri, http.NoBody)
+	u := url.URL{
+		Path:     "/personal/signature/cancel",
+		RawQuery: url.Values{"requestId": {requestID}}.Encode(),
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, u.RequestURI(), http.NoBody)
 	if err != nil {
 		return fmt.Errorf("create request: %w", err)
 	}

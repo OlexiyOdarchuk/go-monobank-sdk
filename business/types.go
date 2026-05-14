@@ -32,10 +32,14 @@ type Account struct {
 }
 
 // BalanceMoney returns Balance as a typed [money.Money] (minor
-// units, currency attached). Rounded to the nearest kopeck (assumes
-// 2 decimal places, which is valid for UAH/USD/EUR).
+// units, currency attached). The minor-per-major scale comes from
+// the currency itself: 100 for UAH/USD/EUR, 1 for JPY/KRW, 1000 for
+// BHD/JOD/KWD/OMR/TND. Rounded to the nearest minor unit (round
+// half away from zero).
 func (a Account) BalanceMoney() money.Money {
-	return money.New(int64(math.Round(a.Balance*100)), currency.Code(a.Currency))
+	code := currency.Code(a.Currency)
+	scale := float64(code.MinorPerMajor())
+	return money.New(int64(math.Round(a.Balance*scale)), code)
 }
 
 // BalancePoint is a single day's balance from the account-history series.
@@ -47,9 +51,12 @@ type BalancePoint struct {
 
 // Money returns Balance as a [money.Money]. The currencyCode of this
 // BalancePoint is inherited from the parent [Client.AccountBalances]
-// call — pass it explicitly (from Account.Currency).
+// call — pass it explicitly (from Account.Currency). The minor-unit
+// scale is taken from the supplied currency, so JPY (0 decimals)
+// and BHD (3 decimals) round correctly.
 func (b BalancePoint) Money(code currency.Code) money.Money {
-	return money.New(int64(math.Round(b.Balance*100)), code)
+	scale := float64(code.MinorPerMajor())
+	return money.New(int64(math.Round(b.Balance*scale)), code)
 }
 
 // Contact is a row from the salary-contacts directory.

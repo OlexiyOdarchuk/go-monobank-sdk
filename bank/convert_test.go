@@ -68,6 +68,48 @@ func TestConvert_skipsZeroRateRow(t *testing.T) {
 	assert.Equal(t, int64(100), out.Minor)
 }
 
+// Table-test that asserts the buy/sell semantics in both directions
+// using realistic Mono quotes. The mapping the bank uses (and the
+// SDK matches):
+//
+//   - Customer SELLS A (gives A, receives B): bank "buys" A → RateBuy
+//   - Customer BUYS  A (gives B, receives A): bank "sells" A → RateSell
+//
+// Direct (A → B) multiplies by the chosen rate; reverse (B → A)
+// divides. The bid/ask spread means RateBuy < RateSell.
+func TestConvert_buySellSemantics(t *testing.T) {
+	// Realistic May 2026 Mono pair: USD bought at 41.50, sold at 42.00.
+	rates := Rates{
+		{CurrencyCodeA: 840, CurrencyCodeB: 980, RateBuy: 41.50, RateSell: 42.00},
+	}
+
+	cases := []struct {
+		name   string
+		amount money.Money
+		to     currency.Code
+		want   int64
+	}{
+		// Customer brings 100 USD, exchanges for UAH → bank buys USD
+		// at 41.50 → 100 * 41.50 = 4150 UAH = 415000 kopecks.
+		{"USD→UAH uses RateBuy", money.New(10000, currency.USD), currency.UAH, 415000},
+		// Customer brings UAH, wants USD → bank sells USD at 42.00 →
+		// 4200 kop / 42.00 = 100 cents.
+		{"UAH→USD uses RateSell", money.New(4200, currency.UAH), currency.USD, 100},
+		// Smaller round: 1 USD → 41.50 UAH = 4150 kopecks.
+		{"USD→UAH small amount", money.New(100, currency.USD), currency.UAH, 4150},
+		// 42 UAH → 1 USD = 100 cents.
+		{"UAH→USD round trip", money.New(4200, currency.UAH), currency.USD, 100},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			out, err := rates.Convert(c.amount, c.to)
+			require.NoError(t, err)
+			assert.Equal(t, c.to, out.Code)
+			assert.Equal(t, c.want, out.Minor)
+		})
+	}
+}
+
 func TestConvert_rounding(t *testing.T) {
 	// 1 USD = 42.5 UAH. 100 центів → 4250 копійок (точно).
 	rates := Rates{

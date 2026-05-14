@@ -58,10 +58,16 @@ func TestCode_Category(t *testing.T) {
 		2000: CategoryContracted,
 		2999: CategoryContracted,
 
-		// Transport — airlines + car rental (3000-3999).
+		// Transport — airlines (3000-3299) and car rental (3300-3499).
 		3000: CategoryTransport,
-		3500: CategoryTransport,
-		3999: CategoryTransport,
+		3299: CategoryTransport,
+		3300: CategoryTransport,
+		3499: CategoryTransport,
+		// Lodging (3500-3999) is hotels, NOT transport — the old
+		// 3000-3999 catch-all conflated the two.
+		3500: CategoryHotels,
+		3700: CategoryHotels,
+		3999: CategoryHotels,
 
 		// Transport — local (4000-4799), excluding the telecom carve-outs above.
 		4000: CategoryTransport,
@@ -154,4 +160,26 @@ func TestCode_Category_specificOverridesRange(t *testing.T) {
 	// 8398 vs neighbour 8399
 	assert.Equal(t, CategoryCharity, Code(8398).Category())
 	assert.Equal(t, CategoryProfessional, Code(8399).Category())
+}
+
+// Regression: pharmacies (5912) and adjacent medical codes belong
+// to Health, not Retail / Professional. The healthMCC override
+// must promote them.
+func TestCode_Category_healthOverride(t *testing.T) {
+	healthCases := []Code{5912, 5122, 5975, 5976, 8011, 8021, 8043, 8062, 8071, 8099}
+	for _, c := range healthCases {
+		assert.Equalf(t, CategoryHealth, c.Category(), "MCC %d must be Health", int(c))
+	}
+}
+
+// Regression: lodging MCCs in 3500-3999 must be Hotels (the old
+// 3000-3999 range incorrectly labelled them Transport).
+func TestCode_Category_lodgingIsHotels(t *testing.T) {
+	for _, c := range []Code{3500, 3501, 3750, 3999} {
+		assert.Equalf(t, CategoryHotels, c.Category(), "MCC %d must be Hotels", int(c))
+	}
+	// Airlines + car-rental remain Transport.
+	for _, c := range []Code{3000, 3100, 3299, 3300, 3499} {
+		assert.Equalf(t, CategoryTransport, c.Category(), "MCC %d must be Transport", int(c))
+	}
 }

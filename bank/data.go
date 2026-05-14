@@ -272,11 +272,28 @@ func (t *Transaction) UnmarshalJSON(data []byte) error {
 // Transactions is a slice of [Transaction].
 type Transactions []Transaction
 
-// MCCCode returns the typed MCC of the transaction — handy for
-// chaining .Category() to group spending.
-func (t Transaction) MCCCode() mcc.Code { return mcc.Code(t.MCC) }
+// validMCC reports whether an int32 is a syntactically valid ISO
+// 18245 MCC (1..9999). Negative numbers (a wire glitch on a signed
+// int32) and zero are rejected — there is no MCC 0.
+func validMCC(n int32) bool { return n >= 1 && n <= 9999 }
+
+// MCCCode returns the typed MCC of the transaction. Handy for
+// chaining .Category() to group spending. Values outside the valid
+// range 1..9999 (a wire glitch or a future field expansion) are
+// reported as Code(0), which Category() folds into
+// [mcc.CategoryUnknown].
+func (t Transaction) MCCCode() mcc.Code {
+	if !validMCC(t.MCC) {
+		return mcc.Code(0)
+	}
+	return mcc.Code(t.MCC)
+}
 
 // OriginalMCCCode returns the MCC before Mono remapped it (for
-// example, for cashback logic). When MCC and OriginalMCC differ, it
-// is worth considering the original when categorizing spending.
-func (t Transaction) OriginalMCCCode() mcc.Code { return mcc.Code(t.OriginalMCC) }
+// example, for cashback logic). Same validity check as [MCCCode].
+func (t Transaction) OriginalMCCCode() mcc.Code {
+	if !validMCC(t.OriginalMCC) {
+		return mcc.Code(0)
+	}
+	return mcc.Code(t.OriginalMCC)
+}

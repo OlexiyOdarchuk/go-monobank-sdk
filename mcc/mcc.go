@@ -37,13 +37,50 @@ const (
 	CategoryCharity      Category = "Charity"
 )
 
+// healthMCC overrides codes that the broad ISO 18245 ranges would
+// place in Retail or Professional, but which in practice belong to
+// Health (pharmacies, optical, drug-related retail, doctors).
+var healthMCC = map[Code]struct{}{
+	5122: {}, // drugs / pharmaceutical wholesale
+	5292: {}, // cosmetic/beauty supply (drugstore-adjacent)
+	5295: {}, // pet stores — kept Retail; documented exclusion
+	5912: {}, // drug stores / pharmacies
+	5975: {}, // hearing aids
+	5976: {}, // orthopedic goods
+	8011: {}, // doctors
+	8021: {}, // dentists
+	8031: {}, // osteopaths
+	8041: {}, // chiropractors
+	8042: {}, // optometrists / ophthalmologists
+	8043: {}, // opticians / optical goods
+	8044: {}, // optical goods + eyeglasses
+	8049: {}, // podiatrists / chiropodists
+	8050: {}, // nursing / personal care
+	8062: {}, // hospitals
+	8071: {}, // medical / dental labs
+	8099: {}, // medical services, not elsewhere classified
+}
+
 // Category returns the high-level bucket for an MCC per the ISO 18245
 // range tables. Unknown codes return [CategoryUnknown].
 //
 // Specific codes (for example 5411 — grocery stores) are matched
 // before the range that contains them (first-match wins), so
-// grocery does not get bucketed as generic Retail.
+// grocery does not get bucketed as generic Retail. The 3000-3999
+// block, often labelled "Travel/Transport", is split:
+//
+//   - 3000-3299: airlines
+//   - 3300-3499: car rental
+//   - 3500-3999: lodging
+//
+// — and lodging is reported as [CategoryHotels], not Transport. The
+// healthMCC override table promotes pharmacies, opticians, doctors,
+// hospitals etc. from generic Retail/Professional to
+// [CategoryHealth].
 func (c Code) Category() Category {
+	if _, ok := healthMCC[c]; ok {
+		return CategoryHealth
+	}
 	switch {
 	// --- specific codes that override their containing range ---
 	case c == 4829:
@@ -64,8 +101,12 @@ func (c Code) Category() Category {
 		return CategoryAgriculture
 	case c >= 1500 && c <= 2999:
 		return CategoryContracted
-	case c >= 3000 && c <= 3999:
-		return CategoryTransport // airlines + car-rental
+	// 3000-3299: airlines; 3300-3499: car rental — both Transport.
+	case c >= 3000 && c <= 3499:
+		return CategoryTransport
+	// 3500-3999: lodging (hotels, motels, resorts).
+	case c >= 3500 && c <= 3999:
+		return CategoryHotels
 	case c >= 4000 && c <= 4799:
 		return CategoryTransport
 	case c >= 4900 && c <= 4999:

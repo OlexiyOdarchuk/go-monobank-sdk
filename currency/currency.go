@@ -19,11 +19,21 @@ const (
 	GBP Code = 826 // Pound sterling
 	PLN Code = 985 // Polish złoty
 	CHF Code = 756 // Swiss franc
-	JPY Code = 392 // Japanese yen
+	JPY Code = 392 // Japanese yen (0 decimals)
 	CZK Code = 203 // Czech koruna
 	CAD Code = 124 // Canadian dollar
 	AUD Code = 36  // Australian dollar
 	CNY Code = 156 // Chinese yuan
+	// 3-decimal currencies — uncommon in Mono payloads but well-defined
+	// by ISO 4217. Kept here for [Code.Decimals] correctness on
+	// cross-currency conversions.
+	BHD Code = 48  // Bahraini dinar (3 decimals)
+	JOD Code = 400 // Jordanian dinar (3 decimals)
+	KWD Code = 414 // Kuwaiti dinar (3 decimals)
+	OMR Code = 512 // Omani rial (3 decimals)
+	TND Code = 788 // Tunisian dinar (3 decimals)
+	// 0-decimal currencies.
+	KRW Code = 410 // South Korean won (0 decimals)
 )
 
 // alpha3 maps the numeric codes above to their alpha-3 equivalents.
@@ -39,6 +49,12 @@ var alpha3 = map[Code]string{
 	CAD: "CAD",
 	AUD: "AUD",
 	CNY: "CNY",
+	BHD: "BHD",
+	JOD: "JOD",
+	KWD: "KWD",
+	OMR: "OMR",
+	TND: "TND",
+	KRW: "KRW",
 }
 
 // fromAlpha3 is the reverse map of [alpha3]: "UAH" → 980. It is
@@ -81,19 +97,52 @@ func (c Code) String() string {
 // (UAH/USD/EUR/GBP/PLN/CHF/CZK/CAD/AUD/CNY) have 2 decimals, so they
 // are not in the map.
 var decimals = map[Code]int{
-	JPY: 0, // Japanese yen — the minor unit is not used
+	// 0 decimals.
+	JPY: 0,
+	KRW: 0,
+	// 3 decimals.
+	BHD: 3,
+	JOD: 3,
+	KWD: 3,
+	OMR: 3,
+	TND: 3,
 }
 
 // Decimals returns the number of decimal places for the currency's
 // major unit per ISO 4217. The default is 2 (as for UAH/USD/EUR/...).
-// Some currencies (JPY=0, KRW=0, BHD/JOD/KWD/OMR/TND=3) have other
-// values — add them to [decimals] if you need them.
+// JPY/KRW use 0, BHD/JOD/KWD/OMR/TND use 3.
 //
-// Used by [money.Money.Major] for the correct minor → major
-// conversion (1250 kopecks = 12.50 UAH; 1250 yen = 1250 yen).
+// Used by [money.Money.Major] and currency-aware money builders for
+// the correct minor ↔ major conversion (1250 kopecks = 12.50 UAH;
+// 1250 yen = 1250 yen; 1250 BHD-fils = 1.250 BHD).
 func (c Code) Decimals() int {
 	if d, ok := decimals[c]; ok {
 		return d
 	}
 	return 2
+}
+
+// MinorPerMajor returns 10^Decimals — the factor that converts
+// between a currency's major and minor units (100 for UAH/USD,
+// 1 for JPY/KRW, 1000 for BHD/JOD/KWD/OMR/TND). Useful for
+// currency-aware float-to-int conversion in API payloads that
+// ship balance as a decimal float.
+func (c Code) MinorPerMajor() int64 {
+	switch c.Decimals() {
+	case 0:
+		return 1
+	case 1:
+		return 10
+	case 2:
+		return 100
+	case 3:
+		return 1000
+	default:
+		// Defensive fallback; not reachable for any ISO 4217 code.
+		p := int64(1)
+		for range c.Decimals() {
+			p *= 10
+		}
+		return p
+	}
 }

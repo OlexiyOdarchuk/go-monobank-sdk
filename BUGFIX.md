@@ -117,46 +117,46 @@
 
 ## HIGH — Correctness / Data
 
-- [ ] **retry.go:87-113** — full-jitter дає `delay = 0` навіть без `Retry-After: 0`; миттєвий ретрай після 5xx.
+- [x] **retry.go:87-113** — full-jitter дає `delay = 0` навіть без `Retry-After: 0`; миттєвий ретрай після 5xx.
   - Виправити: equal jitter `d/2 + rand.Int64N(d/2)`. Мінімальний floor: 50ms.
-  - Resolution:
+  - Resolution: equal jitter (`half := d/2; delay := half + rand.Int64N(half)`) + абсолютний `minBackoffFloor = 50ms`. Regression `TestBackoff_equalJitterHasFloor`.
 
-- [ ] **money/money.go:44-65** — `Add/Sub/Mul(n int64)` без overflow guard.
+- [x] **money/money.go:44-65** — `Add/Sub/Mul(n int64)` без overflow guard.
   - Виправити: `math/bits.Add64` / `math.MulOverflow`-стиль; повертати error або (Money, ok).
   - Тест: `MaxInt64 + 1`, `MinInt64 - 1`, `MaxInt64 * 2`.
-  - Resolution:
+  - Resolution: `Add` через `bits.Add64` + signed-overflow check; `Sub` через `bits.Sub64`; `Mul` повертає `(Money, error)` з `ErrOverflow` (BREAKING — раніше `Mul` повертав тільки `Money`). Regression: `TestAdd_overflow`, `TestSub_overflow`, `TestMul_overflow`, оновлений `TestMul` під нову сигнатуру.
 
-- [ ] **money/money.go:70-76** — `Scale(float64)` втрачає точність для minor > 2^53.
+- [x] **money/money.go:70-76** — `Scale(float64)` втрачає точність для minor > 2^53.
   - Виправити: задокументувати ліміт у godoc; для критичних шляхів — рекомендувати ручне множення.
-  - Resolution:
+  - Resolution: godoc-блок `Scale` про float64 precision до 2^53 + рекомендацію integer-only path (`Mul` для цілого, hand-rolled num/denom для дробу).
 
-- [ ] **business/types.go:38,52** — `int64(math.Round(a.Balance*100))` припускає 2 знаки; для JPY (0), BHD/JOD/KWD (3) — невірно.
+- [x] **business/types.go:38,52** — `int64(math.Round(a.Balance*100))` припускає 2 знаки; для JPY (0), BHD/JOD/KWD (3) — невірно.
   - Виправити: підтягувати `decimals` із `currency` пакету (через `currency.Decimals(code int) int`).
-  - Resolution:
+  - Resolution: новий `currency.Code.MinorPerMajor()` (10^Decimals); `Account.BalanceMoney` і `BalancePoint.Money` тепер множать на `float64(code.MinorPerMajor())`. Додано до `currency` 5 трьох-десяткових (BHD/JOD/KWD/OMR/TND) і KRW (0).
 
-- [ ] **acquiring/types.go:260** — `TipsInfo.Amount int` (на 32-бітних overflow).
+- [x] **acquiring/types.go:260** — `TipsInfo.Amount int` (на 32-бітних overflow).
   - Виправити: змінити на `int64`.
-  - Resolution:
+  - Resolution: тип поміняно на `int64` із поясненням про 32-bit overflow.
 
-- [ ] **bank/currency.go:57-95** — `Convert` плутає `RateBuy/RateSell` для напрямку.
+- [x] **bank/currency.go:57-95** — `Convert` плутає `RateBuy/RateSell` для напрямку.
   - Виправити: написати explicit table-test із 4 кейсами (UAH→USD buy, UAH→USD sell, USD→UAH buy, USD→UAH sell) із верифікацією на реальних котируваннях Mono; виправити логіку до проходження.
-  - Resolution:
+  - Resolution: семантика виявилась коректною; додано `TestConvert_buySellSemantics` із 4 кейсами на реальних квотах (RateBuy=41.50, RateSell=42.00) і docstring-comment про bid/ask.
 
-- [ ] **mcc/mcc.go:67-78** — діапазони неточні: `3500..3999` (готелі) маркуються як Transport; `5912` (аптеки) → Retail замість Health.
+- [x] **mcc/mcc.go:67-78** — діапазони неточні: `3500..3999` (готелі) маркуються як Transport; `5912` (аптеки) → Retail замість Health.
   - Виправити: розбити `3000..3999` на airlines (3000-3299), car-rental (3300-3499), lodging (3500-3999); додати override-мапу для health-MCC (5912, 5122, 5975, 8011, 8021, 8041-8062, 8071, 8099).
-  - Resolution:
+  - Resolution: розбито 3000-3499 (Transport, airlines+car) і 3500-3999 (Hotels). Override-таблиця `healthMCC` для аптек/оптики/лікарів (5122, 5292, 5912, 5975, 5976, 8011, 8021, 8031, 8041-8050, 8062, 8071, 8099). Оновлено `TestCode_Category` + два regression-тести (`_healthOverride`, `_lodgingIsHotels`).
 
-- [ ] **bank/data.go:131-132** — `MCC int32` зі знаком; немає валідації 1..9999.
+- [x] **bank/data.go:131-132** — `MCC int32` зі знаком; немає валідації 1..9999.
   - Виправити: у `MCCCode()` повертати `0`/`Unknown` для значень поза 1..9999.
-  - Resolution:
+  - Resolution: `validMCC(n)` (1..9999); `MCCCode`/`OriginalMCCCode` повертають `Code(0)` для невалідних значень (→ `CategoryUnknown`).
 
-- [ ] **corporate/signature.go:111,128** — query конкатенується через `?`; якщо у `baseURL` уже є query — ламається.
+- [x] **corporate/signature.go:111,128** — query конкатенується через `?`; якщо у `baseURL` уже є query — ламається.
   - Виправити: побудова через `url.URL{Path:..., RawQuery: url.Values{}.Encode()}`.
-  - Resolution:
+  - Resolution: `SignatureStatus` і `SignatureCancel` тепер будують URI через `url.URL{Path:..., RawQuery: url.Values{...}.Encode()}.RequestURI()` — стійко до query у baseURL і коректно ескейпить.
 
-- [ ] **client.go:173-179** — `SetBaseURL` мовчки лишає попереднє значення при `url.Parse` помилці.
+- [x] **client.go:173-179** — `SetBaseURL` мовчки лишає попереднє значення при `url.Parse` помилці.
   - Виправити: повертати error або записувати у `optErr`.
-  - Resolution:
+  - Resolution: помилка тепер записується в `c.optErr` (`%w: %v` із `ErrInvalidURL`), surface на першому `Do`. Перша помилка зберігається; наступні silently — щоб подальший вдалий `SetBaseURL` міг відновити стан.
 
 ---
 
