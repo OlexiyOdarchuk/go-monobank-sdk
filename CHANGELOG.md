@@ -16,6 +16,15 @@
   виключає `examples/` зі статистики мов GitHub.
 - `RELEASING.md` — гайд по випуску версії: чек-лист, SemVer, що робити
   з поламаним тегом (`retract` directive).
+- `go.work` — workspace для одночасної розробки кореня + `otelmonobank`.
+  Зовнішніх споживачів не зачіпає (кожен модуль зберігає авторитетну
+  `go.mod`).
+- `make test-all` — таргет для запуску тестів у всіх workspace-модулях.
+- `.github/workflows/codeql.yaml` — щоденне і per-push сканування
+  GitHub CodeQL (security-and-quality query suite); знахідки в Security tab.
+- govulncheck-job у `ci.yaml` — сканує root і `otelmonobank` на CVE
+  у stdlib і залежностях. `continue-on-error: true`, бо stdlib-фікси
+  часто прилітають швидше за апдейт Go-runner-ів GitHub.
 - `monobank.KeyedLimiter` — per-key token bucket для endpoint-ів із
   per-account/per-resource лімітами (наприклад,
   `/personal/statement/{account}/…`). Реалізує `RateLimiter`; ключ
@@ -54,6 +63,14 @@
 
 - `.codecov.yml` — patch threshold піднятий з 75% до 80%; додано
   виключення `**/*_test.go` і `monobanktest/**` з обчислення покриття.
+- Усі GitHub Actions запіновано на SHA (а не теги): захист від
+  компрометації переписаного тегу. Версія коментується поряд (`# v6.0.2`),
+  тож dependabot автоматично оновлює і SHA, і коментар.
+- CI-workflow-и тепер мають `concurrency` блок із
+  `cancel-in-progress: true` — на нових пушах в PR старіші прогони
+  кенселяться, економить CI-хвилини.
+- `flake.nix` — прибрано `export GOFLAGS="-mod=mod"`, що конфліктував
+  із workspace-режимом (`go.work`).
 
 ### Fixed
 
