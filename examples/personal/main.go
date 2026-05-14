@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/OlexiyOdarchuk/go-monobank-sdk/personal"
@@ -36,7 +37,9 @@ func main() {
 
 	info, err := cli.ClientInfo(ctx)
 	if err != nil {
-		log.Fatalf("ClientInfo: %v", err)
+		safeErr := strings.ReplaceAll(err.Error(), "\n", "")
+		safeErr = strings.ReplaceAll(safeErr, "\r", "")
+		log.Fatalf("ClientInfo: %s", safeErr)
 	}
 
 	fmt.Printf("# %s (%s)\n", info.Name, info.ID)
@@ -64,7 +67,9 @@ func main() {
 	from := to.Add(-7 * 24 * time.Hour)
 	txs, err := cli.Transactions(ctx, info.Accounts[0].AccountID, from, to)
 	if err != nil {
-		log.Fatalf("Transactions: %v", err)
+		safeErr := strings.ReplaceAll(err.Error(), "\n", "")
+		safeErr = strings.ReplaceAll(safeErr, "\r", "")
+		log.Fatalf("Transactions: %s", safeErr)
 	}
 	for _, t := range txs {
 		fmt.Printf("  %s · %+8s · %-16s · %s\n",
