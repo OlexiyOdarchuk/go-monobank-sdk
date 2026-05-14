@@ -362,10 +362,10 @@ type Bank struct {
 	AgreementDate       string `json:"agreement_date,omitempty"`
 	CreditAmount        Money  `json:"credit_amount,omitempty"`
 	CustomerPayAmount   Money  `json:"customer_pay_amount,omitempty"`
-	ProductTypes        string  `json:"product_types,omitempty"`
-	BankID              string  `json:"bank_id,omitempty"`
-	BankName            string  `json:"bank_name,omitempty"`
-	BankExecutive       string  `json:"bank_executive,omitempty"`
-	AvailablePartsCount int     `json:"available_parts_count,omitempty"`
-	CreditProduct       string  `json:"credit_product,omitempty"`
+	ProductTypes        string `json:"product_types,omitempty"`
+	BankID              string `json:"bank_id,omitempty"`
+	BankName            string `json:"bank_name,omitempty"`
+	BankExecutive       string `json:"bank_executive,omitempty"`
+	AvailablePartsCount int    `json:"available_parts_count,omitempty"`
+	CreditProduct       string `json:"credit_product,omitempty"`
 }
