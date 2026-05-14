@@ -34,7 +34,9 @@ func main() {
 
 	accs, err := cli.Accounts(ctx)
 	if err != nil {
-		log.Fatalf("Accounts: %v", err)
+		safeErr := strings.ReplaceAll(err.Error(), "\n", "")
+		safeErr = strings.ReplaceAll(safeErr, "\r", "")
+		log.Fatalf("Accounts: %s", safeErr)
 	}
 	fmt.Println("# Accounts")
 	for _, a := range accs {
