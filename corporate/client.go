@@ -65,6 +65,9 @@ func New(authMaker auth.CorpAuthMakerAPI, opts ...monobank.Option) (*Client, err
 	}, nil
 }
 
+// Close звільняє фонові ресурси клієнта (див. [monobank.Client.Close]).
+func (c *Client) Close() error { return c.c.Close() }
+
 // do applies the given per-request authorizer to req and then dispatches
 // it through the base client (whose own auth is auth.Public — a no-op).
 func (c *Client) do(req *http.Request, a auth.Authorizer, v any, statuses ...int) error {

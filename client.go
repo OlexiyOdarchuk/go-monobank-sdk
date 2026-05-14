@@ -23,6 +23,12 @@ var (
 	// бо [New] завжди ставить дефолт; може виникнути після
 	// [Client.SetBaseURL] з невалідним рядком).
 	ErrInvalidURL = errors.New("invalid URL")
+	// ErrInsecureBaseURL — [WithBaseURL] отримав не-https URL для
+	// зовнішнього хоста. Захист від випадкового передавання токенів
+	// у відкритому вигляді. Для тестів через httptest або власний
+	// localhost-proxy використовуй loopback-хост або
+	// [WithInsecureBaseURL] (свідомо).
+	ErrInsecureBaseURL = errors.New("base URL must be https for non-loopback hosts")
 )
 
 // Sentinel-помилки за типовими HTTP-статусами. [APIError.Is] реалізує
@@ -132,17 +138,28 @@ func truncate(b []byte, n int) string {
 // конструюється — використовуй фабрики підпакетів ([personal.New],
 // [bank.New] тощо).
 type Client struct {
-	http    HTTPDoer
-	auth    auth.Authorizer
-	baseURL *url.URL
-	retry   retryPolicy
-	limiter RateLimiter
+	http      HTTPDoer
+	auth      auth.Authorizer
+	baseURL   *url.URL
+	retry     retryPolicy
+	limiter   RateLimiter
+	userAgent string
 
 	// unsafeRetries дозволяє ретраїти POST/PATCH без Idempotency-Key.
 	// За замовчуванням false: непідтверджувано-ідемпотентні методи
 	// ретраяться лише за наявності заголовка Idempotency-Key (інакше
 	// retry-цикл після 502/504 може створити дублікат операції).
 	unsafeRetries bool
+
+	// allowInsecureBaseURL — bypass для [WithInsecureBaseURL]. За
+	// замовчуванням http://-URL на не-loopback-хост відхиляється з
+	// [ErrInsecureBaseURL] на першому Do.
+	allowInsecureBaseURL bool
+
+	// optErr — помилка, що сталася під час застосування Option-у
+	// (наприклад, insecure base URL). Повертається з першого ж Do,
+	// щоб помилка не «потерялась» між конструктором і викликом.
+	optErr error
 
 	logger *slog.Logger
 	onReq  func(*http.Request)
@@ -159,6 +176,26 @@ func (c *Client) SetBaseURL(uri string) {
 		return
 	}
 	c.baseURL = u
+}
+
+// Close зупиняє фонові ресурси, прикріплені до клієнта (наразі —
+// sweeper-горутину [KeyedLimiter], якщо такий лімітер було передано
+// у [WithRateLimiter]). Безпечно викликати на клієнті, який Close
+// не потребує (повертає nil).
+//
+// Реалізує [io.Closer], тож типовий defer-патерн просто працює:
+//
+//	cli := personal.New(token, monobank.WithRateLimiter(klim))
+//	defer cli.Close()
+//
+// Без виклику Close — горутина sweeper-а [KeyedLimiter] лишається
+// активною до завершення процесу (це leak у тестах, але норма у
+// довготривалих сервісах із одним глобальним клієнтом).
+func (c Client) Close() error {
+	if closer, ok := c.limiter.(interface{ Stop() }); ok {
+		closer.Stop()
+	}
+	return nil
 }
 
 // Do виконує req проти c.baseURL і декодує відповідь у v. Кількість
@@ -180,6 +217,9 @@ func (c *Client) SetBaseURL(uri string) {
 // Передавай *http.Request з path-only URL — він resolve-иться проти
 // налаштованого base URL.
 func (c Client) Do(req *http.Request, v any, expectedStatusCodes ...int) error {
+	if c.optErr != nil {
+		return c.optErr
+	}
 	if req == nil {
 		return ErrEmptyRequest
 	}
@@ -197,6 +237,13 @@ func (c Client) Do(req *http.Request, v any, expectedStatusCodes ...int) error {
 	req.URL = c.baseURL.ResolveReference(target)
 	if req.Header.Get("Content-Type") == "" && req.Body != nil {
 		req.Header.Set("Content-Type", "application/json")
+	}
+	if req.Header.Get("User-Agent") == "" {
+		ua := c.userAgent
+		if ua == "" {
+			ua = UserAgent()
+		}
+		req.Header.Set("User-Agent", ua)
 	}
 
 	if c.auth != nil {

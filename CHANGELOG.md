@@ -7,6 +7,63 @@
 
 ## [Unreleased]
 
+## [1.2.0] — 2026-05-14
+
+DX і security-quality life. Перші додатки, які не закривають баг із
+v1.1.x-аудиту, а навмисне піднімають планку SDK ближче до того, що
+очікують від professional libraries: ідентифікація через User-Agent,
+автоматична редакція токенів у логах, явний Close для звільнення
+фонових ресурсів, заборона insecure base URL за замовчуванням.
+
+Source-incompatible: `WithBaseURL` із http://-URL на не-loopback-хост
+тепер повертає `ErrInsecureBaseURL` замість тихого warn. Старе
+поводження повертається опцією `WithInsecureBaseURL(true)`.
+
+### Added
+
+- **`User-Agent`**: SDK шле `go-monobank-sdk/vX.Y.Z (linux; go1.26.2)`
+  на кожному запиті. Версія дістається з `runtime/debug.ReadBuildInfo`,
+  тож автоматично відповідає реально лінкованому модулю. Mono матиме
+  змогу розрізняти твій сервіс у support-кейсах і fraud-моніторингу.
+- **`WithUserAgent(string)`**: перевизначи дефолтний UA, наприклад
+  щоб додати ім'я свого сервісу попереду. Експортовано `UserAgent()`
+  на випадок, якщо хочеш зберегти SDK-частину.
+- **`Client.Close() error` + у всіх підпакетах** (`personal`,
+  `corporate`, `business`, `acquiring`, `bank`): зупиняє sweeper
+  `KeyedLimiter`-а та інші майбутні фонові ресурси. Реалізує
+  `io.Closer`. Безпечно викликати на клієнті без лімітера.
+- **`WithInsecureBaseURL(bool)`**: opt-in bypass для нової
+  захисної перевірки. Корисно для MITM-проксі дебагу (mitmproxy,
+  burp) або staging-середовищ за VPN-ом.
+- **`ErrInsecureBaseURL` sentinel**: для `errors.Is`-перевірок.
+- **Token redaction через `slog.LogValuer`**: `auth.Personal`,
+  `business.TokenAuth`, `acquiring.TokenAuth`, `auth.CorpAuthMaker`,
+  `installment.Client` тепер рендеряться як `***`, коли ти
+  передаєш їх у slog-виклик. До цього сирий токен/секрет
+  потрапляв у логи в людиночитаному вигляді.
+
+### Changed (breaking)
+
+- `WithBaseURL("http://...")` для не-loopback-хоста повертає
+  `ErrInsecureBaseURL` з першого `Client.Do`. До v1.2 була лише
+  warn-логування — деплой із staging-конфігом у прод проходив тихо.
+  Якщо ти свідомо хочеш http (MITM-debug, internal staging) —
+  оберни у `WithInsecureBaseURL(true)`.
+
+### Migration з v1.1.x
+
+```go
+// Якщо ти раніше робив http://-staging для тестів — додай явну опцію:
+cli := personal.New(token,
+    monobank.WithInsecureBaseURL(true), // має бути ДО WithBaseURL
+    monobank.WithBaseURL("http://staging.example.com"),
+)
+
+// Рекомендований патерн (новий):
+cli := personal.New(token, monobank.WithRateLimiter(klim))
+defer cli.Close() // звільнить sweeper KeyedLimiter-а
+```
+
 ## [1.1.3] — 2026-05-14
 
 Production-readiness polish. Жодних змін поведінки коду — лише
@@ -376,7 +433,8 @@ defer klim.Stop()
 - `monobanktest` — мок-сервер на `httptest.Server` із fluent-builder-ами.
 - Пагінатори через `iter.Seq2` (Go 1.23+).
 
-[Unreleased]: https://github.com/OlexiyOdarchuk/go-monobank-sdk/compare/v1.1.3...HEAD
+[Unreleased]: https://github.com/OlexiyOdarchuk/go-monobank-sdk/compare/v1.2.0...HEAD
+[1.2.0]: https://github.com/OlexiyOdarchuk/go-monobank-sdk/compare/v1.1.3...v1.2.0
 [1.1.3]: https://github.com/OlexiyOdarchuk/go-monobank-sdk/compare/v1.1.2...v1.1.3
 [1.1.2]: https://github.com/OlexiyOdarchuk/go-monobank-sdk/compare/v1.1.1...v1.1.2
 [1.1.1]: https://github.com/OlexiyOdarchuk/go-monobank-sdk/compare/v1.1.0...v1.1.1

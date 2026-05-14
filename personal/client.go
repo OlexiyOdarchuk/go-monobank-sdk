@@ -45,6 +45,10 @@ func New(token string, opts ...monobank.Option) *Client {
 	return &Client{c: monobank.New(append(base, opts...)...)}
 }
 
+// Close звільняє фонові ресурси клієнта (див. [monobank.Client.Close]).
+// Безпечно викликати в defer одразу після [New].
+func (c *Client) Close() error { return c.c.Close() }
+
 // ClientInfo повертає те, що банк знає про авторизованого користувача
 // (ім'я, рахунки, банки). Rate limit: 1 виклик на 60 с.
 // https://api.monobank.ua/docs/#tag/Klientski-personalni-dani/paths/~1personal~1client-info/get

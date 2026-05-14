@@ -1,6 +1,9 @@
 package auth
 
-import "net/http"
+import (
+	"log/slog"
+	"net/http"
+)
 
 const personalTokenHeader = "X-Token"
 
@@ -16,6 +19,16 @@ func (a Personal) SetAuth(r *http.Request) error {
 	}
 	r.Header.Set(personalTokenHeader, a.token)
 	return nil
+}
+
+// LogValue реалізує [slog.LogValuer], щоб токен не потрапляв у логи:
+//
+//	slog.Info("ready", "auth", auth.NewPersonal(tok))
+//	// → ... auth=auth.Personal{token:***}
+//
+// Без цього slog рендерив би сирий токен як значення struct-у.
+func (a Personal) LogValue() slog.Value {
+	return slog.StringValue("auth.Personal{token:***}")
 }
 
 // NewPersonal створює Authorizer для вказаного токена Personal API.

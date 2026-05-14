@@ -27,6 +27,9 @@ func New(opts ...monobank.Option) *Client {
 	return &Client{c: monobank.New(opts...)}
 }
 
+// Close звільняє фонові ресурси клієнта (див. [monobank.Client.Close]).
+func (c *Client) Close() error { return c.c.Close() }
+
 // Rates тягне поточну таблицю курсів обміну з /bank/currency.
 // Mono обмежує цей endpoint частотою — кешуй результат на хвилину-дві.
 // Документація: https://api.monobank.ua/docs/#operation/getCurrency

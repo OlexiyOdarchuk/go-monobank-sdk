@@ -1,6 +1,7 @@
 package monobank
 
 import (
+	"fmt"
 	"log/slog"
 	"net/http"
 	"net/url"
@@ -125,23 +126,37 @@ func WithResponseHook(fn func(*http.Response, error)) Option {
 // окремих хостів (corp-api.monobank.ua — використовується автоматично
 // у [business.New], тут не потрібно).
 //
-// Якщо uri використовує не-https схему (крім localhost / 127.0.0.1) і
-// клієнт сконфігурований із [WithLogger], логується Warn — токен у
-// X-Token піде відкритим текстом, і це майже завжди помилка
-// конфігурації.
+// БЕЗПЕКА: якщо uri використовує не-https схему І хост не є
+// loopback-ом (localhost / 127.0.0.1 / ::1), клієнт запам'ятає
+// [ErrInsecureBaseURL] і поверне її з першого ж [Client.Do]. Це
+// захист від випадкового деплою з staging-конфігом, що відкритим
+// текстом шле X-Token. Свідомо обійти можна через [WithInsecureBaseURL].
 func WithBaseURL(uri string) Option {
 	return func(c *Client) {
-		c.SetBaseURL(uri)
-		if c.logger != nil && isInsecureBaseURL(uri) {
-			c.logger.Warn("monobank: base URL uses insecure scheme — credentials will be sent in cleartext",
-				slog.String("url", uri))
+		if isInsecureBaseURL(uri) && !c.allowInsecureBaseURL {
+			c.optErr = fmt.Errorf("%w: got %q", ErrInsecureBaseURL, uri)
+			return
 		}
+		c.SetBaseURL(uri)
+	}
+}
+
+// WithInsecureBaseURL свідомо дозволяє http://-URL на не-loopback-хост
+// у [WithBaseURL]. Корисно для записаного MITM-proxy для дебагу
+// (mitmproxy, burp) чи staging-сетапів за VPN-ом, де https зайвий.
+// За дефолтом — false; вмикай тільки якщо точно розумієш, що токен
+// піде відкритим текстом і це прийнятно у твоїй мережі.
+//
+// Порядок опцій важливий: [WithInsecureBaseURL] має бути ДО
+// [WithBaseURL], інакше bypass не спрацює.
+func WithInsecureBaseURL(allow bool) Option {
+	return func(c *Client) {
+		c.allowInsecureBaseURL = allow
 	}
 }
 
 // isInsecureBaseURL повертає true, якщо схема не https і хост не
-// є loopback. Виділено окремо, щоб не залежати від порядку опцій
-// (warn спрацює тільки якщо WithLogger йде ДО WithBaseURL).
+// є loopback.
 func isInsecureBaseURL(uri string) bool {
 	u, err := url.Parse(uri)
 	if err != nil || u == nil {
@@ -184,6 +199,24 @@ func WithRetry(attempts int, baseDelay, maxDelay time.Duration) Option {
 		} else if c.retry.maxDelay == 0 {
 			c.retry.maxDelay = defaultRetry.maxDelay
 		}
+	}
+}
+
+// WithUserAgent перевизначає User-Agent, який SDK ставить на кожному
+// запиті (за замовчуванням — [UserAgent]). Корисно, щоб Mono у support-
+// кейсах міг розрізнити твій сервіс серед інших користувачів SDK:
+//
+//	cli := personal.New(token,
+//	    monobank.WithUserAgent("acme-receipts/2.1.0 "+monobank.UserAgent()),
+//	)
+//
+// Порожній рядок ігнорується (зберігається SDK-дефолт).
+func WithUserAgent(ua string) Option {
+	return func(c *Client) {
+		if ua == "" {
+			return
+		}
+		c.userAgent = ua
 	}
 }
 

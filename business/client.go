@@ -34,6 +34,7 @@
 package business
 
 import (
+	"log/slog"
 	"net/http"
 
 	monobank "github.com/OlexiyOdarchuk/go-monobank-sdk"
@@ -63,6 +64,9 @@ func New(token string, opts ...monobank.Option) *Client {
 	return &Client{c: monobank.New(append(base, opts...)...)}
 }
 
+// Close звільняє фонові ресурси клієнта (див. [monobank.Client.Close]).
+func (c *Client) Close() error { return c.c.Close() }
+
 // TokenAuth реалізує [auth.Authorizer] для X-Token-авторизації corp-api.
 // Окрім X-Token, виставляє обов'язковий заголовок `Accept: application/json`,
 // якого очікує corp-api на кожному запиті.
@@ -80,4 +84,9 @@ func (a TokenAuth) SetAuth(r *http.Request) error {
 		r.Header.Set("Accept", "application/json")
 	}
 	return nil
+}
+
+// LogValue приховує токен у slog-виводі.
+func (a TokenAuth) LogValue() slog.Value {
+	return slog.StringValue("business.TokenAuth{Token:***}")
 }

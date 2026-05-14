@@ -43,6 +43,7 @@
 package acquiring
 
 import (
+	"log/slog"
 	"net/http"
 
 	monobank "github.com/OlexiyOdarchuk/go-monobank-sdk"
@@ -72,6 +73,9 @@ func New(token string, opts ...monobank.Option) *Client {
 	return &Client{c: monobank.New(append(base, opts...)...)}
 }
 
+// Close звільняє фонові ресурси клієнта (див. [monobank.Client.Close]).
+func (c *Client) Close() error { return c.c.Close() }
+
 // TokenAuth реалізує [auth.Authorizer] для X-Token-авторизації
 // еквайрингу.
 type TokenAuth struct {
@@ -85,4 +89,9 @@ func (a TokenAuth) SetAuth(r *http.Request) error {
 	}
 	r.Header.Set("X-Token", a.Token)
 	return nil
+}
+
+// LogValue приховує токен у slog-виводі.
+func (a TokenAuth) LogValue() slog.Value {
+	return slog.StringValue("acquiring.TokenAuth{Token:***}")
 }

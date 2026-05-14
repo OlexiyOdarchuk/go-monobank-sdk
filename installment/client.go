@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"time"
 )
@@ -104,6 +105,17 @@ func New(storeID, secret string, opts ...Option) *Client {
 		o(c)
 	}
 	return c
+}
+
+// LogValue — slog-серіалізатор, що приховує store-secret. Без нього
+// `slog.Info("cli", "installment", cli)` вивів би сирий байт-зріз
+// секрету як значення поля.
+func (c *Client) LogValue() slog.Value {
+	return slog.GroupValue(
+		slog.String("storeID", c.storeID),
+		slog.String("secret", "***"),
+		slog.String("baseURL", c.baseURL),
+	)
 }
 
 // Sign обчислює base64(HMAC-SHA256(body, secret)). Експортовано для

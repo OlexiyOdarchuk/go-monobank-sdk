@@ -11,6 +11,7 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
+	"log/slog"
 	"math/big"
 	"net/http"
 	"strconv"
@@ -117,6 +118,16 @@ func NewCorpAuthMaker(secKey []byte) (*CorpAuthMaker, error) {
 		privateKey: privateKey,
 		KeyID:      keyID,
 	}, nil
+}
+
+// LogValue — slog-серіалізатор, що приховує приватний ECDSA-ключ.
+// Без нього `slog.Info("maker", "v", maker)` вивів би сирі координати
+// ключа.
+func (c *CorpAuthMaker) LogValue() slog.Value {
+	return slog.GroupValue(
+		slog.String("KeyID", c.KeyID),
+		slog.String("privateKey", "***"),
+	)
 }
 
 // New повертає [Corp]-авторизатор, прив'язаний до конкретного

@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"runtime"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -286,6 +287,93 @@ func TestWithBaseURL_warnsOnInsecureScheme(t *testing.T) {
 			assert.Equal(t, wantInsecure, isInsecureBaseURL(uri))
 		})
 	}
+}
+
+// User-Agent виставляється автоматично у форматі "go-monobank-sdk/...".
+func TestClient_Do_setsUserAgent(t *testing.T) {
+	var ua string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ua = r.Header.Get("User-Agent")
+		_, _ = w.Write([]byte(`{}`))
+	}))
+	defer srv.Close()
+
+	c := New(WithBaseURL(srv.URL), WithHTTPClient(srv.Client()))
+	req, _ := http.NewRequest(http.MethodGet, "/x", http.NoBody)
+	require.NoError(t, c.Do(req, nil))
+
+	assert.Contains(t, ua, "go-monobank-sdk/")
+	assert.Contains(t, ua, runtime.Version(), "має містити Go-версію")
+}
+
+// WithUserAgent перевизначає дефолтний User-Agent.
+func TestClient_Do_withUserAgentOverride(t *testing.T) {
+	var ua string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ua = r.Header.Get("User-Agent")
+		_, _ = w.Write([]byte(`{}`))
+	}))
+	defer srv.Close()
+
+	c := New(
+		WithBaseURL(srv.URL),
+		WithHTTPClient(srv.Client()),
+		WithUserAgent("acme/1.2.3 go-monobank-sdk/v1.2.0"),
+	)
+	req, _ := http.NewRequest(http.MethodGet, "/x", http.NoBody)
+	require.NoError(t, c.Do(req, nil))
+	assert.Equal(t, "acme/1.2.3 go-monobank-sdk/v1.2.0", ua)
+}
+
+// Якщо користувач сам виставив User-Agent на req, SDK його не зачепить.
+func TestClient_Do_userProvidedUserAgentWins(t *testing.T) {
+	var ua string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ua = r.Header.Get("User-Agent")
+		_, _ = w.Write([]byte(`{}`))
+	}))
+	defer srv.Close()
+
+	c := New(WithBaseURL(srv.URL), WithHTTPClient(srv.Client()))
+	req, _ := http.NewRequest(http.MethodGet, "/x", http.NoBody)
+	req.Header.Set("User-Agent", "mine/1")
+	require.NoError(t, c.Do(req, nil))
+	assert.Equal(t, "mine/1", ua)
+}
+
+// http://-URL на не-loopback-хост відхиляється як ErrInsecureBaseURL.
+func TestWithBaseURL_rejectsInsecureForNonLoopback(t *testing.T) {
+	c := New(WithBaseURL("http://api.example.com"))
+	req, _ := http.NewRequest(http.MethodGet, "/x", http.NoBody)
+	err := c.Do(req, nil)
+	assert.ErrorIs(t, err, ErrInsecureBaseURL)
+}
+
+// localhost / 127.0.0.1 / [::1] пропускаються без помилки (для httptest).
+func TestWithBaseURL_allowsLoopback(t *testing.T) {
+	cases := []string{"http://localhost:8080", "http://127.0.0.1:8080", "http://[::1]:8080"}
+	for _, uri := range cases {
+		t.Run(uri, func(t *testing.T) {
+			c := New(WithBaseURL(uri))
+			assert.NoError(t, c.optErr)
+		})
+	}
+}
+
+// WithInsecureBaseURL дозволяє http:// на зовнішній хост свідомо.
+func TestWithInsecureBaseURL_overridesGuard(t *testing.T) {
+	c := New(
+		WithInsecureBaseURL(true),
+		WithBaseURL("http://staging.example.com"),
+	)
+	assert.NoError(t, c.optErr)
+}
+
+// Close() зупиняє sweeper KeyedLimiter-а (немає leak goroutine-у).
+func TestClient_Close_stopsKeyedLimiter(t *testing.T) {
+	klim := NewKeyedLimiter(time.Minute, 1, 50*time.Millisecond)
+	c := New(WithRateLimiter(klim))
+	require.NoError(t, c.Close())
 }
 
 // shouldRetry правильно різнить методи.
