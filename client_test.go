@@ -376,6 +376,44 @@ func TestWithInsecureBaseURL_overridesGuard(t *testing.T) {
 	assert.NoError(t, c.optErr)
 }
 
+// Regression: option order must NOT matter — putting
+// WithInsecureBaseURL after WithBaseURL used to leave the guard in
+// place because options ran sequentially. New now uses a two-pass
+// apply.
+func TestWithInsecureBaseURL_orderDoesNotMatter(t *testing.T) {
+	for name, opts := range map[string][]Option{
+		"insecure-first": {
+			WithInsecureBaseURL(true),
+			WithBaseURL("http://staging.example.com"),
+		},
+		"insecure-last": {
+			WithBaseURL("http://staging.example.com"),
+			WithInsecureBaseURL(true),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			c := New(opts...)
+			assert.NoError(t, c.optErr,
+				"WithInsecureBaseURL must take effect regardless of position")
+		})
+	}
+}
+
+// Regression: 127.0.0.2 is loopback per net.IP.IsLoopback (whole
+// 127.0.0.0/8), but the old hostname-equality check rejected it.
+func TestWithBaseURL_loopbackIsBroaderThan127001(t *testing.T) {
+	for _, uri := range []string{
+		"http://127.0.0.2:8080",
+		"http://127.42.0.1:8080",
+	} {
+		t.Run(uri, func(t *testing.T) {
+			c := New(WithBaseURL(uri))
+			assert.NoError(t, c.optErr,
+				"the whole 127.0.0.0/8 must be treated as loopback")
+		})
+	}
+}
+
 // WithRoundTripper підмінює http.Transport, зберігаючи інші
 // налаштування http.Client (наприклад, таймаут).
 func TestWithRoundTripper_appliesMiddleware(t *testing.T) {

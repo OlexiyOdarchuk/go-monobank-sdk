@@ -36,7 +36,10 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 
-	cli := jar.New()
+	cli, err := jar.New()
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	if shortID != "" {
 		fmt.Println("## ByShortID (send.monobank.ua/api/handler)")

@@ -24,6 +24,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"time"
@@ -46,6 +47,13 @@ var ErrEmptyJarID = errors.New("jar: empty longJarID")
 // ErrEmptyClientID indicates that an empty clientID was passed to
 // [Client.ByShortID].
 var ErrEmptyClientID = errors.New("jar: empty clientID")
+
+// ErrInsecureBaseURL indicates [WithAPIBaseURL] / [WithSendBaseURL]
+// received an http:// URL on a non-loopback host. Jar endpoints are
+// public, but a man-in-the-middle on an http connection can spoof
+// balances and owner names. Use [WithInsecureBaseURL] to opt in for
+// debugging through a recorded proxy.
+var ErrInsecureBaseURL = errors.New("jar: base URL must be https for non-loopback hosts")
 
 // MaxResponseBytes is the cap on response size. Jar-endpoint bodies
 // are tiny (<10 KiB); 1 MiB leaves plenty of headroom.
@@ -129,30 +137,43 @@ func WithHTTPClient(h *http.Client) Option {
 }
 
 // WithAPIBaseURL overrides the base URL for api.monobank.ua. Mainly
-// for tests via httptest.Server. In production pass only https — the
-// jar endpoint is public, but a custom http proxy between the client
-// and Mono can substitute the response (banker info, jar balance).
+// for tests via httptest.Server. The jar endpoint is public, but a
+// custom http proxy between the client and Mono can substitute the
+// response (owner info, jar balance), so [New] refuses http:// URLs
+// pointing at non-loopback hosts with [ErrInsecureBaseURL]. Opt out
+// via [WithInsecureBaseURL] for a debugging proxy.
 func WithAPIBaseURL(u string) Option {
 	return func(c *Client) { c.apiBase = u }
 }
 
-// WithSendBaseURL overrides the base URL for send.monobank.ua. Mainly
-// for tests. Security considerations are the same as for
-// [WithAPIBaseURL]: https only in production.
+// WithSendBaseURL overrides the base URL for send.monobank.ua. Same
+// scheme guard as [WithAPIBaseURL].
 func WithSendBaseURL(u string) Option {
 	return func(c *Client) { c.sendBase = u }
+}
+
+// WithInsecureBaseURL allows http:// URLs on non-loopback hosts for
+// [WithAPIBaseURL] / [WithSendBaseURL]. Default false. Order is
+// irrelevant — [New] resolves the bypass before evaluating the
+// scheme guard.
+func WithInsecureBaseURL(allow bool) Option {
+	return func(c *Client) { c.allowInsecureBaseURL = allow }
 }
 
 // Client is the read-only client for the two public jar endpoints.
 // Build one via [New]. No authorization — both endpoints are public.
 type Client struct {
-	h        *http.Client
-	apiBase  string
-	sendBase string
+	h                    *http.Client
+	apiBase              string
+	sendBase             string
+	allowInsecureBaseURL bool
 }
 
-// New returns a client with a 15-second default timeout.
-func New(opts ...Option) *Client {
+// New returns a client with a 15-second default timeout. It returns
+// an error when [WithAPIBaseURL] / [WithSendBaseURL] were given an
+// http:// URL on a non-loopback host (override with
+// [WithInsecureBaseURL]).
+func New(opts ...Option) (*Client, error) {
 	c := &Client{
 		h:        &http.Client{Timeout: 15 * time.Second},
 		apiBase:  defaultAPIBaseURL,
@@ -161,7 +182,35 @@ func New(opts ...Option) *Client {
 	for _, o := range opts {
 		o(c)
 	}
-	return c
+	if !c.allowInsecureBaseURL {
+		if isInsecureBaseURL(c.apiBase) {
+			return nil, fmt.Errorf("%w: apiBase=%q", ErrInsecureBaseURL, c.apiBase)
+		}
+		if isInsecureBaseURL(c.sendBase) {
+			return nil, fmt.Errorf("%w: sendBase=%q", ErrInsecureBaseURL, c.sendBase)
+		}
+	}
+	return c, nil
+}
+
+// isInsecureBaseURL reports whether u uses a non-https scheme on a
+// non-loopback host. Mirrors monobank.isInsecureBaseURL.
+func isInsecureBaseURL(u string) bool {
+	parsed, err := url.Parse(u)
+	if err != nil || parsed == nil {
+		return false
+	}
+	if parsed.Scheme == "https" || parsed.Scheme == "" {
+		return false
+	}
+	host := parsed.Hostname()
+	if host == "localhost" {
+		return false
+	}
+	if ip := net.ParseIP(host); ip != nil && ip.IsLoopback() {
+		return false
+	}
+	return true
 }
 
 // ByLongID returns the current info for a jar by its long (longJarId

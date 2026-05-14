@@ -3,6 +3,7 @@ package monobank
 import (
 	"fmt"
 	"log/slog"
+	"net"
 	"net/http"
 	"net/url"
 	"time"
@@ -172,11 +173,16 @@ func WithResponseHook(fn func(*http.Response, error)) Option {
 // here).
 //
 // SECURITY: if uri uses a non-https scheme AND the host is not a
-// loopback (localhost / 127.0.0.1 / ::1), the client remembers
-// [ErrInsecureBaseURL] and returns it from the very first
-// [Client.Do]. This guards against accidentally deploying with a
+// loopback, the client remembers [ErrInsecureBaseURL] and returns
+// it from the very first [Client.Do]. Loopback covers the literal
+// hostname "localhost" plus any IP for which
+// [net.IP.IsLoopback] is true (127.0.0.0/8 and ::1 — not just
+// 127.0.0.1). This guards against accidentally deploying with a
 // staging config that sends X-Token in cleartext. Opt out
 // deliberately via [WithInsecureBaseURL].
+//
+// Option order does NOT matter: [New] applies WithInsecureBaseURL
+// first in a separate pass before evaluating the base-URL guard.
 func WithBaseURL(uri string) Option {
 	return func(c *Client) {
 		if isInsecureBaseURL(uri) && !c.allowInsecureBaseURL {
@@ -194,8 +200,8 @@ func WithBaseURL(uri string) Option {
 // it on only if you understand that the token will travel in
 // cleartext and that is acceptable on your network.
 //
-// Option order matters: [WithInsecureBaseURL] must come BEFORE
-// [WithBaseURL], otherwise the bypass has no effect.
+// Option order is irrelevant — [New] resolves WithInsecureBaseURL
+// in a dedicated pass before any other option runs.
 func WithInsecureBaseURL(allow bool) Option {
 	return func(c *Client) {
 		c.allowInsecureBaseURL = allow
@@ -203,7 +209,9 @@ func WithInsecureBaseURL(allow bool) Option {
 }
 
 // isInsecureBaseURL reports whether the scheme is not https and the
-// host is not a loopback.
+// host is not a loopback. Loopback means literal "localhost", or an
+// IP for which [net.IP.IsLoopback] is true (127.0.0.0/8 and ::1) —
+// not only "127.0.0.1" and "::1" exactly.
 func isInsecureBaseURL(uri string) bool {
 	u, err := url.Parse(uri)
 	if err != nil || u == nil {
@@ -213,7 +221,10 @@ func isInsecureBaseURL(uri string) bool {
 		return false
 	}
 	host := u.Hostname()
-	if host == "localhost" || host == "127.0.0.1" || host == "::1" {
+	if host == "localhost" {
+		return false
+	}
+	if ip := net.ParseIP(host); ip != nil && ip.IsLoopback() {
 		return false
 	}
 	return true
@@ -321,6 +332,11 @@ func WithRateLimiter(l RateLimiter) Option {
 //	    monobank.WithHTTPClient(myHTTP),
 //	    monobank.WithRetry(5, 0, 0),
 //	)
+//
+// Options are applied in two passes so [WithInsecureBaseURL] takes
+// effect regardless of where it appears in the list. Each option
+// runs twice — they are expected to be pure setters; if you wrote a
+// custom Option with side effects, scope them to a single pass.
 func New(opts ...Option) Client {
 	base, _ := url.Parse(defaultBaseURL)
 	c := Client{
@@ -328,6 +344,15 @@ func New(opts ...Option) Client {
 		auth:    auth.Public{},
 		baseURL: base,
 	}
+	// First pass: discover allowInsecureBaseURL on a throwaway probe
+	// so the real apply can already see it when WithBaseURL fires.
+	probe := c
+	for _, opt := range opts {
+		opt(&probe)
+	}
+	c.allowInsecureBaseURL = probe.allowInsecureBaseURL
+	// Second pass: apply all options on the real client. optErr from
+	// the probe is discarded; only the real pass counts.
 	for _, opt := range opts {
 		opt(&c)
 	}

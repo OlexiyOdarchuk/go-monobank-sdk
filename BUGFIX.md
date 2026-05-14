@@ -73,17 +73,17 @@
 
 ## HIGH — Security / Network
 
-- [ ] **options.go:160-173** — `isInsecureBaseURL` хост-чек охоплює тільки `localhost/127.0.0.1/::1` (пропускає `127.0.0.2`, link-local).
+- [x] **options.go:160-173** — `isInsecureBaseURL` хост-чек охоплює тільки `localhost/127.0.0.1/::1` (пропускає `127.0.0.2`, link-local).
   - Виправити: `ip := net.ParseIP(host); ip != nil && ip.IsLoopback()` АБО literal `localhost`.
-  - Resolution:
+  - Resolution: тепер `net.ParseIP(host).IsLoopback()` (вся `127.0.0.0/8` + `::1`) + literal `localhost`. Regression `TestWithBaseURL_loopbackIsBroaderThan127001` (включає `127.0.0.2`, `127.42.0.1`).
 
-- [ ] **options.go:152-156** — `WithInsecureBaseURL` мусить бути ДО `WithBaseURL`, інакше bypass не спрацьовує (порядок-залежна семантика).
+- [x] **options.go:152-156** — `WithInsecureBaseURL` мусить бути ДО `WithBaseURL`, інакше bypass не спрацьовує (порядок-залежна семантика).
   - Виправити: два проходи опцій — спершу `allowInsecureBaseURL`, потім решта; або відкладати валідацію `baseURL` на момент першого Do.
-  - Resolution:
+  - Resolution: `New` робить два проходи — probe для збору `allowInsecureBaseURL`, потім справжній apply. Regression `TestWithInsecureBaseURL_orderDoesNotMatter` (обидва порядки).
 
-- [ ] **jar/jar.go:132-141** — `WithAPIBaseURL`/`WithSendBaseURL` без перевірки схеми → SSRF.
+- [x] **jar/jar.go:132-141** — `WithAPIBaseURL`/`WithSendBaseURL` без перевірки схеми → SSRF.
   - Виправити: ту саму insecure-baseURL логіку, що в `monobank.WithBaseURL`.
-  - Resolution:
+  - Resolution: `jar.New` тепер `(*Client, error)`; відхиляє `http://` на non-loopback із `ErrInsecureBaseURL`; opt-out — `jar.WithInsecureBaseURL(true)`. Перевіряється у кінці `New`, тож порядок опцій не важить.
 
 - [x] **installment/client.go:42** — `MaxResponseBytes = 50<<20` для всіх відповідей; скомпрометований proxy може дути 50 MiB у JSON.
   - Виправити: окремий ліміт для JSON (1 MiB) і PDF (50 MiB); вибирати за endpoint-ом.

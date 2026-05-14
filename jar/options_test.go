@@ -19,10 +19,11 @@ func TestWithHTTPClient_isApplied(t *testing.T) {
 	defer srv.Close()
 
 	custom := &http.Client{Timeout: 5 * time.Second}
-	c := jar.New(
+	c, errNew := jar.New(
 		jar.WithHTTPClient(custom),
 		jar.WithAPIBaseURL(srv.URL),
 	)
+	require.NoError(t, errNew)
 	info, err := c.ByLongID(context.Background(), "x")
 	require.NoError(t, err)
 	assert.Equal(t, "x", info.JarID)

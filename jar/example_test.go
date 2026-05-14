@@ -10,7 +10,10 @@ import (
 )
 
 func ExampleClient_ByLongID() {
-	cli := jar.New()
+	cli, err := jar.New()
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	info, err := cli.ByLongID(context.Background(), "5fX1aB7Y8z")
 	if err != nil {
@@ -19,10 +22,13 @@ func ExampleClient_ByLongID() {
 	fmt.Printf("%s — %d/%d UAH\n", info.Title, info.Amount, info.Goal)
 }
 
-// ByShortID повертає коротку інформацію разом із LongJarID — подальші
-// читання роби через ByLongID, бо ліміти на send.monobank.ua суворіші.
+// ByShortID returns short jar info plus a LongJarID — use ByLongID
+// for subsequent reads because send.monobank.ua has stricter limits.
 func ExampleClient_ByShortID() {
-	cli := jar.New()
+	cli, err := jar.New()
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	short, err := cli.ByShortID(context.Background(), "abc123")
 	if err != nil {
