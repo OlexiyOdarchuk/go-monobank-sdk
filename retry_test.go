@@ -19,12 +19,12 @@ func TestParseRetryAfter(t *testing.T) {
 		header string
 		want   time.Duration
 	}{
-		"missing":       {"", 0},
+		"missing":       {"", noRetryAfter},
 		"seconds":       {"5", 5 * time.Second},
-		"zero seconds":  {"0", 0},
-		"negative":      {"-3", 0},
-		"garbage":       {"soon", 0},
-		"http-date now": {"Sun, 06 Nov 1994 08:49:37 GMT", 0}, // past → 0
+		"zero seconds":  {"0", 0}, // explicit immediate retry
+		"negative":      {"-3", noRetryAfter},
+		"garbage":       {"soon", noRetryAfter},
+		"http-date now": {"Sun, 06 Nov 1994 08:49:37 GMT", 0}, // past → immediate
 	}
 	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {
@@ -43,6 +43,19 @@ func TestParseRetryAfter(t *testing.T) {
 		assert.Greater(t, got, 5*time.Second)
 		assert.LessOrEqual(t, got, 10*time.Second)
 	})
+}
+
+// Регресія H2: дуже великий attempt не повинен переповнювати int64
+// і панікувати в jitter.
+func TestBackoff_NoOverflow(t *testing.T) {
+	// attempt=63 → base<<63 переповнить int64.
+	got := backoff(500*time.Millisecond, 30*time.Second, 63)
+	assert.LessOrEqual(t, got, 30*time.Second, "must clamp at max")
+	assert.GreaterOrEqual(t, got, time.Duration(0))
+
+	// Без max → повертає base замість overflow.
+	got2 := backoff(time.Second, 0, 70)
+	assert.GreaterOrEqual(t, got2, time.Duration(0))
 }
 
 func TestRetryPolicy_disabledByDefault(t *testing.T) {
@@ -104,7 +117,8 @@ func TestRetryPolicy_respectsContext(t *testing.T) {
 	defer cancel()
 
 	err := rp.run(ctx, func() error {
-		return &transientStatus{code: 503, cause: errors.New("down")}
+		// noRetryAfter → backoff sleep gives ctx a chance to fire.
+		return &transientStatus{code: 503, retryAfter: noRetryAfter, cause: errors.New("down")}
 	})
 	assert.ErrorIs(t, err, context.DeadlineExceeded)
 }

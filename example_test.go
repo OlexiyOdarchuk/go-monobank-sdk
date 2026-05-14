@@ -27,8 +27,11 @@ func ExampleNewLimiter() {
 }
 
 // Per-account ліміт виписки: на кожен accountID — окрема корзина.
+// idleTTL=10*time.Minute видаляє корзини, до яких не зверталися довше
+// 10 хв, щоб мапа не росла на сервісах із багатьма accountID.
 func ExampleNewKeyedLimiter() {
-	klim := monobank.NewKeyedLimiter(time.Minute, 1)
+	klim := monobank.NewKeyedLimiter(time.Minute, 1, 10*time.Minute)
+	defer klim.Stop()
 
 	cli := personal.New(os.Getenv("MONO_TOKEN"),
 		monobank.WithRateLimiter(klim),

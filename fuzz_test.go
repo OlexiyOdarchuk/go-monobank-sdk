@@ -35,10 +35,12 @@ func FuzzParseRetryAfter(f *testing.F) {
 	f.Fuzz(func(t *testing.T, raw string) {
 		h := http.Header{}
 		h.Set("Retry-After", raw)
-		// Property: returns a non-negative duration without panicking.
+		// Property: returns either noRetryAfter (-1) for unparseable
+		// inputs, or a non-negative duration. Must not panic on any
+		// input.
 		got := parseRetryAfter(h)
-		if got < 0 {
-			t.Fatalf("parseRetryAfter returned negative duration %v for %q", got, raw)
+		if got < 0 && got != noRetryAfter {
+			t.Fatalf("parseRetryAfter returned unexpected negative duration %v for %q", got, raw)
 		}
 	})
 }

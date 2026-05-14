@@ -117,7 +117,12 @@ func limiterKeyFrom(ctx context.Context) string {
 // для кожного рахунку. Реалізує [RateLimiter]: ключ береться з контексту
 // через [WithLimiterKey].
 //
-//	klim := monobank.NewKeyedLimiter(time.Minute, 1)
+//	// idleTTL=10*time.Minute — корзини, до яких не зверталися
+//	// 10 хв, видаляються фоновим sweeper-ом, щоб мапа не росла
+//	// безкінечно у long-running процесах.
+//	klim := monobank.NewKeyedLimiter(time.Minute, 1, 10*time.Minute)
+//	defer klim.Stop()
+//
 //	cli := personal.New(token, monobank.WithRateLimiter(klim))
 //
 //	for _, acc := range info.Accounts {
@@ -128,23 +133,83 @@ func limiterKeyFrom(ctx context.Context) string {
 //
 // Безпечний для конкурентного використання.
 type KeyedLimiter struct {
-	every time.Duration
-	burst int
+	every   time.Duration
+	burst   int
+	idleTTL time.Duration
 
 	mu       sync.Mutex
-	limiters map[string]*Limiter
+	limiters map[string]*keyedBucket
+
+	stopCh   chan struct{}
+	stopOnce sync.Once
+}
+
+type keyedBucket struct {
+	lim        *Limiter
+	lastAccess time.Time
 }
 
 // NewKeyedLimiter повертає лімітер, що для кожного унікального ключа
 // створює власну корзину з параметрами every / burst (як [NewLimiter]).
-func NewKeyedLimiter(every time.Duration, burst int) *KeyedLimiter {
+//
+// idleTTL > 0 запускає фоновий sweeper, який видаляє корзини, до яких
+// не зверталися довше за idleTTL (захист від витоку пам'яті при
+// великій кількості унікальних ключів). idleTTL <= 0 — eviction
+// вимкнений; підходить для коротких CLI-утиліт, але long-running
+// процесам обов'язково передавай розумне значення (наприклад, у 10×
+// більше за every).
+//
+// Завжди викликай [KeyedLimiter.Stop] на завершенні роботи (через
+// defer одразу після створення), щоб зупинити sweeper-горутину.
+func NewKeyedLimiter(every time.Duration, burst int, idleTTL time.Duration) *KeyedLimiter {
 	if burst < 1 {
 		burst = 1
 	}
-	return &KeyedLimiter{
+	k := &KeyedLimiter{
 		every:    every,
 		burst:    burst,
-		limiters: make(map[string]*Limiter),
+		idleTTL:  idleTTL,
+		limiters: make(map[string]*keyedBucket),
+		stopCh:   make(chan struct{}),
+	}
+	if idleTTL > 0 {
+		go k.sweep()
+	}
+	return k
+}
+
+// Stop зупиняє фоновий sweeper. Безпечно викликати кілька разів і на
+// лімітері без sweeper-а (idleTTL <= 0) — у такому випадку no-op.
+// Після Stop лімітер усе ще обслуговує Wait/WaitKey-виклики коректно;
+// просто корзини більше не евіктяться автоматично.
+func (k *KeyedLimiter) Stop() {
+	k.stopOnce.Do(func() { close(k.stopCh) })
+}
+
+func (k *KeyedLimiter) sweep() {
+	interval := k.idleTTL / 2
+	if interval < time.Second {
+		interval = time.Second
+	}
+	t := time.NewTicker(interval)
+	defer t.Stop()
+	for {
+		select {
+		case <-k.stopCh:
+			return
+		case now := <-t.C:
+			k.evictIdle(now)
+		}
+	}
+}
+
+func (k *KeyedLimiter) evictIdle(now time.Time) {
+	k.mu.Lock()
+	defer k.mu.Unlock()
+	for key, b := range k.limiters {
+		if now.Sub(b.lastAccess) > k.idleTTL {
+			delete(k.limiters, key)
+		}
 	}
 }
 
@@ -164,10 +229,11 @@ func (k *KeyedLimiter) Wait(ctx context.Context) error {
 func (k *KeyedLimiter) bucket(key string) *Limiter {
 	k.mu.Lock()
 	defer k.mu.Unlock()
-	lim, ok := k.limiters[key]
+	b, ok := k.limiters[key]
 	if !ok {
-		lim = NewLimiter(k.every, k.burst)
-		k.limiters[key] = lim
+		b = &keyedBucket{lim: NewLimiter(k.every, k.burst)}
+		k.limiters[key] = b
 	}
-	return lim
+	b.lastAccess = time.Now()
+	return b.lim
 }

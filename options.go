@@ -119,10 +119,37 @@ func WithResponseHook(fn func(*http.Response, error)) Option {
 // Корисно для тестування проти httptest.Server, записаного proxy або
 // окремих хостів (corp-api.monobank.ua — використовується автоматично
 // у [business.New], тут не потрібно).
+//
+// Якщо uri використовує не-https схему (крім localhost / 127.0.0.1) і
+// клієнт сконфігурований із [WithLogger], логується Warn — токен у
+// X-Token піде відкритим текстом, і це майже завжди помилка
+// конфігурації.
 func WithBaseURL(uri string) Option {
 	return func(c *Client) {
 		c.SetBaseURL(uri)
+		if c.logger != nil && isInsecureBaseURL(uri) {
+			c.logger.Warn("monobank: base URL uses insecure scheme — credentials will be sent in cleartext",
+				slog.String("url", uri))
+		}
 	}
+}
+
+// isInsecureBaseURL повертає true, якщо схема не https і хост не
+// є loopback. Виділено окремо, щоб не залежати від порядку опцій
+// (warn спрацює тільки якщо WithLogger йде ДО WithBaseURL).
+func isInsecureBaseURL(uri string) bool {
+	u, err := url.Parse(uri)
+	if err != nil || u == nil {
+		return false
+	}
+	if u.Scheme == "https" || u.Scheme == "" {
+		return false
+	}
+	host := u.Hostname()
+	if host == "localhost" || host == "127.0.0.1" || host == "::1" {
+		return false
+	}
+	return true
 }
 
 // WithRetry вмикає автоматичний ретрай для transient-помилок (5xx і
@@ -152,6 +179,24 @@ func WithRetry(attempts int, baseDelay, maxDelay time.Duration) Option {
 		} else if c.retry.maxDelay == 0 {
 			c.retry.maxDelay = defaultRetry.maxDelay
 		}
+	}
+}
+
+// WithUnsafeRetries вмикає автоматичні ретраї POST/PATCH без заголовка
+// Idempotency-Key. За замовчуванням такі методи не ретраяться, бо
+// 502/504 від балансера може прийти ПІСЛЯ того, як upstream уже
+// обробив запит — повтор створить дублікат операції (наприклад, два
+// інвойси через [acquiring.Client.CreateInvoice]).
+//
+// Mono приймає Idempotency-Key для всіх мутаційних endpoint-ів, де він
+// має сенс (див. [business.NewIdempotencyKey], який автоматично
+// проставляється у [business.Client.PreparePayment] /
+// [business.Client.CreateSalaryRegistry]). Для решти POST-методів,
+// якщо ти впевнений, що endpoint ідемпотентний на стороні Mono або
+// готовий мирно жити з дублями — постав WithUnsafeRetries(true).
+func WithUnsafeRetries(enabled bool) Option {
+	return func(c *Client) {
+		c.unsafeRetries = enabled
 	}
 }
 

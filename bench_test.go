@@ -26,7 +26,7 @@ func BenchmarkLimiterWait_HighBurst(b *testing.B) {
 }
 
 func BenchmarkKeyedLimiterWait(b *testing.B) {
-	klim := NewKeyedLimiter(0, 1)
+	klim := NewKeyedLimiter(0, 1, 0)
 	ctx := WithLimiterKey(context.Background(), "acc-1")
 	b.ResetTimer()
 	for range b.N {

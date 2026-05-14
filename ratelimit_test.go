@@ -147,7 +147,7 @@ func TestWithRateLimiter_NilIgnored(t *testing.T) {
 // --- KeyedLimiter ---
 
 func TestKeyedLimiter_PerKeyIndependent(t *testing.T) {
-	klim := NewKeyedLimiter(time.Hour, 1)
+	klim := NewKeyedLimiter(time.Hour, 1, 0)
 	require.NoError(t, klim.WaitKey(context.Background(), "a"))
 	// Different key → different bucket, must not block.
 	require.NoError(t, klim.WaitKey(context.Background(), "b"))
@@ -159,7 +159,7 @@ func TestKeyedLimiter_PerKeyIndependent(t *testing.T) {
 }
 
 func TestKeyedLimiter_ReadsKeyFromContext(t *testing.T) {
-	klim := NewKeyedLimiter(time.Hour, 1)
+	klim := NewKeyedLimiter(time.Hour, 1, 0)
 	ctxA := WithLimiterKey(context.Background(), "acc-A")
 	ctxB := WithLimiterKey(context.Background(), "acc-B")
 
@@ -168,14 +168,14 @@ func TestKeyedLimiter_ReadsKeyFromContext(t *testing.T) {
 }
 
 func TestKeyedLimiter_NoKeyUsesDefault(t *testing.T) {
-	klim := NewKeyedLimiter(time.Hour, 2)
+	klim := NewKeyedLimiter(time.Hour, 2, 0)
 	// Both calls share the "" bucket; burst=2 covers them.
 	require.NoError(t, klim.Wait(context.Background()))
 	require.NoError(t, klim.Wait(context.Background()))
 }
 
 func TestKeyedLimiter_LazyCreation(t *testing.T) {
-	klim := NewKeyedLimiter(time.Second, 1)
+	klim := NewKeyedLimiter(time.Second, 1, 0)
 	assert.Empty(t, klim.limiters, "no buckets created until first Wait")
 	_ = klim.WaitKey(context.Background(), "x")
 	assert.Len(t, klim.limiters, 1)
@@ -183,12 +183,35 @@ func TestKeyedLimiter_LazyCreation(t *testing.T) {
 	assert.Len(t, klim.limiters, 2)
 }
 
+func TestKeyedLimiter_EvictsIdle(t *testing.T) {
+	klim := NewKeyedLimiter(time.Hour, 1, 50*time.Millisecond)
+	defer klim.Stop()
+
+	require.NoError(t, klim.WaitKey(context.Background(), "x"))
+	require.NoError(t, klim.WaitKey(context.Background(), "y"))
+	require.Len(t, klim.limiters, 2)
+
+	// sweeper runs every idleTTL/2 (capped at 1s); wait long enough for
+	// at least one tick AFTER all entries cross the TTL threshold.
+	require.Eventually(t, func() bool {
+		klim.mu.Lock()
+		defer klim.mu.Unlock()
+		return len(klim.limiters) == 0
+	}, 3*time.Second, 50*time.Millisecond, "idle buckets should be evicted")
+}
+
+func TestKeyedLimiter_StopIdempotent(t *testing.T) {
+	klim := NewKeyedLimiter(time.Hour, 1, time.Minute)
+	klim.Stop()
+	klim.Stop() // must not panic
+}
+
 func TestKeyedLimiter_ImplementsRateLimiter(t *testing.T) {
 	var _ RateLimiter = (*KeyedLimiter)(nil)
 }
 
 func TestKeyedLimiter_ConcurrentSafe(t *testing.T) {
-	klim := NewKeyedLimiter(0, 1) // unlimited, just stress map access
+	klim := NewKeyedLimiter(0, 1, 0) // unlimited, just stress map access
 	var wg sync.WaitGroup
 	for i := range 50 {
 		wg.Add(1)

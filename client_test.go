@@ -2,10 +2,14 @@ package monobank
 
 import (
 	"context"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"strings"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/OlexiyOdarchuk/go-monobank-sdk/auth"
 	"github.com/stretchr/testify/assert"
@@ -109,4 +113,109 @@ func TestNew_appliesOptions(t *testing.T) {
 	base, _ := url.Parse("https://example.com")
 	c := New(WithBaseURL("https://example.com"))
 	assert.Equal(t, base.String(), c.baseURL.String())
+}
+
+// Регресія C1: тіло POST мусить бути валідним на КОЖНІЙ retry-спробі.
+// До фіксу другий attempt отримував порожнє тіло, бо http.Transport
+// повністю споживав Body на першому Do.
+func TestClient_Do_retriesPreserveBody(t *testing.T) {
+	const want = `{"hello":"world"}`
+	var hits atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, err := io.ReadAll(r.Body)
+		require.NoError(t, err)
+		assert.Equal(t, want, string(body),
+			"attempt #%d body mismatch", hits.Load()+1)
+
+		if hits.Add(1) == 1 {
+			w.Header().Set("Retry-After", "0")
+			w.WriteHeader(http.StatusServiceUnavailable)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{}`))
+	}))
+	defer srv.Close()
+
+	c := New(
+		WithBaseURL(srv.URL),
+		WithHTTPClient(srv.Client()),
+		WithRetry(3, time.Millisecond, 10*time.Millisecond),
+	)
+	req, _ := http.NewRequest(http.MethodPost, "/x", strings.NewReader(want))
+	req.Header.Set("Idempotency-Key", "test-key") // інакше POST не ретраїться (C2)
+	require.NoError(t, c.Do(req, nil))
+	assert.Equal(t, int32(2), hits.Load())
+}
+
+// Регресія C2: POST без Idempotency-Key НЕ повинен ретраїтись на 503.
+func TestClient_Do_postWithoutIdempotencyKeyNotRetried(t *testing.T) {
+	var hits atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		hits.Add(1)
+		w.Header().Set("Retry-After", "0")
+		w.WriteHeader(http.StatusServiceUnavailable)
+	}))
+	defer srv.Close()
+
+	c := New(
+		WithBaseURL(srv.URL),
+		WithHTTPClient(srv.Client()),
+		WithRetry(5, time.Millisecond, 10*time.Millisecond),
+	)
+	req, _ := http.NewRequest(http.MethodPost, "/x", strings.NewReader(`{}`))
+	err := c.Do(req, nil)
+	require.Error(t, err)
+	assert.Equal(t, int32(1), hits.Load(),
+		"POST без Idempotency-Key мусить виконатися рівно один раз")
+}
+
+// Регресія C2: POST з Idempotency-Key ретраїться як ідемпотентний.
+func TestClient_Do_postWithIdempotencyKeyRetried(t *testing.T) {
+	var hits atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		if hits.Add(1) == 1 {
+			w.Header().Set("Retry-After", "0")
+			w.WriteHeader(http.StatusServiceUnavailable)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{}`))
+	}))
+	defer srv.Close()
+
+	c := New(
+		WithBaseURL(srv.URL),
+		WithHTTPClient(srv.Client()),
+		WithRetry(3, time.Millisecond, 10*time.Millisecond),
+	)
+	req, _ := http.NewRequest(http.MethodPost, "/x", strings.NewReader(`{}`))
+	req.Header.Set("Idempotency-Key", "k1")
+	require.NoError(t, c.Do(req, nil))
+	assert.Equal(t, int32(2), hits.Load())
+}
+
+// Регресія C2: WithUnsafeRetries(true) дозволяє ретраїти POST без ключа.
+func TestClient_Do_unsafeRetriesAllowsPostRetry(t *testing.T) {
+	var hits atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		if hits.Add(1) == 1 {
+			w.Header().Set("Retry-After", "0")
+			w.WriteHeader(http.StatusServiceUnavailable)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{}`))
+	}))
+	defer srv.Close()
+
+	c := New(
+		WithBaseURL(srv.URL),
+		WithHTTPClient(srv.Client()),
+		WithRetry(3, time.Millisecond, 10*time.Millisecond),
+		WithUnsafeRetries(true),
+	)
+	req, _ := http.NewRequest(http.MethodPost, "/x", strings.NewReader(`{}`))
+	require.NoError(t, c.Do(req, nil))
+	assert.Equal(t, int32(2), hits.Load())
 }

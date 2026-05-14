@@ -4,12 +4,18 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"math/rand"
+	"math"
+	"math/rand/v2"
 	"net/http"
 	"strconv"
 	"strings"
 	"time"
 )
+
+// noRetryAfter — sentinel значення parseRetryAfter, що позначає
+// "header відсутній або не розпізнаний". Дозволяє відрізнити цей
+// випадок від справжнього "Retry-After: 0" (миттєвий повтор).
+const noRetryAfter = time.Duration(-1)
 
 // retryPolicy controls automatic retries on transient HTTP failures.
 //
@@ -52,8 +58,14 @@ func (rp retryPolicy) run(ctx context.Context, fn func() error) error {
 			return lastErr
 		}
 
-		delay := ts.retryAfter
-		if delay <= 0 {
+		var delay time.Duration
+		switch {
+		case ts.retryAfter > 0:
+			delay = ts.retryAfter
+		case ts.retryAfter == 0:
+			// Server explicitly said "retry now" (Retry-After: 0).
+			delay = 0
+		default: // noRetryAfter — header absent
 			delay = backoff(rp.baseDelay, rp.maxDelay, i)
 		}
 		if delay > rp.maxDelay && rp.maxDelay > 0 {
@@ -70,17 +82,34 @@ func (rp retryPolicy) run(ctx context.Context, fn func() error) error {
 }
 
 // backoff returns the delay for attempt n (0-indexed) using exponential
-// growth with full jitter, clamped at max.
+// growth with full jitter, clamped at max. Захищено від int64-overflow
+// при великих attempt: щойно зсув переповнює базу, повертаємо max.
 func backoff(base, max time.Duration, attempt int) time.Duration {
 	if base <= 0 {
 		return 0
 	}
-	d := base << attempt
-	if d > max && max > 0 {
+	// Перевіряємо overflow ДО зсуву: якщо base << attempt перевищить
+	// MaxInt64, не зсуваємо взагалі — повертаємо max (або сам base
+	// якщо max не виставлено).
+	var d time.Duration
+	const maxShift = 62 // 1 << 62 ще влазить у int64
+	if attempt >= maxShift || base > time.Duration(math.MaxInt64>>attempt) {
+		d = max
+		if d <= 0 {
+			d = base
+		}
+	} else {
+		d = base << attempt
+	}
+	if max > 0 && d > max {
 		d = max
 	}
-	jitter := time.Duration(rand.Int63n(int64(d) + 1))
-	return jitter
+	if d <= 0 {
+		return 0
+	}
+	// math/rand/v2 — без глобального мутекса (PCG per goroutine),
+	// безпечно для високого RPS у retry.
+	return time.Duration(rand.Int64N(int64(d) + 1))
 }
 
 // transientStatus is the error type wrapped around responses that look
@@ -102,11 +131,18 @@ func (e *transientStatus) Error() string {
 func (e *transientStatus) Unwrap() error { return e.cause }
 
 // parseRetryAfter parses a Retry-After header value per RFC 7231 §7.1.3.
-// Returns 0 when the header is missing or unparseable.
+// Returns the duration the client should wait. Special cases:
+//   - header missing or unparseable → [noRetryAfter] (-1)
+//   - explicit "0" or HTTP-date in the past → 0 (retry immediately)
+//   - any positive value → that value
+//
+// Розрізнення "відсутній" vs "0" дозволяє retry-логіці використовувати
+// exponential backoff лише коли сервер не дав підказки, а не коли
+// сказав "ретрай негайно".
 func parseRetryAfter(h http.Header) time.Duration {
 	v := strings.TrimSpace(h.Get("Retry-After"))
 	if v == "" {
-		return 0
+		return noRetryAfter
 	}
 	if secs, err := strconv.Atoi(v); err == nil && secs >= 0 {
 		return time.Duration(secs) * time.Second
@@ -115,6 +151,7 @@ func parseRetryAfter(h http.Header) time.Duration {
 		if d := time.Until(t); d > 0 {
 			return d
 		}
+		return 0 // past date → retry immediately
 	}
-	return 0
+	return noRetryAfter
 }
