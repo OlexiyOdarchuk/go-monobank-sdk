@@ -38,6 +38,16 @@ const (
 // ErrNotFound — банка не існує або ID невалідний.
 var ErrNotFound = errors.New("jar: not found")
 
+// ErrEmptyJarID — у [Client.ByLongID] передано порожній longJarID.
+var ErrEmptyJarID = errors.New("jar: empty longJarID")
+
+// ErrEmptyClientID — у [Client.ByShortID] передано порожній clientID.
+var ErrEmptyClientID = errors.New("jar: empty clientID")
+
+// MaxResponseBytes — стеля на розмір відповіді. Тіла jar-ендпоінтів —
+// маленькі (<10 KiB), 1 MiB з великим запасом.
+const MaxResponseBytes = 1 << 20
+
 // APIError — структурована помилка з тіла відповіді monobank (errCode/errText).
 type APIError struct {
 	StatusCode int
@@ -150,7 +160,7 @@ func New(opts ...Option) *Client {
 // отримати з [Client.ByShortID].
 func (c *Client) ByLongID(ctx context.Context, longJarID string) (*Info, error) {
 	if longJarID == "" {
-		return nil, fmt.Errorf("jar: empty longJarID")
+		return nil, ErrEmptyJarID
 	}
 	u := c.apiBase + "/bank/jar/" + url.PathEscape(longJarID)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, http.NoBody)
@@ -163,7 +173,10 @@ func (c *Client) ByLongID(ctx context.Context, longJarID string) (*Info, error) 
 		return nil, fmt.Errorf("jar: do request: %w", err)
 	}
 	defer resp.Body.Close()
-	body, _ := io.ReadAll(resp.Body)
+	body, err := io.ReadAll(io.LimitReader(resp.Body, MaxResponseBytes))
+	if err != nil {
+		return nil, fmt.Errorf("jar: read response body: %w", err)
+	}
 	if resp.StatusCode == http.StatusNotFound {
 		return nil, ErrNotFound
 	}
@@ -192,7 +205,7 @@ type shortIDRequest struct {
 // Для регулярних оновлень балансу використовуй [Client.ByLongID].
 func (c *Client) ByShortID(ctx context.Context, clientID string) (*SendInfo, error) {
 	if clientID == "" {
-		return nil, fmt.Errorf("jar: empty clientID")
+		return nil, ErrEmptyClientID
 	}
 	body, err := json.Marshal(shortIDRequest{C: "hello", ClientID: clientID, Pc: "random"})
 	if err != nil {
@@ -210,7 +223,10 @@ func (c *Client) ByShortID(ctx context.Context, clientID string) (*SendInfo, err
 		return nil, fmt.Errorf("jar: do request: %w", err)
 	}
 	defer resp.Body.Close()
-	respBody, _ := io.ReadAll(resp.Body)
+	respBody, err := io.ReadAll(io.LimitReader(resp.Body, MaxResponseBytes))
+	if err != nil {
+		return nil, fmt.Errorf("jar: read response body: %w", err)
+	}
 	if resp.StatusCode == http.StatusNotFound {
 		return nil, ErrNotFound
 	}

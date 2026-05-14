@@ -30,6 +30,16 @@ const HeaderSignature = "signature"
 // ErrNilRequest повертається з мутаційних методів, коли body == nil.
 var ErrNilRequest = errors.New("installment: request body is nil")
 
+// ErrCallbackSignatureMismatch повертається з [Client.VerifyCallback],
+// коли підпис у заголовку signature не збігається з очікуваним.
+var ErrCallbackSignatureMismatch = errors.New("installment: callback signature mismatch")
+
+// MaxResponseBytes — стеля на розмір відповіді, після якої тіло
+// обрізається. Захист від OOM у разі зловмисного/glitched проксі.
+// PDF-документи (payslips, інвойси) можуть досягати кількох MB; 50 MiB
+// — з великим запасом.
+const MaxResponseBytes = 50 << 20
+
 // APIError — структура помилки сервера (тіло відповіді {"message": "..."}).
 type APIError struct {
 	StatusCode int
@@ -90,13 +100,27 @@ func (c *Client) Sign(body []byte) string {
 	return base64.StdEncoding.EncodeToString(mac.Sum(nil))
 }
 
-// VerifyCallback повертає nil, якщо HMAC-SHA256(body, secret) збігається з
-// значенням заголовка signature, прийнятим у вхідному callback. Викликай
-// перед обробкою тіла, інакше будь-хто може прислати фейковий запит.
+// VerifyCallback повертає nil, якщо HMAC-SHA256(body, secret) збігається
+// з [ErrCallbackSignatureMismatch] значенням заголовка signature,
+// прийнятим у вхідному callback. Викликай перед обробкою тіла, інакше
+// будь-хто може прислати фейковий запит.
+//
+// Реалізація відхиляє підпис із некоректною довжиною (base64 від
+// 32-байтного HMAC-SHA256 завжди має 44 символи) ДО обчислення HMAC —
+// це захист від CPU-DoS, коли атакуючий шле гігабайтне тіло з порожнім
+// або довільним signature. Незалежно від довжини, фінальне порівняння
+// constant-time через [hmac.Equal].
+//
+// Окремо рекомендую загорнути запит у [http.MaxBytesReader] перед
+// викликом VerifyCallback, щоб обмежити верхню межу читання тіла.
 func (c *Client) VerifyCallback(body []byte, signatureHeader string) error {
+	const wantLen = 44 // base64.StdEncoding.EncodedLen(sha256.Size)
+	if len(signatureHeader) != wantLen {
+		return ErrCallbackSignatureMismatch
+	}
 	want := c.Sign(body)
 	if !hmac.Equal([]byte(want), []byte(signatureHeader)) {
-		return errors.New("installment: callback signature mismatch")
+		return ErrCallbackSignatureMismatch
 	}
 	return nil
 }
@@ -121,7 +145,10 @@ func (c *Client) doJSON(ctx context.Context, path string, in, out any, wantStatu
 		return fmt.Errorf("installment: do request: %w", err)
 	}
 	defer resp.Body.Close()
-	respBody, _ := io.ReadAll(resp.Body)
+	respBody, err := io.ReadAll(io.LimitReader(resp.Body, MaxResponseBytes))
+	if err != nil {
+		return fmt.Errorf("installment: read response body: %w", err)
+	}
 	if resp.StatusCode != wantStatus {
 		return decodeAPIError(resp, respBody)
 	}
@@ -153,7 +180,10 @@ func (c *Client) doPDF(ctx context.Context, path string, in any) ([]byte, error)
 		return nil, fmt.Errorf("installment: do request: %w", err)
 	}
 	defer resp.Body.Close()
-	respBody, _ := io.ReadAll(resp.Body)
+	respBody, err := io.ReadAll(io.LimitReader(resp.Body, MaxResponseBytes))
+	if err != nil {
+		return nil, fmt.Errorf("installment: read response body: %w", err)
+	}
 	if resp.StatusCode != http.StatusOK {
 		return nil, decodeAPIError(resp, respBody)
 	}

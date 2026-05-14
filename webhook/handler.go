@@ -7,9 +7,22 @@ import (
 	"io"
 	"net/http"
 	"sync"
+	"time"
 
 	"github.com/OlexiyOdarchuk/go-monobank-sdk/bank"
+	"golang.org/x/sync/singleflight"
 )
+
+// DefaultMaxBodyBytes — стеля на розмір webhook-body, якщо не вказано
+// інше через [Options.MaxBodyBytes]. Реальні Mono-payload-и — десятки
+// KB; 1 MiB з великим запасом і захищає від OOM, коли атакуючий шле
+// гігабайтне тіло на твій webhook-URL.
+const DefaultMaxBodyBytes = 1 << 20
+
+// minRefreshInterval — мінімальна пауза між викликами /bank/sync для
+// оновлення серверного ключа. Захист від DoS-амплифікації, коли
+// атакуючий заливає handler POST-ами з випадковим X-Key-Id.
+const minRefreshInterval = 30 * time.Second
 
 // KeyProvider — будь-що, що вміє віддати поточний публічний ключ банку.
 // [bank.Client] його реалізує; у тестах можна підставити фейк.
@@ -45,7 +58,19 @@ type Options struct {
 	// ним перед OnEvent і скіпає дублікати (відповідає 200, щоб Mono
 	// припинила ретраї). Без deduper-а подія, яку OnEvent успішно
 	// обробив, але клієнт не встиг отримати 200 — буде оброблена двічі.
+	//
+	// Для production обов'язково використовуй ПЕРСИСТЕНТНИЙ deduper
+	// (Redis/SQL) — in-memory [NewMemoryDeduper] втрачає стан при
+	// рестарті і дозволяє replay-атаку: атакуючий, що раз перехопив
+	// валідно підписаний webhook, може повторно його надіслати після
+	// твого рестарту, бо Mono не включає freshness-токен у payload.
 	Dedup Deduper
+
+	// MaxBodyBytes — верхня межа розміру тіла webhook-запиту. 0 або
+	// негативне значення → [DefaultMaxBodyBytes] (1 MiB). Реальні
+	// payload-и Mono — десятки KB, тож стандартний ліміт безпечний.
+	// При перевищенні handler відповідає 413 Request Entity Too Large.
+	MaxBodyBytes int64
 }
 
 // Handler — готовий http.Handler, який приймає підписані webhook-и Mono.
@@ -61,10 +86,16 @@ type Options struct {
 // Монтується на будь-який роутер: net/http, chi, gin через
 // http.HandlerFunc — це звичайний http.Handler.
 type Handler struct {
-	opts Options
+	opts         Options
+	maxBodyBytes int64
 
 	mu  sync.RWMutex
 	key *bank.ServerKey
+
+	refreshGroup singleflight.Group
+
+	refreshMu       sync.Mutex
+	lastRefreshAt   time.Time
 }
 
 // Помилки конфігурації Handler-а.
@@ -86,7 +117,11 @@ func NewHandler(ctx context.Context, opts Options) (*Handler, error) {
 	if opts.OnEvent == nil {
 		return nil, ErrNilOnEvent
 	}
-	h := &Handler{opts: opts}
+	max := opts.MaxBodyBytes
+	if max <= 0 {
+		max = DefaultMaxBodyBytes
+	}
+	h := &Handler{opts: opts, maxBodyBytes: max}
 	if err := h.refresh(ctx); err != nil {
 		return nil, fmt.Errorf("initial ServerKey fetch: %w", err)
 	}
@@ -115,6 +150,30 @@ func (h *Handler) refresh(ctx context.Context) error {
 	return nil
 }
 
+// refreshCoalesced виконує refresh, об'єднуючи паралельні виклики через
+// singleflight (один похід у /bank/sync на пак конкурентних запитів) і
+// дроссельуючи частоту до [minRefreshInterval] (захист від DoS-
+// амплифікації, коли атакуючий шле POST з випадковим X-Key-Id).
+func (h *Handler) refreshCoalesced(ctx context.Context) error {
+	h.refreshMu.Lock()
+	if time.Since(h.lastRefreshAt) < minRefreshInterval {
+		h.refreshMu.Unlock()
+		return nil // throttled — використати кешований ключ
+	}
+	h.refreshMu.Unlock()
+
+	_, err, _ := h.refreshGroup.Do("refresh", func() (any, error) {
+		if e := h.refresh(ctx); e != nil {
+			return nil, e
+		}
+		h.refreshMu.Lock()
+		h.lastRefreshAt = time.Now()
+		h.refreshMu.Unlock()
+		return nil, nil
+	})
+	return err
+}
+
 func (h *Handler) currentKey() *bank.ServerKey {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
@@ -136,18 +195,32 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	body, err := io.ReadAll(r.Body)
+	limited := http.MaxBytesReader(w, r.Body, h.maxBodyBytes)
+	body, err := io.ReadAll(limited)
 	if err != nil {
+		// MaxBytesReader повертає *http.MaxBytesError при перевищенні.
+		var mbe *http.MaxBytesError
+		if errors.As(err, &mbe) {
+			http.Error(w, "request body too large", http.StatusRequestEntityTooLarge)
+			return
+		}
 		http.Error(w, "read body", http.StatusBadRequest)
 		return
 	}
 
 	key := h.currentKey()
+	if key == nil {
+		// Захист на випадок Handler{} напряму (без NewHandler) — без
+		// ключа верифікувати неможливо.
+		h.reportError(errors.New("ServerKey not loaded"))
+		http.Error(w, "key not ready", http.StatusServiceUnavailable)
+		return
+	}
 	if incomingKeyID := r.Header.Get("X-Key-Id"); incomingKeyID != "" && incomingKeyID != key.ID {
-		if err := h.refresh(r.Context()); err != nil {
+		if err := h.refreshCoalesced(r.Context()); err != nil {
 			h.reportError(fmt.Errorf("refresh ServerKey on X-Key-Id mismatch: %w", err))
-		} else {
-			key = h.currentKey()
+		} else if k := h.currentKey(); k != nil {
+			key = k
 		}
 	}
 
