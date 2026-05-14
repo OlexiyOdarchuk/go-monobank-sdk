@@ -72,6 +72,35 @@ func TestTransactionsRange_paginates31DayWindows(t *testing.T) {
 	assert.Len(t, got, 3)
 }
 
+// Regression: consecutive windows must not overlap on the boundary
+// second. Mono's /personal/statement is inclusive on both ends —
+// before the +1s shift, a transaction landing exactly at the window
+// boundary was returned in BOTH the current and the next chunk.
+func TestTransactionsRange_noBoundaryDuplicate(t *testing.T) {
+	var calls atomic.Int32
+	// Server records which from/to it was asked for; checks must
+	// not see two requests sharing the same boundary second.
+	seenFrom := map[int64]bool{}
+	c := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		calls.Add(1)
+		segs := strings.Split(strings.TrimPrefix(r.URL.Path, "/"), "/")
+		from, _ := strconv.ParseInt(segs[3], 10, 64)
+		to, _ := strconv.ParseInt(segs[4], 10, 64)
+		// from of window N must NOT equal to of window N-1.
+		assert.False(t, seenFrom[from],
+			"window boundary %d appears in two requests — caller will see duplicates", from)
+		seenFrom[from] = true
+		assert.True(t, to >= from, "to must be >= from")
+		_, _ = w.Write([]byte(`[]`))
+	})
+
+	from := time.Unix(1_700_000_000, 0)
+	to := from.Add(70 * 24 * time.Hour) // 3 windows
+	_, err := c.TransactionsRange(context.Background(), "a", from, to)
+	require.NoError(t, err)
+	assert.GreaterOrEqual(t, calls.Load(), int32(2))
+}
+
 func TestTransactionsRange_zeroOrNegative(t *testing.T) {
 	c := New("x")
 	now := time.Now()

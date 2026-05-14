@@ -54,12 +54,16 @@ func (c *Client) Transactions(ctx context.Context, requestID, accountID string, 
 // arbitrary range, slicing it into consecutive 31-day windows and
 // concatenating the results. If to is zero or earlier than from,
 // it returns nil, nil.
+//
+// Mono's /personal/statement is inclusive on both ends, so the next
+// window starts at end+1s — a transaction at exactly the boundary
+// would otherwise appear in two chunks.
 func (c *Client) TransactionsRange(ctx context.Context, requestID, accountID string, from, to time.Time) (bank.Transactions, error) {
 	if to.IsZero() || !to.After(from) {
 		return nil, nil
 	}
 	var all bank.Transactions
-	for cursor := from; cursor.Before(to); {
+	for cursor := from; !cursor.After(to); {
 		end := cursor.Add(bank.MaxStatementWindow)
 		if end.After(to) {
 			end = to
@@ -69,7 +73,11 @@ func (c *Client) TransactionsRange(ctx context.Context, requestID, accountID str
 			return nil, fmt.Errorf("range %s..%s: %w", cursor.Format(time.RFC3339), end.Format(time.RFC3339), err)
 		}
 		all = append(all, chunk...)
-		cursor = end
+		next := end.Add(time.Second)
+		if !next.After(cursor) {
+			break
+		}
+		cursor = next
 	}
 	return all, nil
 }

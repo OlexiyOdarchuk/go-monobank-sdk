@@ -31,10 +31,10 @@
   - Додати regression-тест із транспортом, що повертає `(nil, error)`, перевірити, що `len(store) == 0`.
   - Resolution:
 
-- [ ] **personal/client.go:101-112, corporate/client_data.go:60-72, personal/iter.go:53, corporate/iter.go:47** — пагінатор робить `cursor = end` без зсуву на +1с. Mono `[from,to]` інклюзивний → транзакції на стиках вікон з'являться двічі (а у streaming-ітераторі — без помітної ознаки).
+- [x] **personal/client.go:101-112, corporate/client_data.go:60-72, personal/iter.go:53, corporate/iter.go:47** — пагінатор робить `cursor = end` без зсуву на +1с. Mono `[from,to]` інклюзивний → транзакції на стиках вікон з'являться двічі (а у streaming-ітераторі — без помітної ознаки).
   - Виправити: `cursor = end.Add(time.Second)` АБО дедуп через `seen map[string]struct{}` на ID транзакцій (memory-safe — освіжати на кожному вікні).
   - Тест: вікно з транзакціями рівно на boundary секунді — не повинно бути дублів.
-  - Resolution:
+  - Resolution: cursor зсувається на +1s після кожного вікна в personal/corporate (slice + iter). Loop guard `!cursor.After(to)` замість `cursor.Before(to)` коректно завершує. Regression `TestTransactionsRange_noBoundaryDuplicate` фіксує: `from` кожного запиту унікальний (немає overlap).
 
 - [x] **business/iter.go:57-94** — `oldest.Add(-time.Second)` як курсор: якщо в одній секунді операцій більше за `pageSize` — рештa губиться (silent data loss).
   - Виправити: ID-based курсор АБО не зсувати на секунду коли `len(page) == limit` і всі мають однаковий `time`.

@@ -32,7 +32,7 @@ func (c *Client) TransactionsRangeIter(ctx context.Context, accountID string,
 		if to.IsZero() || !to.After(from) {
 			return
 		}
-		for cursor := from; cursor.Before(to); {
+		for cursor := from; !cursor.After(to); {
 			if err := ctx.Err(); err != nil {
 				_ = yield(bank.Transaction{}, err)
 				return
@@ -51,7 +51,14 @@ func (c *Client) TransactionsRangeIter(ctx context.Context, accountID string,
 					return
 				}
 			}
-			cursor = end
+			// Mono's /personal/statement is inclusive on both ends —
+			// the next window starts at end+1s to avoid yielding the
+			// boundary transaction twice.
+			next := end.Add(time.Second)
+			if !next.After(cursor) {
+				return
+			}
+			cursor = next
 		}
 	}
 }

@@ -26,7 +26,7 @@ func (c *Client) TransactionsRangeIter(ctx context.Context, requestID, accountID
 		if to.IsZero() || !to.After(from) {
 			return
 		}
-		for cursor := from; cursor.Before(to); {
+		for cursor := from; !cursor.After(to); {
 			if err := ctx.Err(); err != nil {
 				_ = yield(bank.Transaction{}, err)
 				return
@@ -45,7 +45,13 @@ func (c *Client) TransactionsRangeIter(ctx context.Context, requestID, accountID
 					return
 				}
 			}
-			cursor = end
+			// inclusive [from, to] on both sides — bump by +1s to
+			// avoid double-yielding the boundary transaction.
+			next := end.Add(time.Second)
+			if !next.After(cursor) {
+				return
+			}
+			cursor = next
 		}
 	}
 }

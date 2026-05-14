@@ -94,13 +94,18 @@ func (c *Client) Transactions(ctx context.Context, accountID string, from, to ti
 // If to is zero or earlier than from, returns nil, nil (no error).
 // Mind the rate limit: 1 call per account per 60 s — for weekly
 // ranges that is 1 request, for quarterly it can be 3-4.
+//
+// Consecutive windows do not overlap on the boundary second: Mono's
+// /personal/statement is inclusive on both ends, so the next cursor
+// is end+1s, not end. Without that shift a transaction landing
+// exactly on a window boundary would appear in two chunks.
 func (c *Client) TransactionsRange(ctx context.Context, accountID string, from, to time.Time) (bank.Transactions, error) {
 	if to.IsZero() || !to.After(from) {
 		return nil, nil
 	}
 
 	var all bank.Transactions
-	for cursor := from; cursor.Before(to); {
+	for cursor := from; !cursor.After(to); {
 		end := cursor.Add(bank.MaxStatementWindow)
 		if end.After(to) {
 			end = to
@@ -110,7 +115,12 @@ func (c *Client) TransactionsRange(ctx context.Context, accountID string, from, 
 			return nil, fmt.Errorf("range %s..%s: %w", cursor.Format(time.RFC3339), end.Format(time.RFC3339), err)
 		}
 		all = append(all, chunk...)
-		cursor = end
+		next := end.Add(time.Second)
+		if !next.After(cursor) {
+			// safety against int64 overflow on very large windows
+			break
+		}
+		cursor = next
 	}
 	return all, nil
 }
