@@ -195,14 +195,17 @@ import "github.com/OlexiyOdarchuk/go-monobank-sdk/business"
 cli := business.New(os.Getenv("MONO_BUSINESS_TOKEN"))
 accs, _ := cli.Accounts(ctx)
 
-key := business.NewIdempotencyKey() // UUID v4
+key, err := business.NewIdempotencyKey() // UUID v4
+if err != nil { return err }
 out, _ := cli.PreparePayment(ctx, key, &business.PaymentRequest{...})
 ```
 
 All mutating endpoints accept an `Idempotency-Key` — generate one with
 `business.NewIdempotencyKey()` per logical attempt. Retries with the same
 key are guaranteed safe — the bank returns the same response without
-duplicating the operation.
+duplicating the operation. An empty key is refused locally with
+`ErrIdempotencyKeyRequired`, because the bank treats a missing header as
+"no dedupe" and would happily create a duplicate.
 
 ## Quick start: Acquiring
 
@@ -231,6 +234,13 @@ if err := acquiring.VerifyWebhook(pub, body, r.Header.Get("X-Sign")); err != nil
     http.Error(w, "bad signature", 400)
     return
 }
+
+// Optional replay defence — reject webhooks older than 5 minutes by
+// modifiedDate. This is ON TOP OF the persistent (invoiceId,
+// modifiedDate) dedupe that you MUST keep (Mono retries on 60s/600s).
+if err := acquiring.VerifyWebhookFresh(pub, body, sig, 5*time.Minute); err != nil {
+    // ErrWebhookStale / ErrWebhookNoTimestamp / ErrBadSignature
+}
 ```
 
 Covered scenarios: one-shot debit, auth-then-capture (hold + finalize),
@@ -246,23 +256,26 @@ T2P terminals (`Terminals`).
 ```go
 import "github.com/OlexiyOdarchuk/go-monobank-sdk/installment"
 
-cli := installment.New(
+cli, err := installment.New(
     os.Getenv("CHAST_STORE_ID"),
     os.Getenv("CHAST_SECRET"),
     installment.WithBaseURL(installment.BaseURLSandbox),
 )
+if err != nil { return err } // ErrEmptyStoreID / ErrEmptySecret / ErrInsecureBaseURL
 
 order, _ := cli.CreateOrder(ctx, &installment.CreateOrderRequest{
     StoreOrderID: "ORD-001",
-    ClientPhone:  "+380501234561", // ...1 = sandbox success
-    TotalSum:     2499.99,         // hryvnia + kopecks, NOT minor units
+    ClientPhone:  "+380501234561",                // ...1 = sandbox success
+    TotalSum:     installment.NewMoney(2499, 99), // 2499.99 UAH (typed Money)
     Invoice: installment.CreateOrderInvoice{
         Number: "INV-001", Date: "2026-05-13",
         Source: installment.SourceInternet,
     },
     AvailablePrograms: []installment.Program{{AvailablePartsCount: []int{3, 6}}},
-    Products:          []installment.Product{{Name: "Kit", Count: 1, Sum: 2499.99}},
-    ResultCallback:    "https://shop/api/chast/cb",
+    Products: []installment.Product{
+        {Name: "Kit", Count: 1, Sum: installment.NewMoney(2499, 99)},
+    },
+    ResultCallback: "https://shop/api/chast/cb",
 })
 // → poll cli.OrderState(ctx, order.OrderID) until WAITING_FOR_STORE_CONFIRM
 // → ship the goods → cli.ConfirmOrder(ctx, order.OrderID)
@@ -270,13 +283,22 @@ order, _ := cli.CreateOrder(ctx, &installment.CreateOrderRequest{
 
 Body signing is automatic (HMAC-SHA256 with your store secret). For
 incoming bank callbacks: `cli.VerifyCallback(body, signatureHeader)`.
+Wrong-length signature → `ErrCallbackBadLength`; wrong MAC →
+`ErrCallbackSignatureMismatch` — separate sentinels for security
+telemetry.
+
+Every money field in installment (`TotalSum`, `Sum`, `Reverse.Sum`,
+`Commission`, `CreditAmount`, …) is `installment.Money` — int64 kopecks
+inside, exact-decimal MarshalJSON/UnmarshalJSON (string-based parsing,
+no float64 in the hot path). `0.10`/`0.20`/`0.30` round-trip exactly.
 
 ## Quick start: Jar
 
 ```go
 import "github.com/OlexiyOdarchuk/go-monobank-sdk/jar"
 
-cli := jar.New()
+cli, err := jar.New()
+if err != nil { return err }
 
 // 1) If you know the longJarId (from the widget URL) — straight to /bank/jar/{id}:
 info, _ := cli.ByLongID(ctx, "2zQL6sqnKgTYi7e69271YYWKTXTfMK8g")
@@ -310,10 +332,12 @@ recurring updates.
   parsed `ErrorDescription`, and the raw body. Implements `errors.Is`
   against the package sentinels (see below).
 - `WithRequestHook` / `WithResponseHook` — plug in metrics or tracing
-  without replacing the transport. For a full middleware chain use
-  `WithRoundTripper(http.RoundTripper)`: a clean slot for
-  OpenTelemetry / Datadog / circuit-breaker that preserves the
-  inner `*http.Client`'s timeout and cookie jar.
+  without replacing the transport. These options overwrite each other —
+  to ADD a hook on top of an existing one (e.g. application hook +
+  OpenTelemetry): `Client.ChainRequestHook(fn)` / `ChainResponseHook(fn)`.
+  For a full middleware chain use `WithRoundTripper(http.RoundTripper)`:
+  a clean slot for OpenTelemetry / Datadog / circuit-breaker that
+  preserves the inner `*http.Client`'s timeout and cookie jar.
 - `WithUserAgent(string)` — overrides the default User-Agent
   (`go-monobank-sdk/vX.Y.Z (linux; goX.Y.Z)`). Mono uses it in
   support to disambiguate your service from other SDK users.
@@ -328,16 +352,21 @@ recurring updates.
 By default, `WithBaseURL("http://...")` for a non-loopback host
 returns `monobank.ErrInsecureBaseURL` from the first `Do` — a
 config mistake should not silently send the X-Token in the clear.
-Loopback (`localhost`, `127.0.0.1`, `[::1]`) is always allowed for
-`httptest.Server` use. Opt in explicitly for MITM-proxy debugging
-or VPN-internal staging:
+Loopback is always allowed — both `localhost` and any IP for which
+`net.IP.IsLoopback` is true (`127.0.0.0/8`, `::1`). Opt in
+explicitly for MITM-proxy debugging or VPN-internal staging:
 
 ```go
 cli := personal.New(token,
-    monobank.WithInsecureBaseURL(true), // must precede WithBaseURL
+    monobank.WithInsecureBaseURL(true),
     monobank.WithBaseURL("http://staging.example.com"),
 )
+// Option order does NOT matter — New does a two-pass apply.
 ```
+
+The same guard lives in `installment.New`, `jar.New`, and
+`corporate.Client.Auth` (for the `X-Callback URL`). Each package has
+its own `WithInsecureBaseURL` / `AllowInsecureCallback` for opt-out.
 
 ### Token redaction in logs
 
@@ -353,6 +382,14 @@ slog.Info("auth", "creds", auth.NewPersonal(token))
 Protects against accidental token leaks in DEBUG logs via
 `slog.Info("token", token)`. If you log the token explicitly via
 `slog.String("token", token)` — that's on you.
+
+The SDK also redacts PII in logs: `bank.ClientInfo` (Name → first
+letter + `***`, WebHookURL path → `***`), `bank.Account` (IBAN →
+country + last4, card masks → `****` + last4), and
+`installment.ClientInfo` (full name / INN). All via `LogValue` —
+the raw struct still behaves normally, but
+`slog.Info("info", info)` never spills the customer's name into a
+log aggregator.
 
 ### Rate limits
 
@@ -434,8 +471,21 @@ if errors.As(err, &apiErr) {
 ```
 
 `installment` has its own format and its own `installment.APIError` with
-`Message`, `TraceID` fields. Callback-signature mismatches compare via
-`errors.Is(err, installment.ErrCallbackSignatureMismatch)`.
+`Message`, `TraceID` fields. Callback failures expose two sentinels:
+`installment.ErrCallbackBadLength` (wrong-length header) and
+`installment.ErrCallbackSignatureMismatch` (wrong MAC) — separate so
+security telemetry can tell "malformed" from "forgery attempt".
+
+Other useful sentinel errors:
+
+- `monobank.{ErrEmptyRequest, ErrInvalidURL, ErrInsecureBaseURL}`
+- `auth.ErrEmptyToken` — empty X-Token is refused on the first `Do`.
+- `business.{ErrIdempotencyKeyRequired, ErrInvalidTimeRange, ErrNilRequest}`
+- `installment.{ErrEmptyOrderID, ErrEmptyDate, ErrEmptyPhone, ErrInvalidPhone, ErrEmptyStoreID, ErrEmptySecret, ErrInsecureBaseURL}`
+- `acquiring.{ErrEmptyID, ErrBadSignature, ErrWebhookStale, ErrWebhookNoTimestamp}`
+- `corporate.{ErrInsecureCallback, ErrInvalidCallback, ErrLogoTooLarge, ErrEmptyAuthMaker, ErrNilRequest}`
+- `jar.{ErrNotFound, ErrEmptyJarID, ErrEmptyClientID, ErrInsecureBaseURL}`
+- `money.ErrOverflow` — int64 overflow in `Add/Sub/Mul`.
 
 ### `bank` — public endpoints
 
@@ -466,22 +516,49 @@ if errors.As(err, &apiErr) {
 ### `money` — typed amounts
 
 ```go
-m := money.New(12550, currency.UAH) // 125.50 UAH
-m = m.Mul(3)                         // 376.50 UAH
-sum, err := m.Add(other)             // errors out on currency mismatch
-fmt.Println(m)                       // "125.50 UAH"
+m := money.New(12550, currency.UAH)        // 125.50 UAH
+trip, err := m.Mul(3)                      // → ErrOverflow on MaxInt64*N
+if err != nil { return err }
+sum, err := m.Add(other)                   // currency mismatch → error
+                                           // overflow → ErrOverflow
+fmt.Println(trip)                          // "376.50 UAH"
 fmt.Println(money.New(1250, currency.JPY)) // "1250 JPY" — 0 decimals
 ```
 
 `Money` serializes as a plain integer (minor units) — wire-compatible with
-mono's format. `Money.Major` / `String` honor `currency.Code.Decimals()`,
-so JPY/KRW (0 decimals) format correctly without dividing by 100.
+mono's format. `Money.Major` / `String` honor `currency.Code.Decimals()`:
+JPY/KRW (0 decimals), BHD/JOD/KWD/OMR/TND (3 decimals), UAH/USD/EUR/...
+(2 decimals) all format correctly without a hardcoded ÷100. The helper
+`currency.Code.MinorPerMajor()` returns `10^Decimals` for currency-aware
+conversion between decimal-float and int64 minor.
+
+`Add/Sub/Mul` return `ErrOverflow` on int64 boundary — silent wrap on
+quarterly-statement-scale aggregates is no longer possible.
+
+### `installment.Money` — UAH with exact-decimal wire format
+
+The installment API is unusual in that it ships money on the wire as
+`"total_sum": 2499.99` (decimal float), not as int64 minor units. To
+avoid float64 precision loss, the package has a dedicated type:
+
+```go
+amt := installment.NewMoney(2499, 99)     // 2499.99 UAH
+amt = installment.MoneyFromKopecks(249999)
+amt = installment.MoneyFromMajor(2499.99) // rounds half away from zero
+
+// MarshalJSON emits `2499.99` (no quotes); UnmarshalJSON parses via
+// the digit string, no float64. 0.10, 0.20, 0.30 round-trip exactly.
+```
 
 ### `currency`, `mcc` — enums
 
 - `currency.Code(980).String()` → `"UAH"`; `currency.FromAlpha3("USD")` → `840`.
-- `currency.UAH.Decimals()` → `2`; `currency.JPY.Decimals()` → `0`.
+- `currency.UAH.Decimals()` → `2`; `currency.JPY.Decimals()` → `0`;
+  `currency.BHD.Decimals()` → `3`.
 - `mcc.Code(5411).Category()` → `mcc.CategoryGroceries`.
+- `mcc.Code(3500).Category()` → `mcc.CategoryHotels` (3000-3299 airlines,
+  3300-3499 car rental, 3500-3999 lodging).
+- `mcc.Code(5912).Category()` → `mcc.CategoryHealth` (pharmacy override).
 
 ### Paginators
 

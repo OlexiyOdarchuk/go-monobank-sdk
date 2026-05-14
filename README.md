@@ -196,14 +196,16 @@ import "github.com/OlexiyOdarchuk/go-monobank-sdk/business"
 cli := business.New(os.Getenv("MONO_BUSINESS_TOKEN"))
 accs, _ := cli.Accounts(ctx)
 
-key := business.NewIdempotencyKey() // UUID v4
+key, err := business.NewIdempotencyKey() // UUID v4
+if err != nil { return err }
 out, _ := cli.PreparePayment(ctx, key, &business.PaymentRequest{...})
 ```
 
-Усі мутаційні endpoint-и приймають `Idempotency-Key` — генеруйте через
+Усі мутаційні endpoint-и приймають `Idempotency-Key` — генеруйте його через
 `business.NewIdempotencyKey()` на кожну логічну спробу. Повтор із тим самим
 ключем гарантовано безпечний — банк віддасть ту саму відповідь, не дублюючи
-операцію.
+операцію. Порожній ключ відхиляється локально (`ErrIdempotencyKeyRequired`),
+бо банк потрактує відсутність ключа як «дедуп не треба» і створить дубль.
 
 ## Швидкий старт: Acquiring (еквайринг)
 
@@ -232,6 +234,13 @@ if err := acquiring.VerifyWebhook(pub, body, r.Header.Get("X-Sign")); err != nil
     http.Error(w, "bad signature", 400)
     return
 }
+
+// Опційно: захист від replay'а — відхилити webhook-и, modifiedDate яких
+// старший за 5 хвилин. Це поверх dedup-у за (invoiceId, modifiedDate),
+// який ви ОБОВ'ЯЗКОВО мусите тримати persistent (Mono ретраїть на 60s/600s).
+if err := acquiring.VerifyWebhookFresh(pub, body, sig, 5*time.Minute); err != nil {
+    // ErrWebhookStale / ErrWebhookNoTimestamp / ErrBadSignature
+}
 ```
 
 Покриті сценарії: одношагова оплата (debit), auth-then-capture (hold +
@@ -246,23 +255,26 @@ finalize), рекурент через токенізовані картки, р
 ```go
 import "github.com/OlexiyOdarchuk/go-monobank-sdk/installment"
 
-cli := installment.New(
+cli, err := installment.New(
     os.Getenv("CHAST_STORE_ID"),
     os.Getenv("CHAST_SECRET"),
     installment.WithBaseURL(installment.BaseURLSandbox),
 )
+if err != nil { return err } // ErrEmptyStoreID / ErrEmptySecret / ErrInsecureBaseURL
 
 order, _ := cli.CreateOrder(ctx, &installment.CreateOrderRequest{
     StoreOrderID: "ORD-001",
-    ClientPhone:  "+380501234561", // ...1 = sandbox-успіх
-    TotalSum:     2499.99,         // гривні з копійками, НЕ мінорні одиниці
+    ClientPhone:  "+380501234561",                // ...1 = sandbox-успіх
+    TotalSum:     installment.NewMoney(2499, 99), // 2499.99 UAH (типована Money)
     Invoice: installment.CreateOrderInvoice{
         Number: "INV-001", Date: "2026-05-13",
         Source: installment.SourceInternet,
     },
     AvailablePrograms: []installment.Program{{AvailablePartsCount: []int{3, 6}}},
-    Products:          []installment.Product{{Name: "Кит-набір", Count: 1, Sum: 2499.99}},
-    ResultCallback:    "https://shop/api/chast/cb",
+    Products: []installment.Product{
+        {Name: "Кит-набір", Count: 1, Sum: installment.NewMoney(2499, 99)},
+    },
+    ResultCallback: "https://shop/api/chast/cb",
 })
 // → poll cli.OrderState(ctx, order.OrderID) до WAITING_FOR_STORE_CONFIRM
 // → видали товар → cli.ConfirmOrder(ctx, order.OrderID)
@@ -270,13 +282,22 @@ order, _ := cli.CreateOrder(ctx, &installment.CreateOrderRequest{
 
 Підпис тіла рахується автоматично (HMAC-SHA256 з вашим store-secret).
 Для вхідного callback від банку — `cli.VerifyCallback(body, signatureHeader)`.
+Невалідна довжина підпису → `ErrCallbackBadLength`; невалідний MAC →
+`ErrCallbackSignatureMismatch` — окремі sentinel-и для security-телеметрії.
+
+Усі money-поля installment (`TotalSum`, `Sum`, `Reverse.Sum`, `Commission`,
+`CreditAmount` тощо) — це `installment.Money` із exact-decimal JSON
+serializer (int64 копійок всередині, MarshalJSON через рядкову арифметику).
+float64 на парсингу/серіалізації не з'являється — `0.10`/`0.20`/`0.30`
+round-trip точно.
 
 ## Швидкий старт: Jar (банки)
 
 ```go
 import "github.com/OlexiyOdarchuk/go-monobank-sdk/jar"
 
-cli := jar.New()
+cli, err := jar.New()
+if err != nil { return err }
 
 // 1) Якщо знаєш longJarId (з URL віджета) — одразу /bank/jar/{id}:
 info, _ := cli.ByLongID(ctx, "2zQL6sqnKgTYi7e69271YYWKTXTfMK8g")
@@ -308,10 +329,12 @@ short, _ := cli.ByShortID(ctx, "clientIdFromShareLink")
   статусом, розпарсеним `ErrorDescription` і сирим body. Реалізує
   `errors.Is` проти sentinel-помилок (див. нижче).
 - `WithRequestHook` / `WithResponseHook` — підключіть власні метрики чи
-  трейсинг без замін транспорту. Для повноцінного middleware-chain —
-  `WithRoundTripper(http.RoundTripper)`: чистий слот під
-  OpenTelemetry / Datadog / circuit-breaker, що зберігає таймаут і
-  Cookie-jar вбудованого `*http.Client`.
+  трейсинг без замін транспорту. Перезаписують один одного — щоб
+  ДОДАТИ hook поверх існуючого (наприклад, application hook +
+  OpenTelemetry): `Client.ChainRequestHook(fn)` / `ChainResponseHook(fn)`.
+  Для повноцінного middleware-chain — `WithRoundTripper(http.RoundTripper)`:
+  чистий слот під OpenTelemetry / Datadog / circuit-breaker, що зберігає
+  таймаут і Cookie-jar вбудованого `*http.Client`.
 - `WithUserAgent(string)` — перевизначає дефолтний User-Agent
   (`go-monobank-sdk/vX.Y.Z (linux; goX.Y.Z)`). Mono використовує його
   у support-кейсах для розрізнення твого сервісу серед інших юзерів
@@ -325,16 +348,22 @@ short, _ := cli.ByShortID(ctx, "clientIdFromShareLink")
 За замовчуванням `WithBaseURL("http://...")` для не-loopback-хоста
 повертає `monobank.ErrInsecureBaseURL` із першого `Do` — щоб
 конфігураційна помилка не призвела до відправлення X-Token у
-відкритому вигляді. Loopback (`localhost`, `127.0.0.1`, `[::1]`)
-завжди дозволений для тестів через `httptest.Server`. Свідомо обійти
-для MITM-проксі чи staging-у за VPN-ом:
+відкритому вигляді. Loopback дозволений завжди — і `localhost`, і
+вся `127.0.0.0/8`, і `::1` (через `net.IP.IsLoopback`, не лише
+дослівні `localhost`/`127.0.0.1`). Свідомо обійти для MITM-проксі
+чи staging-у за VPN-ом:
 
 ```go
 cli := personal.New(token,
-    monobank.WithInsecureBaseURL(true), // має бути ДО WithBaseURL
+    monobank.WithInsecureBaseURL(true),
     monobank.WithBaseURL("http://staging.example.com"),
 )
+// Порядок опцій не важить — New робить two-pass apply.
 ```
+
+Та сама гарда у `installment.New`, `jar.New`, `corporate.Client.Auth`
+(для `X-Callback URL`). Кожен з пакетів має власну
+`WithInsecureBaseURL` / `AllowInsecureCallback` для opt-out.
 
 ### Token redaction у логах
 
@@ -350,6 +379,13 @@ slog.Info("auth", "creds", auth.NewPersonal(token))
 Захист від випадкового потрапляння токену/секрету в DEBUG-логи через
 `slog.Info("token", token)`. Якщо ти логуєш токен явно через
 `slog.String("token", token)` — це твоя відповідальність.
+
+SDK також маскує PII у logs: `bank.ClientInfo` (Name → перша
+літера+`***`, WebHookURL шлях → `***`), `bank.Account` (IBAN →
+country+last4, card masks → `****`+last4), а також
+`installment.ClientInfo` (ПІБ/ІНН). Усе через `LogValue` — raw
+структура поведена нормально, але `slog.Info("info", info)` не
+розкриє ПІБ клієнта в log-аґрегаторі.
 
 ### Rate limits
 
@@ -430,8 +466,22 @@ if errors.As(err, &apiErr) {
 ```
 
 `installment` має власний формат і власний `installment.APIError` з полями
-`Message`, `TraceID`. Підпис callback порівнюється з
-`installment.ErrCallbackSignatureMismatch` через `errors.Is`.
+`Message`, `TraceID`. Підпис callback порівнюється або з
+`installment.ErrCallbackBadLength` (для wrong-length header), або з
+`installment.ErrCallbackSignatureMismatch` (для wrong MAC) — окремі
+sentinels дозволяють security-телеметрії розрізняти "malformed request"
+і "forgery attempt".
+
+Інші локальні sentinel-помилки, які варто знати:
+
+- `monobank.{ErrEmptyRequest, ErrInvalidURL, ErrInsecureBaseURL}`
+- `auth.ErrEmptyToken` — порожній X-Token відхиляється з першого `Do`.
+- `business.{ErrIdempotencyKeyRequired, ErrInvalidTimeRange, ErrNilRequest}`
+- `installment.{ErrEmptyOrderID, ErrEmptyDate, ErrEmptyPhone, ErrInvalidPhone, ErrEmptyStoreID, ErrEmptySecret, ErrInsecureBaseURL}`
+- `acquiring.{ErrEmptyID, ErrBadSignature, ErrWebhookStale, ErrWebhookNoTimestamp}`
+- `corporate.{ErrInsecureCallback, ErrInvalidCallback, ErrLogoTooLarge, ErrEmptyAuthMaker, ErrNilRequest}`
+- `jar.{ErrNotFound, ErrEmptyJarID, ErrEmptyClientID, ErrInsecureBaseURL}`
+- `money.ErrOverflow` — int64 overflow на `Add/Sub/Mul`.
 
 ### `bank` — публічні endpoint-и
 
@@ -462,23 +512,49 @@ if errors.As(err, &apiErr) {
 ### `money` — типізовані суми
 
 ```go
-m := money.New(12550, currency.UAH) // 125.50 грн
-m = m.Mul(3)                         // 376.50 грн
-sum, err := m.Add(other)             // помилка, якщо валюти різні
-fmt.Println(m)                       // "125.50 UAH"
+m := money.New(12550, currency.UAH)        // 125.50 грн
+trip, err := m.Mul(3)                      // → ErrOverflow при MaxInt64*N
+if err != nil { return err }
+sum, err := m.Add(other)                   // різні валюти → error
+                                           // переповнення → ErrOverflow
+fmt.Println(trip)                          // "376.50 UAH"
 fmt.Println(money.New(1250, currency.JPY)) // "1250 JPY" — 0 знаків після коми
 ```
 
 `Money` серіалізується в JSON як ціле число мінорних одиниць — wire-сумісно
 з форматом Mono. `Money.Major` / `String` поважають
-`currency.Code.Decimals()` — JPY/KRW (0 знаків) форматуються коректно
-без ділення на 100.
+`currency.Code.Decimals()` — JPY/KRW (0 знаків), BHD/JOD/KWD/OMR/TND
+(3 знаки), UAH/USD/EUR/... (2 знаки) форматуються коректно без жорстко
+зашитого ділення на 100. Helper `currency.Code.MinorPerMajor()` повертає
+`10^Decimals` для конвертації decimal-float ↔ int64 minor.
+
+`Add/Sub/Mul` повертають `ErrOverflow` при перетині межі int64 — silent
+wrap на сумах рівня квартальної виписки виключений.
+
+### `installment.Money` — UAH з exact-decimal wire-форматом
+
+`installment` API унікальна тим, що шле гроші як `"total_sum": 2499.99`
+(decimal-float), а не як int64 minor units. Щоб уникнути float64 precision
+loss, у пакеті є окремий тип:
+
+```go
+amt := installment.NewMoney(2499, 99)     // 2499.99 грн
+amt = installment.MoneyFromKopecks(249999)
+amt = installment.MoneyFromMajor(2499.99) // round half away from zero
+
+// MarshalJSON емітить `2499.99` (без лапок); UnmarshalJSON парсить через
+// рядок, без float64. 0.10, 0.20, 0.30 round-trip точно.
+```
 
 ### `currency`, `mcc` — enum-и
 
 - `currency.Code(980).String()` → `"UAH"`; `currency.FromAlpha3("USD")` → `840`.
-- `currency.UAH.Decimals()` → `2`; `currency.JPY.Decimals()` → `0`.
+- `currency.UAH.Decimals()` → `2`; `currency.JPY.Decimals()` → `0`;
+  `currency.BHD.Decimals()` → `3`.
 - `mcc.Code(5411).Category()` → `mcc.CategoryGroceries`.
+- `mcc.Code(3500).Category()` → `mcc.CategoryHotels` (3000-3299 авіакомпанії,
+  3300-3499 оренда авто, 3500-3999 готелі).
+- `mcc.Code(5912).Category()` → `mcc.CategoryHealth` (аптека-override).
 
 ### Пагінатори
 
