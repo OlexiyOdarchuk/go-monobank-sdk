@@ -43,22 +43,22 @@ type ClientInfo struct {
 
 // Account — один банківський рахунок клієнта. Balance і CreditLimit —
 // типізовані [money.Money]; на wire-рівні Mono шле їх як голі int64
-// мінорних одиниць, а валюту — окремим полем CurrencyCode. Custom
-// UnmarshalJSON прозоро прив'язує currency.Code до сум.
+// мінорних одиниць, а валюту — окремим полем currencyCode. Custom
+// UnmarshalJSON прозоро прив'язує [currency.Code] до сум.
 type Account struct {
-	AccountID    string      `json:"id"`
-	SendID       string      `json:"sendId"`
-	Balance      money.Money `json:"balance"`
-	CreditLimit  money.Money `json:"creditLimit"`
-	CurrencyCode int         `json:"currencyCode"`
-	CashbackType string      `json:"cashbackType"` // enum: None, UAH, Miles
-	CardMasks    []string    `json:"maskedPan"`    // маски номерів карток
-	Type         CardType    `json:"type"`
-	IBAN         string      `json:"iban"`
+	AccountID    string        `json:"id"`
+	SendID       string        `json:"sendId"`
+	Balance      money.Money   `json:"balance"`
+	CreditLimit  money.Money   `json:"creditLimit"`
+	Currency     currency.Code `json:"currencyCode"`
+	CashbackType string        `json:"cashbackType"` // enum: None, UAH, Miles
+	CardMasks    []string      `json:"maskedPan"`    // маски номерів карток
+	Type         CardType      `json:"type"`
+	IBAN         string        `json:"iban"`
 }
 
 // UnmarshalJSON декодує Account і додатково проставляє Code у
-// money-полях зі сусіднього CurrencyCode.
+// money-полях зі сусіднього Currency.
 func (a *Account) UnmarshalJSON(data []byte) error {
 	type raw Account
 	var r raw
@@ -66,25 +66,25 @@ func (a *Account) UnmarshalJSON(data []byte) error {
 		return err
 	}
 	*a = Account(r)
-	a.Balance.Code = currency.Code(a.CurrencyCode)
-	a.CreditLimit.Code = currency.Code(a.CurrencyCode)
+	a.Balance.Code = a.Currency
+	a.CreditLimit.Code = a.Currency
 	return nil
 }
 
 // Jar — рахунок-«банка» (накопичення з ціллю). Balance і Goal — у
 // типізованих [money.Money] (див. примітку про wire-формат у [Account]).
 type Jar struct {
-	ID           string      `json:"id"`
-	SendID       string      `json:"sendId"`
-	Title        string      `json:"title"`
-	Description  string      `json:"description"`
-	CurrencyCode int         `json:"currencyCode"`
-	Balance      money.Money `json:"balance"`
-	Goal         money.Money `json:"goal"`
+	ID          string        `json:"id"`
+	SendID      string        `json:"sendId"`
+	Title       string        `json:"title"`
+	Description string        `json:"description"`
+	Currency    currency.Code `json:"currencyCode"`
+	Balance     money.Money   `json:"balance"`
+	Goal        money.Money   `json:"goal"`
 }
 
 // UnmarshalJSON декодує Jar і додатково проставляє Code у money-полях
-// зі сусіднього CurrencyCode.
+// зі сусіднього Currency.
 func (j *Jar) UnmarshalJSON(data []byte) error {
 	type raw Jar
 	var r raw
@@ -92,8 +92,8 @@ func (j *Jar) UnmarshalJSON(data []byte) error {
 		return err
 	}
 	*j = Jar(r)
-	j.Balance.Code = currency.Code(j.CurrencyCode)
-	j.Goal.Code = currency.Code(j.CurrencyCode)
+	j.Balance.Code = j.Currency
+	j.Goal.Code = j.Currency
 	return nil
 }
 
@@ -119,11 +119,11 @@ type Accounts []Account
 type Jars []Jar
 
 // Transaction — один запис виписки. Грошові поля — типізовані
-// [money.Money]. CurrencyCode — це валюта операції (для OperationAmount).
+// [money.Money]. Currency — це валюта операції (для OperationAmount).
 // Amount описаний як «у валюті рахунку», але Mono не повертає account
 // currency у тілі транзакції — Code у всіх money-полях проставляється з
-// CurrencyCode. Для крос-валютних операцій (Amount у валюті, відмінній
-// від CurrencyCode) це треба тримати на увазі.
+// Currency. Для крос-валютних операцій (Amount у валюті, відмінній від
+// Currency) це треба тримати на увазі.
 type Transaction struct {
 	ID          string        `json:"id"`
 	Time        epoch.Seconds `json:"time"`
@@ -133,15 +133,15 @@ type Transaction struct {
 	Hold        bool          `json:"hold"`
 	// Amount — сума у валюті рахунку.
 	Amount money.Money `json:"amount"`
-	// OperationAmount — сума у валюті транзакції (CurrencyCode) або
+	// OperationAmount — сума у валюті транзакції (Currency) або
 	// після подвійної конверсії.
 	OperationAmount money.Money `json:"operationAmount"`
-	// CurrencyCode — ISO 4217 числовий код валюти транзакції.
-	CurrencyCode   int         `json:"currencyCode"`
-	CommissionRate money.Money `json:"commissionRate"`
-	CashbackAmount money.Money `json:"cashbackAmount"`
-	Balance        money.Money `json:"balance"`
-	Comment        string      `json:"comment"`
+	// Currency — ISO 4217 числовий код валюти транзакції.
+	Currency       currency.Code `json:"currencyCode"`
+	CommissionRate money.Money   `json:"commissionRate"`
+	CashbackAmount money.Money   `json:"cashbackAmount"`
+	Balance        money.Money   `json:"balance"`
+	Comment        string        `json:"comment"`
 	// Тільки для зняття готівки.
 	ReceiptID string `json:"receiptId"`
 	// Тільки для рахунків ФОП.
@@ -152,7 +152,7 @@ type Transaction struct {
 	IBAN string `json:"counterIban"`
 }
 
-// UnmarshalJSON декодує Transaction і прив'язує CurrencyCode до всіх
+// UnmarshalJSON декодує Transaction і прив'язує Currency до всіх
 // money-полів.
 func (t *Transaction) UnmarshalJSON(data []byte) error {
 	type raw Transaction
@@ -161,7 +161,7 @@ func (t *Transaction) UnmarshalJSON(data []byte) error {
 		return err
 	}
 	*t = Transaction(r)
-	c := currency.Code(t.CurrencyCode)
+	c := t.Currency
 	t.Amount.Code = c
 	t.OperationAmount.Code = c
 	t.CommissionRate.Code = c

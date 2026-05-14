@@ -23,7 +23,7 @@ func TestServer_WithClientInfo_personalClient(t *testing.T) {
 		ID:   "c-42",
 		Name: "Тест",
 		Accounts: bank.Accounts{
-			{AccountID: "a1", CurrencyCode: 980, IBAN: "UA1"},
+			{AccountID: "a1", Currency: 980, IBAN: "UA1"},
 		},
 	})
 
@@ -52,7 +52,7 @@ func TestServer_WithRates(t *testing.T) {
 func TestServer_WithStatement_prefixMatch(t *testing.T) {
 	srv := monobanktest.NewServer(t)
 	srv.WithStatement("acc-1", bank.Transactions{
-		{ID: "tx-1", Amount: bank.Transaction{}.Amount, CurrencyCode: 980},
+		{ID: "tx-1", Amount: bank.Transaction{}.Amount, Currency: 980},
 	})
 
 	cli := personal.New("token", srv.Option())

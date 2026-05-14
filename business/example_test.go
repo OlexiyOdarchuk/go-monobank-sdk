@@ -61,6 +61,6 @@ func ExampleClient_Statement() {
 	for _, op := range items {
 		fmt.Printf("%s · %+d %s · %s\n",
 			time.Unix(op.Time.Unix(), 0).Format(time.RFC3339),
-			op.Amount, op.CurrencyCode, op.Description)
+			op.Amount, op.CurrencyAlpha3, op.Description)
 	}
 }

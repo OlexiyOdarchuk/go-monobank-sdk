@@ -158,8 +158,14 @@ type StatementItem struct {
 	CompletedTime     epoch.Seconds   `json:"completedTime,omitempty"`
 	Description       string          `json:"description"`
 	Amount            money.Money     `json:"amount"`
-	CurrencyCode      string          `json:"currencyCode"` // ISO-4217 alpha-3
-	ReceiptID         string          `json:"receiptId,omitempty"`
+	// CurrencyAlpha3 — валюта операції у форматі ISO-4217 alpha-3
+	// (наприклад, "UAH"). На відміну від [bank.Account.Currency] чи
+	// [acquiring.InvoiceStatusResponse.Currency], тут wire-формат
+	// рядковий — corp-api саме так шле currencyCode у виписці. Для
+	// типізованого порівняння конвертуй через [currency.FromAlpha3]
+	// (UnmarshalJSON робить це автоматично для Amount.Code).
+	CurrencyAlpha3 string          `json:"currencyCode"`
+	ReceiptID      string          `json:"receiptId,omitempty"`
 	CounterEdrpou     string          `json:"counterEdrpou,omitempty"`
 	CounterIBAN       string          `json:"counterIban,omitempty"`
 	CounterName       string          `json:"counterName,omitempty"`
@@ -177,7 +183,7 @@ func (s *StatementItem) UnmarshalJSON(data []byte) error {
 		return err
 	}
 	*s = StatementItem(r)
-	if c, ok := currency.FromAlpha3(s.CurrencyCode); ok {
+	if c, ok := currency.FromAlpha3(s.CurrencyAlpha3); ok {
 		s.Amount.Code = c
 	}
 	return nil

@@ -49,7 +49,7 @@ func TestPaymentDirect(t *testing.T) {
 
 	out, err := c.PaymentDirect(context.Background(), &PaymentDirectRequest{
 		Amount: 1000,
-		Ccy:    980,
+		Currency:    980,
 		CardData: CardData{
 			PAN: "4444333322221111", Exp: "1228", CVV: "123",
 		},
@@ -58,7 +58,7 @@ func TestPaymentDirect(t *testing.T) {
 	})
 	require.NoError(t, err)
 	assert.Equal(t, "i-99", out.InvoiceID)
-	assert.Equal(t, "processing", out.Status)
+	assert.Equal(t, StatusProcessing, out.Status)
 	assert.Equal(t, "https://3ds/x", out.TDSUrl)
 }
 
@@ -83,7 +83,7 @@ func TestSyncPayment_appleFlow(t *testing.T) {
 
 	out, err := c.SyncPayment(context.Background(), &SyncPaymentRequest{
 		Amount: 500,
-		Ccy:    980,
+		Currency:    980,
 		ApplePay: &ApplePayPayload{
 			Token:        "tok-apple",
 			Exp:          "1228",

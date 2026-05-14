@@ -18,7 +18,7 @@ func ExampleNewHandler() {
 		Dedup: webhook.NewMemoryDeduper(1024),
 		OnEvent: func(_ context.Context, e *webhook.Response) error {
 			t := e.Data.Transaction
-			log.Printf("%s · %d %d", e.Data.AccountID, t.Amount, t.CurrencyCode)
+			log.Printf("%s · %d %d", e.Data.AccountID, t.Amount, t.Currency)
 			return nil
 		},
 		OnError: func(err error) { log.Printf("webhook: %v", err) },

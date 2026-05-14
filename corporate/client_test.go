@@ -23,8 +23,8 @@ func (stubAuth) SetAuth(_ *http.Request) error { return nil }
 // stubMaker satisfies auth.CorpAuthMakerAPI for tests.
 type stubMaker struct{}
 
-func (stubMaker) New(_ string) auth.Authorizer               { return stubAuth{} }
-func (stubMaker) NewPermissions(_ ...string) auth.Authorizer { return stubAuth{} }
+func (stubMaker) New(_ string) auth.Authorizer                    { return stubAuth{} }
+func (stubMaker) NewPermissions(_ ...auth.Permission) auth.Authorizer { return stubAuth{} }
 
 func newTestClient(t *testing.T, h http.HandlerFunc) *Client {
 	t.Helper()

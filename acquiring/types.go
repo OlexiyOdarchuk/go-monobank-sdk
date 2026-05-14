@@ -50,10 +50,10 @@ type QRDetails struct {
 	ShortQrID string      `json:"shortQrId"`
 	InvoiceID string      `json:"invoiceId,omitempty"`
 	Amount    money.Money `json:"amount,omitempty"`
-	Ccy       int         `json:"ccy,omitempty"`
+	Currency  currency.Code `json:"ccy,omitempty"`
 }
 
-// UnmarshalJSON прив'язує Ccy → Amount.Code.
+// UnmarshalJSON прив’язує Currency → Amount.Code.
 func (q *QRDetails) UnmarshalJSON(data []byte) error {
 	type raw QRDetails
 	var r raw
@@ -61,7 +61,7 @@ func (q *QRDetails) UnmarshalJSON(data []byte) error {
 		return err
 	}
 	*q = QRDetails(r)
-	q.Amount.Code = currency.Code(q.Ccy)
+	q.Amount.Code = q.Currency
 	return nil
 }
 
@@ -164,7 +164,7 @@ type SaveCardData struct {
 // CreateInvoiceRequest is the body of POST /api/merchant/invoice/create.
 type CreateInvoiceRequest struct {
 	Amount           int64             `json:"amount"`
-	Ccy              int               `json:"ccy,omitempty"`
+	Currency         currency.Code     `json:"ccy,omitempty"`
 	MerchantPaymInfo *MerchantPaymInfo `json:"merchantPaymInfo,omitempty"`
 	RedirectURL      string            `json:"redirectUrl,omitempty"`
 	WebHookURL       string            `json:"webHookUrl,omitempty"`
@@ -221,7 +221,7 @@ const (
 
 // PaymentInfo is the card-side detail attached to a successful invoice.
 // Fee та AgentFee — у мінорних одиницях; валюта успадковується з
-// батьківського [InvoiceStatusResponse.Ccy].
+// батьківського [InvoiceStatusResponse.Currency].
 type PaymentInfo struct {
 	MaskedPan     string        `json:"maskedPan"`
 	ApprovalCode  string        `json:"approvalCode,omitempty"`
@@ -236,12 +236,22 @@ type PaymentInfo struct {
 	AgentFee      money.Money   `json:"agentFee,omitempty"`
 }
 
+// WalletStatus — стан токенізації картки.
+type WalletStatus string
+
+// Можливі значення [WalletStatus].
+const (
+	WalletNew     WalletStatus = "new"
+	WalletCreated WalletStatus = "created"
+	WalletFailed  WalletStatus = "failed"
+)
+
 // WalletData is the tokenization state of a card following an invoice
 // where SaveCardData.SaveCard was true.
 type WalletData struct {
-	CardToken string `json:"cardToken"`
-	WalletID  string `json:"walletId"`
-	Status    string `json:"status"` // new | created | failed
+	CardToken string       `json:"cardToken"`
+	WalletID  string       `json:"walletId"`
+	Status    WalletStatus `json:"status"`
 }
 
 // TipsInfo is the tip amount/recipient on an invoice.
@@ -250,19 +260,32 @@ type TipsInfo struct {
 	Amount     int    `json:"amount,omitempty"`
 }
 
+// ProcessingStatus — стан асинхронної операції (cancel/finalize/
+// payment-direct/wallet-payment/sync-payment/statement). Один тип на
+// всі ці місця, бо wire-енумерація однакова.
+type ProcessingStatus string
+
+// Можливі значення [ProcessingStatus].
+const (
+	StatusProcessing ProcessingStatus = "processing"
+	StatusSuccess    ProcessingStatus = "success"
+	StatusFailure    ProcessingStatus = "failure"
+	StatusHold       ProcessingStatus = "hold"
+)
+
 // CancelOp is one element in the cancel history of an invoice.
 type CancelOp struct {
-	Status       string      `json:"status"` // processing | success | failure
-	Amount       money.Money `json:"amount,omitempty"`
-	Ccy          int         `json:"ccy,omitempty"`
-	CreatedDate  string      `json:"createdDate"`
-	ModifiedDate string      `json:"modifiedDate"`
-	ApprovalCode string      `json:"approvalCode,omitempty"`
-	RRN          string      `json:"rrn,omitempty"`
-	ExtRef       string      `json:"extRef,omitempty"`
+	Status       ProcessingStatus `json:"status"`
+	Amount       money.Money      `json:"amount,omitempty"`
+	Currency     currency.Code    `json:"ccy,omitempty"`
+	CreatedDate  string           `json:"createdDate"`
+	ModifiedDate string           `json:"modifiedDate"`
+	ApprovalCode string           `json:"approvalCode,omitempty"`
+	RRN          string           `json:"rrn,omitempty"`
+	ExtRef       string           `json:"extRef,omitempty"`
 }
 
-// UnmarshalJSON прив'язує Ccy → Amount.Code.
+// UnmarshalJSON прив’язує Currency → Amount.Code.
 func (c *CancelOp) UnmarshalJSON(data []byte) error {
 	type raw CancelOp
 	var r raw
@@ -270,20 +293,20 @@ func (c *CancelOp) UnmarshalJSON(data []byte) error {
 		return err
 	}
 	*c = CancelOp(r)
-	c.Amount.Code = currency.Code(c.Ccy)
+	c.Amount.Code = c.Currency
 	return nil
 }
 
 // InvoiceStatusResponse is the response to GET /api/merchant/invoice/status.
-// Грошові поля — типізовані [money.Money]; Code заповнюється з Ccy.
-// CancelList[*].Amount, PaymentInfo.Fee/AgentFee теж отримують Ccy.
+// Грошові поля — типізовані [money.Money]; Code заповнюється з Currency.
+// CancelList[*].Amount, PaymentInfo.Fee/AgentFee теж отримують Currency.
 type InvoiceStatusResponse struct {
 	InvoiceID     string        `json:"invoiceId"`
 	Status        InvoiceStatus `json:"status"`
 	FailureReason string        `json:"failureReason,omitempty"`
 	ErrCode       string        `json:"errCode,omitempty"`
 	Amount        money.Money   `json:"amount"`
-	Ccy           int           `json:"ccy"`
+	Currency      currency.Code `json:"ccy"`
 	FinalAmount   money.Money   `json:"finalAmount,omitempty"`
 	CreatedDate   string        `json:"createdDate,omitempty"`
 	ModifiedDate  string        `json:"modifiedDate,omitempty"`
@@ -295,8 +318,8 @@ type InvoiceStatusResponse struct {
 	TipsInfo      *TipsInfo     `json:"tipsInfo,omitempty"`
 }
 
-// UnmarshalJSON прив'язує Ccy до всіх грошових полів — Amount, FinalAmount,
-// PaymentInfo.{Fee,AgentFee}. CancelList[i].Amount має власний Ccy і
+// UnmarshalJSON прив’язує Currency до всіх грошових полів — Amount, FinalAmount,
+// PaymentInfo.{Fee,AgentFee}. CancelList[i].Amount має власний Currency і
 // заповнюється його UnmarshalJSON-ом.
 func (i *InvoiceStatusResponse) UnmarshalJSON(data []byte) error {
 	type raw InvoiceStatusResponse
@@ -305,7 +328,7 @@ func (i *InvoiceStatusResponse) UnmarshalJSON(data []byte) error {
 		return err
 	}
 	*i = InvoiceStatusResponse(r)
-	c := currency.Code(i.Ccy)
+	c := i.Currency
 	i.Amount.Code = c
 	i.FinalAmount.Code = c
 	if i.PaymentInfo != nil {
@@ -325,9 +348,9 @@ type CancelRequest struct {
 
 // CancelResponse is the response to POST /api/merchant/invoice/cancel.
 type CancelResponse struct {
-	Status       string `json:"status"` // processing | success | failure
-	CreatedDate  string `json:"createdDate"`
-	ModifiedDate string `json:"modifiedDate"`
+	Status       ProcessingStatus `json:"status"`
+	CreatedDate  string           `json:"createdDate"`
+	ModifiedDate string           `json:"modifiedDate"`
 }
 
 // FinalizeRequest is the body of POST /api/merchant/invoice/finalize.
@@ -339,7 +362,7 @@ type FinalizeRequest struct {
 
 // FinalizeResponse is the response to POST /api/merchant/invoice/finalize.
 type FinalizeResponse struct {
-	Status string `json:"status"` // always "success"
+	Status ProcessingStatus `json:"status"` // always StatusSuccess
 }
 
 // RemoveRequest is the body of POST /api/merchant/invoice/remove.
@@ -417,7 +440,7 @@ const (
 // PaymentDirectRequest is the body of POST /api/merchant/invoice/payment-direct.
 type PaymentDirectRequest struct {
 	Amount           int64             `json:"amount"`
-	Ccy              int               `json:"ccy,omitempty"`
+	Currency         currency.Code     `json:"ccy,omitempty"`
 	CardData         CardData          `json:"cardData"`
 	MerchantPaymInfo *MerchantPaymInfo `json:"merchantPaymInfo,omitempty"`
 	WebHookURL       string            `json:"webHookUrl,omitempty"`
@@ -429,17 +452,17 @@ type PaymentDirectRequest struct {
 
 // PaymentDirectResponse is the response to /payment-direct.
 type PaymentDirectResponse struct {
-	InvoiceID     string      `json:"invoiceId"`
-	TDSUrl        string      `json:"tdsUrl,omitempty"`
-	Status        string      `json:"status"` // processing | success | failure
-	FailureReason string      `json:"failureReason,omitempty"`
-	Amount        money.Money `json:"amount"`
-	Ccy           int         `json:"ccy"`
-	CreatedDate   string      `json:"createdDate"`
-	ModifiedDate  string      `json:"modifiedDate"`
+	InvoiceID     string           `json:"invoiceId"`
+	TDSUrl        string           `json:"tdsUrl,omitempty"`
+	Status        ProcessingStatus `json:"status"`
+	FailureReason string           `json:"failureReason,omitempty"`
+	Amount        money.Money      `json:"amount"`
+	Currency      currency.Code    `json:"ccy"`
+	CreatedDate   string           `json:"createdDate"`
+	ModifiedDate  string           `json:"modifiedDate"`
 }
 
-// UnmarshalJSON прив'язує Ccy → Amount.Code.
+// UnmarshalJSON прив’язує Currency → Amount.Code.
 func (p *PaymentDirectResponse) UnmarshalJSON(data []byte) error {
 	type raw PaymentDirectResponse
 	var r raw
@@ -447,7 +470,7 @@ func (p *PaymentDirectResponse) UnmarshalJSON(data []byte) error {
 		return err
 	}
 	*p = PaymentDirectResponse(r)
-	p.Amount.Code = currency.Code(p.Ccy)
+	p.Amount.Code = p.Currency
 	return nil
 }
 
@@ -495,7 +518,7 @@ type GooglePayPayload struct {
 // SyncPaymentRequest is the body of POST /api/merchant/invoice/sync-payment.
 type SyncPaymentRequest struct {
 	Amount           int64             `json:"amount"`
-	Ccy              int               `json:"ccy"`
+	Currency         currency.Code     `json:"ccy"`
 	MerchantPaymInfo *MerchantPaymInfo `json:"merchantPaymInfo,omitempty"`
 	CardData         *SyncCardData     `json:"cardData,omitempty"`
 	ApplePay         *ApplePayPayload  `json:"applePay,omitempty"`
@@ -513,13 +536,13 @@ type ResetAmountRequest struct {
 // StatementInvoice is one row in /api/merchant/statement.
 type StatementInvoice struct {
 	InvoiceID     string            `json:"invoiceId"`
-	Status        string            `json:"status"` // hold | processing | success | failure
+	Status        ProcessingStatus  `json:"status"`
 	MaskedPan     string            `json:"maskedPan"`
 	Date          string            `json:"date"`
 	PaymentScheme string            `json:"paymentScheme"`
 	Amount        money.Money       `json:"amount"`
 	ProfitAmount  money.Money       `json:"profitAmount,omitempty"`
-	Ccy           int               `json:"ccy"`
+	Currency      currency.Code     `json:"ccy"`
 	ApprovalCode  string            `json:"approvalCode,omitempty"`
 	RRN           string            `json:"rrn,omitempty"`
 	Reference     string            `json:"reference,omitempty"`
@@ -528,7 +551,7 @@ type StatementInvoice struct {
 	CancelList    []StatementRefund `json:"cancelList,omitempty"`
 }
 
-// UnmarshalJSON прив'язує Ccy → Amount/ProfitAmount.Code.
+// UnmarshalJSON прив’язує Currency → Amount/ProfitAmount.Code.
 func (s *StatementInvoice) UnmarshalJSON(data []byte) error {
 	type raw StatementInvoice
 	var r raw
@@ -536,7 +559,7 @@ func (s *StatementInvoice) UnmarshalJSON(data []byte) error {
 		return err
 	}
 	*s = StatementInvoice(r)
-	c := currency.Code(s.Ccy)
+	c := s.Currency
 	s.Amount.Code = c
 	s.ProfitAmount.Code = c
 	return nil
@@ -544,15 +567,15 @@ func (s *StatementInvoice) UnmarshalJSON(data []byte) error {
 
 // StatementRefund is one cancel record nested in StatementInvoice.
 type StatementRefund struct {
-	Amount       money.Money `json:"amount"`
-	Ccy          int         `json:"ccy"`
+	Amount       money.Money   `json:"amount"`
+	Currency     currency.Code `json:"ccy"`
 	Date         string      `json:"date"`
 	ApprovalCode string      `json:"approvalCode,omitempty"`
 	RRN          string      `json:"rrn,omitempty"`
 	MaskedPan    string      `json:"maskedPan"`
 }
 
-// UnmarshalJSON прив'язує Ccy → Amount.Code.
+// UnmarshalJSON прив’язує Currency → Amount.Code.
 func (s *StatementRefund) UnmarshalJSON(data []byte) error {
 	type raw StatementRefund
 	var r raw
@@ -560,7 +583,7 @@ func (s *StatementRefund) UnmarshalJSON(data []byte) error {
 		return err
 	}
 	*s = StatementRefund(r)
-	s.Amount.Code = currency.Code(s.Ccy)
+	s.Amount.Code = s.Currency
 	return nil
 }
 
@@ -585,7 +608,7 @@ type WalletResponse struct {
 type WalletPaymentRequest struct {
 	CardToken        string            `json:"cardToken"`
 	Amount           int64             `json:"amount"`
-	Ccy              int               `json:"ccy"`
+	Currency         currency.Code     `json:"ccy"`
 	RedirectURL      string            `json:"redirectUrl,omitempty"`
 	WebHookURL       string            `json:"webHookUrl,omitempty"`
 	InitiationKind   InitiationKind    `json:"initiationKind"`

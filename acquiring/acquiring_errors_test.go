@@ -54,7 +54,7 @@ func TestAcquiring_errorPaths(t *testing.T) {
 		assertAPIError(t, err)
 	})
 	t.Run("CreateInvoice", func(t *testing.T) {
-		_, err := errorClient(t).CreateInvoice(ctx, &CreateInvoiceRequest{Amount: 100, Ccy: 980})
+		_, err := errorClient(t).CreateInvoice(ctx, &CreateInvoiceRequest{Amount: 100, Currency: 980})
 		assertAPIError(t, err)
 	})
 	t.Run("InvoiceStatus", func(t *testing.T) {

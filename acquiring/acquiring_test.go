@@ -80,7 +80,7 @@ func TestCreateInvoice(t *testing.T) {
 
 	out, err := c.CreateInvoice(context.Background(), &CreateInvoiceRequest{
 		Amount:      1000,
-		Ccy:         980,
+		Currency:         980,
 		PaymentType: PaymentHold,
 	})
 	require.NoError(t, err)
@@ -116,7 +116,7 @@ func TestCancelInvoice(t *testing.T) {
 		Amount:    500,
 	})
 	require.NoError(t, err)
-	assert.Equal(t, "processing", out.Status)
+	assert.Equal(t, StatusProcessing, out.Status)
 }
 
 func TestFinalizeInvoice(t *testing.T) {
@@ -129,7 +129,7 @@ func TestFinalizeInvoice(t *testing.T) {
 		Amount:    1000,
 	})
 	require.NoError(t, err)
-	assert.Equal(t, "success", out.Status)
+	assert.Equal(t, StatusSuccess, out.Status)
 }
 
 func TestRemoveInvoice(t *testing.T) {
@@ -209,7 +209,7 @@ func TestWalletPayment(t *testing.T) {
 	out, err := c.WalletPayment(context.Background(), &WalletPaymentRequest{
 		CardToken:      "tok",
 		Amount:         500,
-		Ccy:            980,
+		Currency:            980,
 		InitiationKind: InitMerchant,
 	})
 	require.NoError(t, err)

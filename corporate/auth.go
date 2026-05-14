@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+
+	"github.com/OlexiyOdarchuk/go-monobank-sdk/auth"
 )
 
 // TokenRequest — відповідь POST /personal/auth/request. RequestID —
@@ -23,7 +25,7 @@ const urlPathAuth = "/personal/auth/request"
 // permissions означає «усі дозволи»; передай комбінацію з
 // [auth.PermSt], [auth.PermPI], [auth.PermFOP] для звуження scope.
 // https://api.monobank.ua/docs/corporate.html#tag/Klyentski-personalni-dani/paths/~1personal~1auth~1request/post
-func (c *Client) Auth(ctx context.Context, callbackURL string, permissions ...string) (*TokenRequest, error) {
+func (c *Client) Auth(ctx context.Context, callbackURL string, permissions ...auth.Permission) (*TokenRequest, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, urlPathAuth, http.NoBody)
 	if err != nil {
 		return nil, fmt.Errorf("create request: %w", err)

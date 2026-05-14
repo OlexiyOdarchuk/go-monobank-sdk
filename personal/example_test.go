@@ -20,7 +20,7 @@ func ExampleNew() {
 	}
 	for _, a := range info.Accounts {
 		fmt.Printf("%s · %d %s\n",
-			a.IBAN, a.Balance, currency.Code(a.CurrencyCode))
+			a.IBAN, a.Balance, currency.Code(a.Currency))
 	}
 }
 

@@ -3,6 +3,7 @@ package business
 import (
 	"context"
 	"iter"
+	"time"
 )
 
 // ContactsAll повертає iter.Seq2-ітератор по всіх зарплатних контактах
@@ -39,6 +40,55 @@ func (c *Client) ContactsAll(ctx context.Context, pageSize int) iter.Seq2[Contac
 				return
 			}
 			offset += len(page.Contacts)
+		}
+	}
+}
+
+// StatementAll лінько пагінує операції за період [from, to] на рахунку
+// account. На кожному кроці тягне сторінку через [Client.Statement] із
+// pageSize (0 → дефолт API), використовуючи `direction=DOWN` від `to`
+// у минуле; проміжний курсор зсуває верхню межу до моменту найстарішої
+// віддачі. Якщо to нульовий — ітерує від `now` назад.
+//
+//	for op, err := range cli.StatementAll(ctx, "acc-1", from, time.Time{}, 500) {
+//	    if err != nil { return err }
+//	    process(op)
+//	}
+func (c *Client) StatementAll(ctx context.Context, account string, from, to time.Time, pageSize int) iter.Seq2[StatementItem, error] {
+	return func(yield func(StatementItem, error) bool) {
+		cursorTo := to
+		if cursorTo.IsZero() {
+			cursorTo = time.Now()
+		}
+		for {
+			if err := ctx.Err(); err != nil {
+				_ = yield(StatementItem{}, err)
+				return
+			}
+			if !cursorTo.After(from) {
+				return
+			}
+			page, err := c.Statement(ctx, account, from, cursorTo, StatementDown, pageSize)
+			if err != nil {
+				_ = yield(StatementItem{}, err)
+				return
+			}
+			if len(page) == 0 {
+				return
+			}
+			for _, item := range page {
+				if !yield(item, nil) {
+					return
+				}
+			}
+			// DOWN-direction: остання — найстаріша; зсуваємо верхню
+			// межу на 1 секунду раніше за неї, щоб уникнути дублів.
+			oldest := page[len(page)-1].Time.Time
+			next := oldest.Add(-time.Second)
+			if !next.Before(cursorTo) {
+				return
+			}
+			cursorTo = next
 		}
 	}
 }

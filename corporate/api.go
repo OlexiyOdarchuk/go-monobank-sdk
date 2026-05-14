@@ -5,6 +5,7 @@ import (
 	"iter"
 	"time"
 
+	"github.com/OlexiyOdarchuk/go-monobank-sdk/auth"
 	"github.com/OlexiyOdarchuk/go-monobank-sdk/bank"
 )
 
@@ -14,7 +15,7 @@ import (
 // інтерфейс реалізує (перевіряється compile-time assert-ом нижче).
 type API interface {
 	// Авторизація і налаштування компанії.
-	Auth(ctx context.Context, callbackURL string, permissions ...string) (*TokenRequest, error)
+	Auth(ctx context.Context, callbackURL string, permissions ...auth.Permission) (*TokenRequest, error)
 	CheckAuth(ctx context.Context, requestID string) error
 	Register(ctx context.Context, in *RegistrationRequest) (*RegistrationResponse, error)
 	RegistrationStatus(ctx context.Context, pubkeyPEM []byte) (*RegistrationStatusResponse, error)

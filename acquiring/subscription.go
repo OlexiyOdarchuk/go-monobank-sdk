@@ -5,10 +5,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"iter"
 	"net/http"
 	"net/url"
 	"strconv"
 	"time"
+
+	"github.com/OlexiyOdarchuk/go-monobank-sdk/currency"
 )
 
 // SubscriptionStatus — стан регулярного платежу.
@@ -52,7 +55,7 @@ type SubscriptionWebHookURLs struct {
 // Interval — рядок виду "{N}{одиниця}": "1d", "2w", "1m", "1y".
 type SubscriptionCreateRequest struct {
 	Amount      int64                    `json:"amount"`
-	Ccy         int                      `json:"ccy,omitempty"`
+	Currency    currency.Code            `json:"ccy,omitempty"`
 	RedirectURL string                   `json:"redirectUrl,omitempty"`
 	WebHookURLs *SubscriptionWebHookURLs `json:"webHookUrls,omitempty"`
 	Interval    string                   `json:"interval"`
@@ -89,10 +92,10 @@ type SubscriptionSummary struct {
 // SubscriptionWalletData — токенізована картка, на яку прив'язана
 // підписка.
 type SubscriptionWalletData struct {
-	CardToken          string `json:"cardToken"`
-	WalletID           string `json:"walletId"`
-	Status             string `json:"status"` // new | created | failed
-	FailureDescription string `json:"failureDescription,omitempty"`
+	CardToken          string       `json:"cardToken"`
+	WalletID           string       `json:"walletId"`
+	Status             WalletStatus `json:"status"`
+	FailureDescription string       `json:"failureDescription,omitempty"`
 }
 
 // SubscriptionStatusResponse — відповідь GET /api/merchant/subscription/status.
@@ -102,7 +105,7 @@ type SubscriptionStatusResponse struct {
 	StartDate        string                 `json:"startDate"`
 	EndDate          string                 `json:"endDate,omitempty"`
 	Amount           int64                  `json:"amount"`
-	Ccy              int                    `json:"ccy"`
+	Currency         currency.Code          `json:"ccy"`
 	Interval         string                 `json:"interval"`
 	NextChargeDate   string                 `json:"nextChargeDate,omitempty"`
 	CancellationDesc string                 `json:"cancellationDesc,omitempty"`
@@ -121,7 +124,7 @@ type Pagination struct {
 // SubscriptionPayment — одне списання за підпискою (елемент із /payments).
 type SubscriptionPayment struct {
 	Amount    int64                     `json:"amount"`
-	Ccy       int                       `json:"ccy"`
+	Currency  currency.Code             `json:"ccy"`
 	Status    SubscriptionPaymentStatus `json:"status"`
 	ChargedAt string                    `json:"chargedAt"`
 }
@@ -310,4 +313,76 @@ func (c *Client) SubscriptionPayments(ctx context.Context, opts SubscriptionPaym
 		return nil, err
 	}
 	return &out, nil
+}
+
+// SubscriptionListAll лінько ітерує всі сторінки [Client.SubscriptionList].
+// Корисно, коли потрібен повний прохід без ручного керування Page.
+//
+//	opts := acquiring.SubscriptionListOptions{DateFrom: from, Limit: 50}
+//	for s, err := range cli.SubscriptionListAll(ctx, opts) {
+//	    if err != nil { return err }
+//	    process(s)
+//	}
+func (c *Client) SubscriptionListAll(ctx context.Context, opts SubscriptionListOptions) iter.Seq2[SubscriptionListItem, error] {
+	return func(yield func(SubscriptionListItem, error) bool) {
+		page := opts.Page
+		if page < 1 {
+			page = 1
+		}
+		for {
+			if err := ctx.Err(); err != nil {
+				_ = yield(SubscriptionListItem{}, err)
+				return
+			}
+			cur := opts
+			cur.Page = page
+			resp, err := c.SubscriptionList(ctx, cur)
+			if err != nil {
+				_ = yield(SubscriptionListItem{}, err)
+				return
+			}
+			for _, s := range resp.List {
+				if !yield(s, nil) {
+					return
+				}
+			}
+			if len(resp.List) == 0 || page >= resp.Pagination.TotalPages {
+				return
+			}
+			page++
+		}
+	}
+}
+
+// SubscriptionPaymentsAll лінько ітерує всі сторінки
+// [Client.SubscriptionPayments] для конкретної підписки.
+func (c *Client) SubscriptionPaymentsAll(ctx context.Context, opts SubscriptionPaymentsOptions) iter.Seq2[SubscriptionPayment, error] {
+	return func(yield func(SubscriptionPayment, error) bool) {
+		page := opts.Page
+		if page < 1 {
+			page = 1
+		}
+		for {
+			if err := ctx.Err(); err != nil {
+				_ = yield(SubscriptionPayment{}, err)
+				return
+			}
+			cur := opts
+			cur.Page = page
+			resp, err := c.SubscriptionPayments(ctx, cur)
+			if err != nil {
+				_ = yield(SubscriptionPayment{}, err)
+				return
+			}
+			for _, p := range resp.Payments {
+				if !yield(p, nil) {
+					return
+				}
+			}
+			if len(resp.Payments) == 0 || page >= resp.Pagination.TotalPages {
+				return
+			}
+			page++
+		}
+	}
 }
