@@ -7,6 +7,39 @@
 
 ## [Unreleased]
 
+## [1.1.1] — 2026-05-14
+
+Hot-fix v1.1.0: модуль не збирався на Go 1.23/1.24 (через x/sync@v0.20
+що вимагає Go 1.25). v1.1.0 retract-нутий у go.mod.
+
+### Fixed
+
+- Downgrade `golang.org/x/sync` v0.20.0 → v0.10.0 — підтримка Go 1.23
+  у відповідності з директивою `go` модуля.
+- Race у `webhook.Handler.refreshCoalesced` (виявлений через
+  `go test -count=20 -race`): між моментом, коли singleflight
+  завершував першу refresh-функцію, і моментом оновлення
+  `lastRefreshAt`, могла прослизнути друга хвиля горутин і викликати
+  ще один `/bank/sync`. Тепер double-check `lastRefreshAt` всередині
+  singleflight-callback гарантує ≤2 виклики ServerKey() при
+  N конкурентних webhook-ах з невідомим X-Key-Id.
+- `gofmt` після `sed`-renames у v1.1.0 (CI блокувався).
+
+### Added
+
+- Регресійні тести для всіх v1.1.0 fixes: H1 (MaxBytesReader → 413),
+  H3 (singleflight + 50-goroutine stress), H5 (VerifyCallback
+  fast-path), M2 (off-curve point + wrong length/prefix), L4 (P-384
+  rejection), M7 (PathEscape з spec-символами), M8 (JPY 0 decimals),
+  M9 (204 No Content + Content-Length: 0), L7 (errors.Is sentinels +
+  errors.As chain), L2 (insecure baseURL helper), C2 (shouldRetry
+  matrix), L8 (StatementAll / SubscriptionListAll / Payments
+  iterators), L6b (typed Permission).
+
+### Retracted
+
+- v1.1.0 — не збиралася на Go 1.23/1.24.
+
 ## [1.1.0] — 2026-05-14
 
 Реліз із виправленнями знайденими у повному code review v1.0.0:
@@ -217,7 +250,8 @@ runtime-баги retry/limiter-стеку, DoS-векторів у webhook/insta
 - `monobanktest` — мок-сервер на `httptest.Server` із fluent-builder-ами.
 - Пагінатори через `iter.Seq2` (Go 1.23+).
 
-[Unreleased]: https://github.com/OlexiyOdarchuk/go-monobank-sdk/compare/v1.1.0...HEAD
+[Unreleased]: https://github.com/OlexiyOdarchuk/go-monobank-sdk/compare/v1.1.1...HEAD
+[1.1.1]: https://github.com/OlexiyOdarchuk/go-monobank-sdk/compare/v1.1.0...v1.1.1
 [1.1.0]: https://github.com/OlexiyOdarchuk/go-monobank-sdk/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/OlexiyOdarchuk/go-monobank-sdk/compare/v0.1.0...v1.0.0
 [0.1.0]: https://github.com/OlexiyOdarchuk/go-monobank-sdk/releases/tag/v0.1.0
