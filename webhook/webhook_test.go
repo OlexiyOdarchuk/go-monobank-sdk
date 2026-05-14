@@ -386,7 +386,7 @@ func TestHandler_failureLetsMonoRetryWithDedup(t *testing.T) {
 	assert.Equal(t, int32(2), attempts.Load(), "duplicates must not run OnEvent")
 }
 
-// Регресія H1: тіло, що перевищує MaxBodyBytes, має повернути 413,
+// тіло, що перевищує MaxBodyBytes, має повернути 413,
 // причому ДО спроби верифікувати підпис (захист від memory-DoS).
 func TestHandler_bodyTooLarge_returns413(t *testing.T) {
 	var verified atomic.Bool
@@ -416,7 +416,7 @@ func TestHandler_bodyAtLimit_passes(t *testing.T) {
 	assert.Equal(t, http.StatusOK, w.Code)
 }
 
-// Регресія H3: N конкурентних webhook-ів із одним і тим самим невідомим
+// N конкурентних webhook-ів із одним і тим самим невідомим
 // X-Key-Id мають викликати ServerKey() ОДИН РАЗ (singleflight), а не N.
 // Без цього атакуючий, що шле випадкові X-Key-Id, амплифікує DoS на
 // /bank/sync 1:1.
@@ -451,7 +451,7 @@ func TestHandler_refreshSingleflight(t *testing.T) {
 		"expected ≤2 ServerKey calls (initial + 1 coalesced refresh), got %d", total)
 }
 
-// Регресія H3: повторні запити з невідомим X-Key-Id у короткому вікні
+// повторні запити з невідомим X-Key-Id у короткому вікні
 // мають дросселюватися (minRefreshInterval).
 func TestHandler_refreshThrottled(t *testing.T) {
 	pub := testServerPubKey(t)
@@ -479,7 +479,7 @@ func TestHandler_refreshThrottled(t *testing.T) {
 		"second mismatch within %s must be throttled", minRefreshInterval)
 }
 
-// Регресія: Handler{} без NewHandler (nil-key) не повинен NPE-ити; має
+// Handler{} без NewHandler (nil-key) не повинен NPE-ити; має
 // повернути 503.
 func TestHandler_nilKey_returns503(t *testing.T) {
 	h := &Handler{

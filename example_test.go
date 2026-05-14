@@ -64,3 +64,29 @@ func ExampleAPIError() {
 		}
 	}
 }
+
+// Sentinel-помилки через errors.Is — без необхідності розпаковувати
+// APIError, якщо потрібен тільки control-flow за статусом.
+func ExampleErrUnauthorized() {
+	cli := personal.New(os.Getenv("MONO_TOKEN"))
+
+	_, err := cli.ClientInfo(context.Background())
+	switch {
+	case errors.Is(err, monobank.ErrUnauthorized):
+		fmt.Println("токен невалідний — перегенеруй")
+	case errors.Is(err, monobank.ErrTooManyRequests):
+		fmt.Println("ліміт — почекати")
+	case err != nil:
+		fmt.Printf("інша помилка: %v\n", err)
+	}
+}
+
+// За замовчуванням POST/PATCH без Idempotency-Key НЕ ретраяться, щоб
+// 502 від балансера не створив дублікат операції. WithUnsafeRetries
+// явно вмикає ретрай — лише коли впевнений, що endpoint ідемпотентний.
+func ExampleWithUnsafeRetries() {
+	cli := personal.New(os.Getenv("MONO_TOKEN"),
+		monobank.WithUnsafeRetries(true),
+	)
+	_ = cli
+}

@@ -55,7 +55,7 @@ func TestServerKey_badBase64(t *testing.T) {
 	assert.Contains(t, err.Error(), "decode serverPubKey")
 }
 
-// Регресія M2: MITM-стиль атаки — підмінити /bank/sync на uncompressed
+// MITM-стиль атаки — підмінити /bank/sync на uncompressed
 // точку (X, Y), яка проходить базовий length/prefix-чек, але НЕ лежить
 // на кривій secp256k1. До фіксу asServerKey приймала такі ключі, і всі
 // наступні webhook-верифікації провалювалися 401-ми, що тригерило

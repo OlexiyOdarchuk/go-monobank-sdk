@@ -116,7 +116,7 @@ func TestNew_appliesOptions(t *testing.T) {
 	assert.Equal(t, base.String(), c.baseURL.String())
 }
 
-// Регресія C1: тіло POST мусить бути валідним на КОЖНІЙ retry-спробі.
+// тіло POST мусить бути валідним на КОЖНІЙ retry-спробі.
 // До фіксу другий attempt отримував порожнє тіло, бо http.Transport
 // повністю споживав Body на першому Do.
 func TestClient_Do_retriesPreserveBody(t *testing.T) {
@@ -149,7 +149,7 @@ func TestClient_Do_retriesPreserveBody(t *testing.T) {
 	assert.Equal(t, int32(2), hits.Load())
 }
 
-// Регресія C2: POST без Idempotency-Key НЕ повинен ретраїтись на 503.
+// POST без Idempotency-Key НЕ повинен ретраїтись на 503.
 func TestClient_Do_postWithoutIdempotencyKeyNotRetried(t *testing.T) {
 	var hits atomic.Int32
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -171,7 +171,7 @@ func TestClient_Do_postWithoutIdempotencyKeyNotRetried(t *testing.T) {
 		"POST без Idempotency-Key мусить виконатися рівно один раз")
 }
 
-// Регресія C2: POST з Idempotency-Key ретраїться як ідемпотентний.
+// POST з Idempotency-Key ретраїться як ідемпотентний.
 func TestClient_Do_postWithIdempotencyKeyRetried(t *testing.T) {
 	var hits atomic.Int32
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -196,7 +196,7 @@ func TestClient_Do_postWithIdempotencyKeyRetried(t *testing.T) {
 	assert.Equal(t, int32(2), hits.Load())
 }
 
-// Регресія M9: 204 No Content із non-nil v — не повинно бути EOF-помилки.
+// 204 No Content із non-nil v — не повинно бути EOF-помилки.
 func TestClient_Do_204NoContent(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
@@ -212,7 +212,7 @@ func TestClient_Do_204NoContent(t *testing.T) {
 	assert.Equal(t, "", out.Message, "out unchanged when body is empty")
 }
 
-// Регресія M9: Content-Length: 0 з очікуваним 200 (нестандартно, але
+// Content-Length: 0 з очікуваним 200 (нестандартно, але
 // можливо) — також не EOF.
 func TestClient_Do_emptyBody200(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -227,7 +227,7 @@ func TestClient_Do_emptyBody200(t *testing.T) {
 	assert.NoError(t, c.Do(req, &out))
 }
 
-// Регресія L7: APIError.Is має зробити errors.Is(err, ErrUnauthorized)
+// APIError.Is має зробити errors.Is(err, ErrUnauthorized)
 // тощо валідним для відповідних HTTP-статусів.
 func TestAPIError_IsSentinels(t *testing.T) {
 	cases := map[int]error{
@@ -251,7 +251,7 @@ func TestAPIError_IsSentinels(t *testing.T) {
 	assert.False(t, errors.Is(apiErr, ErrUnauthorized))
 }
 
-// Регресія L7: errors.As повинен витягати APIError навіть коли
+// errors.As повинен витягати APIError навіть коли
 // користувач робив errors.Is(err, ErrUnauthorized) — тобто і chain, і
 // sentinel працюють одночасно.
 func TestAPIError_AsAndIsBoth(t *testing.T) {
@@ -273,7 +273,7 @@ func TestAPIError_AsAndIsBoth(t *testing.T) {
 	assert.Equal(t, "Unknown 'X-Token'", apiErr.ErrorDescription)
 }
 
-// Регресія L2: WithBaseURL мусить warn-логнути при не-https + не-localhost.
+// WithBaseURL мусить warn-логнути при не-https + не-localhost.
 func TestWithBaseURL_warnsOnInsecureScheme(t *testing.T) {
 	cases := map[string]bool{
 		"http://api.example.com":  true,  // має варн
@@ -288,7 +288,7 @@ func TestWithBaseURL_warnsOnInsecureScheme(t *testing.T) {
 	}
 }
 
-// Регресія C2: shouldRetry правильно різнить методи.
+// shouldRetry правильно різнить методи.
 func TestShouldRetry_methodMatrix(t *testing.T) {
 	mkReq := func(method string, idem bool) *http.Request {
 		r, _ := http.NewRequest(method, "/x", nil)
@@ -312,7 +312,7 @@ func TestShouldRetry_methodMatrix(t *testing.T) {
 		"WithUnsafeRetries дозволяє POST без ключа")
 }
 
-// Регресія C2: WithUnsafeRetries(true) дозволяє ретраїти POST без ключа.
+// WithUnsafeRetries(true) дозволяє ретраїти POST без ключа.
 func TestClient_Do_unsafeRetriesAllowsPostRetry(t *testing.T) {
 	var hits atomic.Int32
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {

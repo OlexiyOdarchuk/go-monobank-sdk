@@ -7,6 +7,37 @@
 
 ## [Unreleased]
 
+## [1.1.2] — 2026-05-14
+
+Documentation hot-fix v1.1.1: README мав застарілі приклади
+(`Ccy: 980`, 2-аргументний `NewKeyedLimiter`), які буквально не
+компілювалися на v1.1.x, а нові фічі (`WithUnsafeRetries`, sentinel-
+помилки, `MaxBodyBytes`, currency-aware Money, iterator-и) у
+документацію не потрапили. v1.1.1 retract-нутий разом із v1.1.0.
+
+### Fixed
+
+- README.md / README.en.md: оновлено acquiring-приклад (`Currency:`
+  замість видаленого `Ccy:`), `KeyedLimiter`-приклад (3-аргументна
+  сигнатура + `defer Stop()`), business endpoint count (23, не 17).
+- Усі `// Регресія X:` префікси в тестах прибрані — це були посилання
+  на сесійні tracking-ID, які стариіють із часом.
+
+### Added
+
+- README-секції: `WithUnsafeRetries`, sentinel-помилки
+  (`monobank.ErrUnauthorized` etc), `Options.MaxBodyBytes`,
+  `singleflight`-throttle на refresh ключа, currency-aware
+  `Money.Major` / `String`, `currency.Code.Decimals()`, повний
+  перелік `iter.Seq2`-пагінаторів.
+- Нові godoc Example-функції: `ExampleErrUnauthorized`,
+  `ExampleWithUnsafeRetries`.
+
+### Retracted
+
+- v1.1.1 — документація розходилася з кодом.
+- v1.1.0 — не збиралася на Go 1.23/1.24 (вже retract-нутий у v1.1.1).
+
 ## [1.1.1] — 2026-05-14
 
 Hot-fix v1.1.0: модуль не збирався на Go 1.23/1.24 (через x/sync@v0.20
@@ -250,7 +281,8 @@ runtime-баги retry/limiter-стеку, DoS-векторів у webhook/insta
 - `monobanktest` — мок-сервер на `httptest.Server` із fluent-builder-ами.
 - Пагінатори через `iter.Seq2` (Go 1.23+).
 
-[Unreleased]: https://github.com/OlexiyOdarchuk/go-monobank-sdk/compare/v1.1.1...HEAD
+[Unreleased]: https://github.com/OlexiyOdarchuk/go-monobank-sdk/compare/v1.1.2...HEAD
+[1.1.2]: https://github.com/OlexiyOdarchuk/go-monobank-sdk/compare/v1.1.1...v1.1.2
 [1.1.1]: https://github.com/OlexiyOdarchuk/go-monobank-sdk/compare/v1.1.0...v1.1.1
 [1.1.0]: https://github.com/OlexiyOdarchuk/go-monobank-sdk/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/OlexiyOdarchuk/go-monobank-sdk/compare/v0.1.0...v1.0.0

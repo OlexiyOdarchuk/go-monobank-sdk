@@ -54,7 +54,7 @@ func TestCorp_SetAuth_withPermissions(t *testing.T) {
 	assert.Empty(t, r.Header.Get("X-Request-Id"))
 }
 
-// Регресія L6b: Permission — typed string, тож константи мають правильний
+// Permission — typed string, тож константи мають правильний
 // тип, конкатенація летерів зберігається, custom Permission приймається.
 func TestPermission_typedStringSemantics(t *testing.T) {
 	// Compile-time: PermSt має тип Permission, не плоский string.

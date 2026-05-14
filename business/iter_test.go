@@ -114,7 +114,7 @@ func TestContactsAll_contextCancel(t *testing.T) {
 	}
 }
 
-// Регресія L8: StatementAll лінько пагінує операції через DOWN-курсор.
+// StatementAll лінько пагінує операції через DOWN-курсор.
 func TestStatementAll_paginatesDownByTime(t *testing.T) {
 	from := time.Unix(1_700_000_000, 0)
 	to := time.Unix(1_700_009_000, 0)
@@ -150,7 +150,7 @@ func TestStatementAll_paginatesDownByTime(t *testing.T) {
 	assert.Equal(t, "op-1700003000", got[5])
 }
 
-// Регресія L8: порожня сторінка зупиняє ітерацію.
+// порожня сторінка зупиняє ітерацію.
 func TestStatementAll_stopsOnEmptyPage(t *testing.T) {
 	from := time.Unix(1_700_000_000, 0)
 	to := from.Add(time.Hour)
@@ -165,7 +165,7 @@ func TestStatementAll_stopsOnEmptyPage(t *testing.T) {
 	assert.Equal(t, 0, n)
 }
 
-// Регресія L8: break зупиняє ітерацію без додаткових HTTP-викликів.
+// break зупиняє ітерацію без додаткових HTTP-викликів.
 func TestStatementAll_breakStops(t *testing.T) {
 	from := time.Unix(1_700_000_000, 0)
 	to := time.Unix(1_700_010_000, 0)

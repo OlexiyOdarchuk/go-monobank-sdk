@@ -39,7 +39,7 @@ The internal mobile API has no public spec — out of scope.
 |---|---|---|---|
 | Open API — personal (X-Token) | [api.monobank.ua/docs](https://api.monobank.ua/docs/) | `personal` | 4 |
 | Open API — corporate (ECDSA) + monoКЕП | [corporate.html](https://api.monobank.ua/docs/corporate.html) | `corporate` | 11 |
-| corp-api for legal entities | [corp-api.monobank.ua](https://corp-api.monobank.ua/) | `business` | 17 |
+| corp-api for legal entities | [corp-api.monobank.ua](https://corp-api.monobank.ua/) | `business` | 23 |
 | Acquiring (`/api/merchant/*`) | [acquiring.html](https://api.monobank.ua/docs/acquiring.html) | `acquiring` | 31 |
 | Installment (HMAC-SHA256) | [chast docs](https://u2-demo-ext.mono.st4g3.com/docs/index.html) | `installment` | 14 |
 | JAR / public jars (community) | community docs | `jar` | 2 |
@@ -54,7 +54,7 @@ monobank-sdk/
 │                   (ClientInfo, Account, Jar, Transaction) + Rates.Convert
 ├── personal/       Personal Open API (X-Token)
 ├── corporate/      Corporate Open API (ECDSA) + monoКЕП
-├── business/       corp-api.monobank.ua — 17 endpoints
+├── business/       corp-api.monobank.ua — 23 endpoints
 ├── acquiring/      /api/merchant/* — 31 endpoints (invoices, QR, wallet,
 │                   subscriptions, monopay-keys, split, T2P) +
 │                   ECDSA webhook verification
@@ -212,8 +212,8 @@ import "github.com/OlexiyOdarchuk/go-monobank-sdk/acquiring"
 cli := acquiring.New(os.Getenv("MONO_ACQUIRING_TOKEN"))
 
 inv, _ := cli.CreateInvoice(ctx, &acquiring.CreateInvoiceRequest{
-    Amount: 10000, // minor units → 100.00 UAH
-    Ccy:    980,   // UAH
+    Amount:   10000,           // minor units → 100.00 UAH
+    Currency: currency.UAH,    // or just 980
     MerchantPaymInfo: &acquiring.MerchantPaymInfo{
         Reference:   "order-42",
         Destination: "Order #42",
@@ -301,8 +301,14 @@ recurring updates.
   honors `Retry-After`, retries only 5xx/429.
 - `WithRateLimiter(RateLimiter)` — client-side throttle (see "Rate limits"
   below).
+- `WithUnsafeRetries(bool)` — by default POST/PATCH retries are gated on
+  the `Idempotency-Key` header (a load-balancer 502 may arrive after the
+  upstream already processed the request, so a blind retry would create
+  a duplicate). Enable when you know your endpoint is idempotent or
+  duplicates are acceptable.
 - `APIError` — typed error with method, URL, received/expected status,
-  parsed `ErrorDescription`, and the raw body.
+  parsed `ErrorDescription`, and the raw body. Implements `errors.Is`
+  against the package sentinels (see below).
 - `WithRequestHook` / `WithResponseHook` — plug in metrics or tracing
   without replacing the transport.
 
@@ -339,15 +345,23 @@ For per-account limits (each account's statement has its own quota), use
 `KeyedLimiter`:
 
 ```go
-klim := monobank.NewKeyedLimiter(time.Minute, 1)
+// idleTTL=10*time.Minute — buckets idle for >10 min are GC'd by a
+// background sweeper so the map stays bounded under churn.
+klim := monobank.NewKeyedLimiter(time.Minute, 1, 10*time.Minute)
+defer klim.Stop()
+
 cli := personal.New(token, monobank.WithRateLimiter(klim))
 
 for _, acc := range info.Accounts {
-    ctx := monobank.WithLimiterKey(ctx, acc.ID)
-    txs, _ := cli.Transactions(ctx, acc.ID, from, to)
+    ctx := monobank.WithLimiterKey(ctx, acc.AccountID)
+    txs, _ := cli.Transactions(ctx, acc.AccountID, from, to)
     // …
 }
 ```
+
+Pass `idleTTL <= 0` to disable eviction (fine for short-lived CLIs;
+long-running services should always pass a sensible TTL, e.g. ~10× the
+`every` interval).
 
 ### Structured errors
 
@@ -357,17 +371,29 @@ Personal/corporate/business/acquiring APIs all return errors as
 
 ```go
 _, err := cli.ClientInfo(ctx)
+
+// Sentinel errors for common control flow:
+switch {
+case errors.Is(err, monobank.ErrUnauthorized):    // 401
+    log.Println("invalid token")
+case errors.Is(err, monobank.ErrForbidden):       // 403
+    log.Println("token lacks endpoint permission")
+case errors.Is(err, monobank.ErrNotFound):        // 404
+    log.Println("entity not found")
+case errors.Is(err, monobank.ErrTooManyRequests): // 429
+    log.Println("rate limit exceeded")
+}
+
+// Full APIError when you need ErrorDescription / raw body:
 var apiErr *monobank.APIError
 if errors.As(err, &apiErr) {
-    if apiErr.StatusCode == http.StatusForbidden {
-        log.Printf("token rejected: %s", apiErr.ErrorDescription)
-    }
-    // apiErr.Body — raw bytes if you need custom parsing.
+    log.Printf("HTTP %d: %s", apiErr.StatusCode, apiErr.ErrorDescription)
 }
 ```
 
 `installment` has its own format and its own `installment.APIError` with
-`Message`, `TraceID` fields.
+`Message`, `TraceID` fields. Callback-signature mismatches compare via
+`errors.Is(err, installment.ErrCallbackSignatureMismatch)`.
 
 ### `bank` — public endpoints
 
@@ -384,8 +410,16 @@ if errors.As(err, &apiErr) {
   amount, balance, opAmount, currencyCode, hold, etc.).
 - `NewHandler(ctx, Options)` — drop-in `http.Handler`: verification,
   parsing, dedup, key auto-refresh.
-- `NewMemoryDeduper(n)` — LRU set keyed on `Response.UID`; swap in your
-  own `Deduper` for Redis/SQL.
+- `NewMemoryDeduper(n)` — LRU set keyed on `Data.Transaction.ID` (the
+  transaction id inside the payload). Swap in your own `Deduper` for
+  Redis/SQL — the in-memory variant loses state on restart, which makes
+  replay of a previously-valid webhook possible.
+- `Options.MaxBodyBytes` — request-body cap (default 1 MiB via
+  `DefaultMaxBodyBytes`). Protects a publicly-exposed webhook URL from
+  OOM by a hostile POST.
+- ServerKey refreshes are coalesced via `singleflight` and throttled to
+  once per 30 s — an attacker spamming POSTs with random `X-Key-Id`
+  cannot amplify a DoS against `/bank/sync`.
 
 ### `money` — typed amounts
 
@@ -394,15 +428,33 @@ m := money.New(12550, currency.UAH) // 125.50 UAH
 m = m.Mul(3)                         // 376.50 UAH
 sum, err := m.Add(other)             // errors out on currency mismatch
 fmt.Println(m)                       // "125.50 UAH"
+fmt.Println(money.New(1250, currency.JPY)) // "1250 JPY" — 0 decimals
 ```
 
 `Money` serializes as a plain integer (minor units) — wire-compatible with
-mono's format.
+mono's format. `Money.Major` / `String` honor `currency.Code.Decimals()`,
+so JPY/KRW (0 decimals) format correctly without dividing by 100.
 
 ### `currency`, `mcc` — enums
 
 - `currency.Code(980).String()` → `"UAH"`; `currency.FromAlpha3("USD")` → `840`.
+- `currency.UAH.Decimals()` → `2`; `currency.JPY.Decimals()` → `0`.
 - `mcc.Code(5411).Category()` → `mcc.CategoryGroceries`.
+
+### Paginators
+
+Every endpoint with a natural cursor ships an `iter.Seq2` wrapper:
+
+- `personal.Client.TransactionsRangeIter` — lazy paging over a
+  multi-window statement.
+- `corporate.Client.TransactionsRangeIter` — same for corp-API.
+- `business.Client.ContactsAll` / `SearchContactsAll` — salary
+  contacts.
+- `business.Client.StatementAll` — DOWN-cursor over time.
+- `acquiring.Client.SubscriptionListAll` / `SubscriptionPaymentsAll` —
+  subscriptions and their payments.
+
+All honor `break` (stop further HTTP calls) and `ctx.Done()`.
 
 ### `monobanktest` — fake monobank for tests
 

@@ -81,7 +81,7 @@ func TestMajor(t *testing.T) {
 	assert.InDelta(t, 0.0, Money{}.Major(), 1e-9)
 }
 
-// Регресія M8: Major має поважати кількість знаків після коми за валютою.
+// Major має поважати кількість знаків після коми за валютою.
 // До фіксу UAH/USD ділилися на 100, але JPY/KRW (0 знаків) теж — отже
 // 1250 єн відображалися як 12.50, що неправильно.
 func TestMajor_currencyAwareDecimals(t *testing.T) {
@@ -110,7 +110,7 @@ func TestString(t *testing.T) {
 	assert.Equal(t, "0.00 7777", New(0, currency.Code(7777)).String(), "невідома валюта — числовий код")
 }
 
-// Регресія M8: String використовує currency-aware decimals — JPY без
+// String використовує currency-aware decimals — JPY без
 // знаків після коми ("1250 JPY", не "12.50 JPY").
 func TestString_currencyAwareDecimals(t *testing.T) {
 	assert.Equal(t, "1250 JPY", New(1250, currency.JPY).String(),

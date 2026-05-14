@@ -213,8 +213,8 @@ import "github.com/OlexiyOdarchuk/go-monobank-sdk/acquiring"
 cli := acquiring.New(os.Getenv("MONO_ACQUIRING_TOKEN"))
 
 inv, _ := cli.CreateInvoice(ctx, &acquiring.CreateInvoiceRequest{
-    Amount: 10000, // копійки → 100.00 грн
-    Ccy:    980,   // UAH
+    Amount:   10000,           // копійки → 100.00 грн
+    Currency: currency.UAH,    // або просто 980
     MerchantPaymInfo: &acquiring.MerchantPaymInfo{
         Reference:   "order-42",
         Destination: "Замовлення №42",
@@ -300,8 +300,13 @@ short, _ := cli.ByShortID(ctx, "clientIdFromShareLink")
   повага до `Retry-After`, ретраїться лише на 5xx/429.
 - `WithRateLimiter(RateLimiter)` — клієнтський throttle (див. розділ
   «Rate limits» нижче).
+- `WithUnsafeRetries(bool)` — за замовчуванням POST/PATCH ретраяться
+  ЛИШЕ за наявності заголовка `Idempotency-Key` (інакше 502 від
+  балансера може створити дублікат операції). Вмикайте, якщо точно
+  знаєте, що ваш endpoint ідемпотентний і дублі прийнятні.
 - `APIError` — типізована помилка з методом, URL, отриманим/очікуваним
-  статусом, розпарсеним `ErrorDescription` і сирим body.
+  статусом, розпарсеним `ErrorDescription` і сирим body. Реалізує
+  `errors.Is` проти sentinel-помилок (див. нижче).
 - `WithRequestHook` / `WithResponseHook` — підключіть власні метрики чи
   трейсинг без замін транспорту.
 
@@ -335,8 +340,25 @@ cli := personal.New(token,
 потрібні дрібніші налаштування.
 
 Для per-account обмежень (виписка по кожному рахунку — окремий ліміт)
-тримайте окремий `*Limiter` на акаунт, або реалізуйте власний
-`RateLimiter` із dispatch-логікою.
+використовуйте `KeyedLimiter`:
+
+```go
+// idleTTL=10*time.Minute — корзини, до яких не зверталися >10 хв,
+// видаляються фоновим sweeper-ом, щоб мапа не росла безкінечно.
+klim := monobank.NewKeyedLimiter(time.Minute, 1, 10*time.Minute)
+defer klim.Stop()
+
+cli := personal.New(token, monobank.WithRateLimiter(klim))
+
+for _, acc := range info.Accounts {
+    ctx := monobank.WithLimiterKey(ctx, acc.AccountID)
+    txs, _ := cli.Transactions(ctx, acc.AccountID, from, to)
+    // …
+}
+```
+
+`idleTTL <= 0` вимикає eviction — годиться для коротких CLI-утиліт, але
+у long-running сервісах задавайте розумне значення (~10× за `every`).
 
 ### Структуровані помилки
 
@@ -345,17 +367,30 @@ cli := personal.New(token,
 
 ```go
 _, err := cli.ClientInfo(ctx)
+
+// Sentinel-помилки за статусом — для типового control-flow:
+switch {
+case errors.Is(err, monobank.ErrUnauthorized):    // 401
+    log.Println("токен невалідний")
+case errors.Is(err, monobank.ErrForbidden):       // 403
+    log.Println("токен не має прав на endpoint")
+case errors.Is(err, monobank.ErrNotFound):        // 404
+    log.Println("сутність не існує")
+case errors.Is(err, monobank.ErrTooManyRequests): // 429
+    log.Println("rate-limit перевищено")
+}
+
+// Повний APIError — коли треба ErrorDescription, raw body тощо:
 var apiErr *monobank.APIError
 if errors.As(err, &apiErr) {
-    if apiErr.StatusCode == http.StatusForbidden {
-        log.Printf("token rejected: %s", apiErr.ErrorDescription)
-    }
+    log.Printf("HTTP %d: %s", apiErr.StatusCode, apiErr.ErrorDescription)
     // apiErr.Body — оригінальні байти, якщо потрібен власний парсинг.
 }
 ```
 
 `installment` має власний формат і власний `installment.APIError` з полями
-`Message`, `TraceID`.
+`Message`, `TraceID`. Підпис callback порівнюється з
+`installment.ErrCallbackSignatureMismatch` через `errors.Is`.
 
 ### `bank` — публічні endpoint-и
 
@@ -376,6 +411,12 @@ if errors.As(err, &apiErr) {
   з payload-у); підставте власну реалізацію `Deduper` для Redis/SQL —
   in-memory deduper втрачає стан при рестарті, що дозволяє replay
   валідно підписаного webhook-у.
+- `Options.MaxBodyBytes` — стеля на розмір тіла запиту (за дефолтом
+  1 MiB через `DefaultMaxBodyBytes`). Захист від OOM на публічно
+  доступному webhook-URL.
+- Refresh серверного ключа дроссельований до раз на 30 с і об'єднаний
+  через `singleflight` — атакуючий, що шле POST з випадковим
+  `X-Key-Id`, не амплифікує DoS на `/bank/sync`.
 
 ### `money` — типізовані суми
 
@@ -384,15 +425,34 @@ m := money.New(12550, currency.UAH) // 125.50 грн
 m = m.Mul(3)                         // 376.50 грн
 sum, err := m.Add(other)             // помилка, якщо валюти різні
 fmt.Println(m)                       // "125.50 UAH"
+fmt.Println(money.New(1250, currency.JPY)) // "1250 JPY" — 0 знаків після коми
 ```
 
 `Money` серіалізується в JSON як ціле число мінорних одиниць — wire-сумісно
-з форматом Mono.
+з форматом Mono. `Money.Major` / `String` поважають
+`currency.Code.Decimals()` — JPY/KRW (0 знаків) форматуються коректно
+без ділення на 100.
 
 ### `currency`, `mcc` — enum-и
 
 - `currency.Code(980).String()` → `"UAH"`; `currency.FromAlpha3("USD")` → `840`.
+- `currency.UAH.Decimals()` → `2`; `currency.JPY.Decimals()` → `0`.
 - `mcc.Code(5411).Category()` → `mcc.CategoryGroceries`.
+
+### Пагінатори
+
+Усі ендпоінти, де є природний курсор, мають `iter.Seq2`-обгортки:
+
+- `personal.Client.TransactionsRangeIter` — виписка за довільний період,
+  ліниво по 31-денних вікнах.
+- `corporate.Client.TransactionsRangeIter` — те саме для corp-API.
+- `business.Client.ContactsAll` / `SearchContactsAll` — зарплатні
+  контакти.
+- `business.Client.StatementAll` — виписка через DOWN-курсор по часу.
+- `acquiring.Client.SubscriptionListAll` / `SubscriptionPaymentsAll` —
+  списки підписок та їх платежів.
+
+Усі поважають `break` (зупиняють подальші HTTP-виклики) і `ctx.Done()`.
 
 ### `monobanktest` — фейковий monobank для тестів
 

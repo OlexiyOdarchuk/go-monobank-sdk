@@ -49,7 +49,7 @@ func TestVerifyCallback(t *testing.T) {
 	require.Error(t, c.VerifyCallback(body, "tampered"))
 }
 
-// Регресія H5: VerifyCallback з підписом некоректної довжини мусить
+// VerifyCallback з підписом некоректної довжини мусить
 // бути відхиленим БЕЗ обчислення HMAC. До фіксу великий body + короткий/
 // порожній signature змушував сервер витратити CPU на HMAC-SHA256 від N
 // байтів, перш ніж відмовити. Тут перевіряємо лише результат (sentinel),

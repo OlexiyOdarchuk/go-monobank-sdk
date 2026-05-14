@@ -80,7 +80,7 @@ func TestTransactionsRange_zeroOrNegative(t *testing.T) {
 	assert.Nil(t, out)
 }
 
-// Регресія M7: accountID мусить бути url.PathEscape-нутим у path-сегменті
+// accountID мусить бути url.PathEscape-нутим у path-сегменті
 // /personal/statement/{accountID}/{from}/{to}. Без цього зловмисний
 // accountID типу "../foo" зміг би пробити SDK на інший endpoint, а
 // account-IDs зі слешем / спецсимволом ламали би 31-day pagination.

@@ -45,7 +45,7 @@ func TestParseRetryAfter(t *testing.T) {
 	})
 }
 
-// Регресія H2: дуже великий attempt не повинен переповнювати int64
+// дуже великий attempt не повинен переповнювати int64
 // і панікувати в jitter.
 func TestBackoff_NoOverflow(t *testing.T) {
 	// attempt=63 → base<<63 переповнить int64.

@@ -286,7 +286,7 @@ func TestSubscriptionPayments_requiresFields(t *testing.T) {
 	assert.Contains(t, err.Error(), "DateFrom is required")
 }
 
-// Регресія L8: SubscriptionListAll лінько пагінує всі сторінки.
+// SubscriptionListAll лінько пагінує всі сторінки.
 func TestSubscriptionListAll_paginates(t *testing.T) {
 	var calls int
 	c := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
