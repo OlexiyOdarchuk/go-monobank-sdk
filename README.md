@@ -308,7 +308,48 @@ short, _ := cli.ByShortID(ctx, "clientIdFromShareLink")
   статусом, розпарсеним `ErrorDescription` і сирим body. Реалізує
   `errors.Is` проти sentinel-помилок (див. нижче).
 - `WithRequestHook` / `WithResponseHook` — підключіть власні метрики чи
-  трейсинг без замін транспорту.
+  трейсинг без замін транспорту. Для повноцінного middleware-chain —
+  `WithRoundTripper(http.RoundTripper)`: чистий слот під
+  OpenTelemetry / Datadog / circuit-breaker, що зберігає таймаут і
+  Cookie-jar вбудованого `*http.Client`.
+- `WithUserAgent(string)` — перевизначає дефолтний User-Agent
+  (`go-monobank-sdk/vX.Y.Z (linux; goX.Y.Z)`). Mono використовує його
+  у support-кейсах для розрізнення твого сервісу серед інших юзерів
+  SDK. Експортовано `monobank.UserAgent()` — якщо хочеш зберегти
+  SDK-частину і додати свій префікс.
+- `Client.Close() error` — реалізує `io.Closer`; зупиняє sweeper
+  фоновим `KeyedLimiter`. Безпечно викликати на клієнті без лімітера.
+
+### Insecure base URL
+
+За замовчуванням `WithBaseURL("http://...")` для не-loopback-хоста
+повертає `monobank.ErrInsecureBaseURL` із першого `Do` — щоб
+конфігураційна помилка не призвела до відправлення X-Token у
+відкритому вигляді. Loopback (`localhost`, `127.0.0.1`, `[::1]`)
+завжди дозволений для тестів через `httptest.Server`. Свідомо обійти
+для MITM-проксі чи staging-у за VPN-ом:
+
+```go
+cli := personal.New(token,
+    monobank.WithInsecureBaseURL(true), // має бути ДО WithBaseURL
+    monobank.WithBaseURL("http://staging.example.com"),
+)
+```
+
+### Token redaction у логах
+
+`auth.Personal`, `business.TokenAuth`, `acquiring.TokenAuth`,
+`auth.CorpAuthMaker`, `installment.Client` реалізують
+`slog.LogValuer` і рендеряться як `***` у slog-виводі:
+
+```go
+slog.Info("auth", "creds", auth.NewPersonal(token))
+// → ... creds=auth.Personal{token:***}
+```
+
+Захист від випадкового потрапляння токену/секрету в DEBUG-логи через
+`slog.Info("token", token)`. Якщо ти логуєш токен явно через
+`slog.String("token", token)` — це твоя відповідальність.
 
 ### Rate limits
 

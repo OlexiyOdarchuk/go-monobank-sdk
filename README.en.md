@@ -310,7 +310,49 @@ recurring updates.
   parsed `ErrorDescription`, and the raw body. Implements `errors.Is`
   against the package sentinels (see below).
 - `WithRequestHook` / `WithResponseHook` — plug in metrics or tracing
-  without replacing the transport.
+  without replacing the transport. For a full middleware chain use
+  `WithRoundTripper(http.RoundTripper)`: a clean slot for
+  OpenTelemetry / Datadog / circuit-breaker that preserves the
+  inner `*http.Client`'s timeout and cookie jar.
+- `WithUserAgent(string)` — overrides the default User-Agent
+  (`go-monobank-sdk/vX.Y.Z (linux; goX.Y.Z)`). Mono uses it in
+  support to disambiguate your service from other SDK users.
+  Exported `monobank.UserAgent()` lets you keep the SDK part and
+  prepend your own prefix.
+- `Client.Close() error` — implements `io.Closer`; stops the
+  background sweeper of a `KeyedLimiter`. Safe to call on a client
+  without a limiter.
+
+### Insecure base URL
+
+By default, `WithBaseURL("http://...")` for a non-loopback host
+returns `monobank.ErrInsecureBaseURL` from the first `Do` — a
+config mistake should not silently send the X-Token in the clear.
+Loopback (`localhost`, `127.0.0.1`, `[::1]`) is always allowed for
+`httptest.Server` use. Opt in explicitly for MITM-proxy debugging
+or VPN-internal staging:
+
+```go
+cli := personal.New(token,
+    monobank.WithInsecureBaseURL(true), // must precede WithBaseURL
+    monobank.WithBaseURL("http://staging.example.com"),
+)
+```
+
+### Token redaction in logs
+
+`auth.Personal`, `business.TokenAuth`, `acquiring.TokenAuth`,
+`auth.CorpAuthMaker`, `installment.Client` implement
+`slog.LogValuer` and render as `***` in slog output:
+
+```go
+slog.Info("auth", "creds", auth.NewPersonal(token))
+// → ... creds=auth.Personal{token:***}
+```
+
+Protects against accidental token leaks in DEBUG logs via
+`slog.Info("token", token)`. If you log the token explicitly via
+`slog.String("token", token)` — that's on you.
 
 ### Rate limits
 
