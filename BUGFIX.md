@@ -345,9 +345,9 @@
   - Виправити: типізовані алиаси `type OperationID string`, `type ExternalRef string`.
   - Resolution: відкладено — потенційно breaking; до v2.
 
-- [ ] **client.go ResolveReference** — якщо `req.URL` уже абсолютний — пройде у запит.
+- [x] **client.go ResolveReference** — якщо `req.URL` уже абсолютний — пройде у запит.
   - Виправити: явно вимагати path-only у docstring `Do`; опційно — error при абсолютному.
-  - Resolution: deferred — потрібен реальний reproducer SSRF; задокументовано в `Do` godoc, що очікується path-only.
+  - Resolution: `Do` тепер відхиляє `req.URL.IsAbs()` з `ErrInvalidURL` ДО `ResolveReference`. Захищає від misuse, коли caller передає `https://evil.example.com/leak` як URL — `url.URL.ResolveReference` би тихо відправив туди. Regression `TestClient_Do_rejectsAbsoluteRequestURL`.
 
 - [x] **monobanktest/server.go:38** — `sync.Mutex` замість `sync.RWMutex`.
   - Виправити: тільки якщо тести стануть гарячими — наразі overkill.

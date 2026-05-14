@@ -300,6 +300,14 @@ func (c Client) Do(req *http.Request, v any, expectedStatusCodes ...int) error {
 	if err != nil {
 		return fmt.Errorf("parse request URL: %w", err)
 	}
+	// Reject an absolute URL in req.URL — otherwise [url.URL.ResolveReference]
+	// would silently let the caller bypass c.baseURL and send the
+	// request to any host. Sub-packages always construct path-only
+	// requests (NewRequestWithContext + "/personal/..."), so this guard
+	// catches a misuse not a normal flow.
+	if target.IsAbs() {
+		return fmt.Errorf("%w: req.URL must be path-only, got %q", ErrInvalidURL, target.String())
+	}
 	req.URL = c.baseURL.ResolveReference(target)
 	if req.Header.Get("Content-Type") == "" && req.Body != nil {
 		req.Header.Set("Content-Type", "application/json")

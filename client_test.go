@@ -367,6 +367,22 @@ func TestWithBaseURL_allowsLoopback(t *testing.T) {
 	}
 }
 
+// Regression: Do must REJECT an absolute URL in req.URL. Without
+// the guard, url.URL.ResolveReference silently lets the caller send
+// the request to any host, defeating c.baseURL.
+func TestClient_Do_rejectsAbsoluteRequestURL(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {
+		t.Fatal("server must not be hit when req.URL is absolute")
+	}))
+	defer srv.Close()
+
+	c := New(WithBaseURL(srv.URL), WithHTTPClient(srv.Client()))
+	// http.NewRequest with an absolute URL — caller misuse.
+	req, _ := http.NewRequest(http.MethodGet, "https://evil.example.com/leak", http.NoBody)
+	err := c.Do(req, nil)
+	assert.ErrorIs(t, err, ErrInvalidURL)
+}
+
 // WithInsecureBaseURL дозволяє http:// на зовнішній хост свідомо.
 func TestWithInsecureBaseURL_overridesGuard(t *testing.T) {
 	c := New(
