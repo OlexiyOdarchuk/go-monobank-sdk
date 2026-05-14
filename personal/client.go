@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
 	"strconv"
 	"time"
 
@@ -65,7 +66,7 @@ func (c *Client) ClientInfo(ctx context.Context) (*bank.ClientInfo, error) {
 // Rate limit: 1 виклик на рахунок на 60 с.
 // https://api.monobank.ua/docs/#tag/Klientski-personalni-dani/paths/~1personal~1statement~1{account}~1{from}~1{to}/get
 func (c *Client) Transactions(ctx context.Context, accountID string, from, to time.Time) (bank.Transactions, error) {
-	uri := "/personal/statement/" + accountID +
+	uri := "/personal/statement/" + url.PathEscape(accountID) +
 		"/" + strconv.FormatInt(from.Unix(), 10) +
 		"/" + strconv.FormatInt(to.Unix(), 10)
 

@@ -73,3 +73,24 @@ func (c Code) String() string {
 	}
 	return strconv.Itoa(int(c))
 }
+
+// decimals — overrides проти дефолту 2 для валют, у яких ISO 4217 чітко
+// фіксує іншу кількість знаків після коми. Більшість валют (UAH/USD/
+// EUR/GBP/PLN/CHF/CZK/CAD/AUD/CNY) — 2 знаки, тож у мапі їх немає.
+var decimals = map[Code]int{
+	JPY: 0, // Japanese yen — minor unit не використовується
+}
+
+// Decimals повертає кількість знаків після коми для мажорної одиниці
+// валюти за ISO 4217. Дефолт — 2 (як у UAH/USD/EUR/...). Окремі
+// валюти (JPY=0, KRW=0, BHD/JOD/KWD/OMR/TND=3) мають інші значення —
+// додай їх у [decimals], якщо потрібно підтримати.
+//
+// Використовується [money.Money.Major] для коректної конверсії
+// minor → major (1250 копійок = 12.50 грн; 1250 єн = 1250 єн).
+func (c Code) Decimals() int {
+	if d, ok := decimals[c]; ok {
+		return d
+	}
+	return 2
+}

@@ -13,6 +13,7 @@ package money
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 
 	"github.com/OlexiyOdarchuk/go-monobank-sdk/currency"
 )
@@ -74,15 +75,23 @@ func (m Money) Scale(factor float64) Money {
 	return Money{Minor: int64(r - 0.5), Code: m.Code}
 }
 
-// Major повертає суму у мажорних одиницях (грн/USD/EUR), припускаючи
-// 2 знаки після коми (виключення на кшталт JPY/KRW поки не
-// підтримуються — обробляй вручну через .Minor).
-func (m Money) Major() float64 { return float64(m.Minor) / 100 }
+// Major повертає суму у мажорних одиницях (грн/USD/EUR/...). Кількість
+// знаків після коми береться з [currency.Code.Decimals]: 2 для більшості
+// валют, 0 для JPY (1250 єн = 1250 одиниць, не 12.50). Якщо валюта
+// невідома SDK — припускаємо 2 знаки.
+func (m Money) Major() float64 {
+	d := m.Code.Decimals()
+	if d == 0 {
+		return float64(m.Minor)
+	}
+	return float64(m.Minor) / math.Pow10(d)
+}
 
-// String форматує гроші у вигляді «42.50 UAH» (2 знаки після коми + ISO
-// alpha-3 код). Корисно для логів і дебагу.
+// String форматує гроші у вигляді «42.50 UAH» (кількість знаків після
+// коми відповідає валюті — 2 для UAH, 0 для JPY тощо). Корисно для
+// логів і дебагу.
 func (m Money) String() string {
-	return fmt.Sprintf("%.2f %s", m.Major(), m.Code)
+	return fmt.Sprintf("%.*f %s", m.Code.Decimals(), m.Major(), m.Code)
 }
 
 // MarshalJSON серіалізує Money як голу кількість мінорних одиниць —

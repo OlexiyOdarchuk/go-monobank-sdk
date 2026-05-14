@@ -372,8 +372,10 @@ if errors.As(err, &apiErr) {
   amount, balance, opAmount, currencyCode, hold тощо).
 - `NewHandler(ctx, Options)` — готовий `http.Handler`: верифікація,
   парсинг, дедуп, авторефреш ключа.
-- `NewMemoryDeduper(n)` — LRU-set на `Response.UID`; підставте власну
-  реалізацію `Deduper` для Redis/SQL.
+- `NewMemoryDeduper(n)` — LRU-set на `Data.Transaction.ID` (id транзакції
+  з payload-у); підставте власну реалізацію `Deduper` для Redis/SQL —
+  in-memory deduper втрачає стан при рестарті, що дозволяє replay
+  валідно підписаного webhook-у.
 
 ### `money` — типізовані суми
 

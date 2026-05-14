@@ -38,8 +38,8 @@ func TestPublicKeyPEM_roundtrip(t *testing.T) {
 	assert.True(t, curveOID.Equal(oidSecp256k1), "curve must be secp256k1")
 
 	// Public point — точно 65 байтів, починається з 0x04.
-	require.Len(t, info.PublicKey.Bytes, uncompressedPointLength)
-	assert.Equal(t, byte(uncompressedPointPrefix), info.PublicKey.Bytes[0])
+	require.Len(t, info.PublicKey.Bytes, 1+2*pointCoordinateBytes)
+	assert.Equal(t, byte(0x04), info.PublicKey.Bytes[0])
 
 	// X-координата точки збігається з тією, що випливає з приватного ключа.
 	wantX := m.privateKey.PublicKey.X.Bytes() //nolint:staticcheck

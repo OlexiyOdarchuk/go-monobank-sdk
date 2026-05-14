@@ -29,11 +29,7 @@ type pkixAlgorithm struct {
 }
 
 // secp256k1 uncompressed point: 0x04 || X (32 bytes) || Y (32 bytes).
-const (
-	uncompressedPointPrefix = 0x04
-	pointCoordinateBytes    = 32
-	uncompressedPointLength = 1 + 2*pointCoordinateBytes
-)
+const pointCoordinateBytes = 32
 
 // PublicKeyPEM повертає публічний ключ цього CorpAuthMaker у форматі,
 // якого очікують [corporate.Client.Register] і
@@ -54,18 +50,11 @@ const (
 // Реалізовано вручну, бо x509.MarshalPKIXPublicKey зі стандартної
 // бібліотеки не підтримує secp256k1 (тільки P-224/P-256/P-384/P-521).
 func (c *CorpAuthMaker) PublicKeyPEM() ([]byte, error) {
-	pub := c.privateKey.PublicKey
-
-	// Uncompressed-point у фіксованих 65 байтах: лівопадинг X/Y до 32.
-	x := pub.X.Bytes() //nolint:staticcheck // SDK has to live with deprecated API
-	y := pub.Y.Bytes() //nolint:staticcheck
-	if len(x) > pointCoordinateBytes || len(y) > pointCoordinateBytes {
-		return nil, fmt.Errorf("auth: public-key coordinates exceed 32 bytes (X=%d, Y=%d)", len(x), len(y))
+	if c.privateKey.X.BitLen() > 8*pointCoordinateBytes ||
+		c.privateKey.Y.BitLen() > 8*pointCoordinateBytes {
+		return nil, fmt.Errorf("auth: public-key coordinates exceed 32 bytes")
 	}
-	point := make([]byte, uncompressedPointLength)
-	point[0] = uncompressedPointPrefix
-	copy(point[1+pointCoordinateBytes-len(x):1+pointCoordinateBytes], x)
-	copy(point[1+2*pointCoordinateBytes-len(y):], y)
+	point := serializeECDSAPubKeyUncompressed(&c.privateKey.PublicKey)
 
 	paramBytes, err := asn1.Marshal(oidSecp256k1)
 	if err != nil {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"net/url"
 	"strconv"
 	"time"
 
@@ -33,7 +34,7 @@ func (c *Client) ClientInfo(ctx context.Context, requestID string) (*bank.Client
 // [Client.TransactionsRange].
 // https://api.monobank.ua/docs/corporate.html#tag/Klyentski-personalni-dani/paths/~1personal~1statement~1{account}~1{from}~1{to}/get
 func (c *Client) Transactions(ctx context.Context, requestID, accountID string, from, to time.Time) (bank.Transactions, error) {
-	uri := "/personal/statement/" + accountID +
+	uri := "/personal/statement/" + url.PathEscape(accountID) +
 		"/" + strconv.FormatInt(from.Unix(), 10) +
 		"/" + strconv.FormatInt(to.Unix(), 10)
 

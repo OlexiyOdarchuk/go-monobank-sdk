@@ -2,6 +2,7 @@ package acquiring
 
 import (
 	"crypto/ecdsa"
+	"crypto/elliptic"
 	"crypto/sha256"
 	"crypto/x509"
 	"encoding/base64"
@@ -53,6 +54,12 @@ func ParsePubKey(keyB64 []byte) (*ecdsa.PublicKey, error) {
 	ecPub, ok := pub.(*ecdsa.PublicKey)
 	if !ok {
 		return nil, fmt.Errorf("%w: expected ECDSA, got %T", ErrInvalidPubKey, pub)
+	}
+	// Mono acquiring завжди підписує P-256 (NIST secp256r1). Інші
+	// криві відхиляємо, щоб MITM не міг підсунути сторонній ключ
+	// (наприклад P-384), на якому verify випадково пройде.
+	if ecPub.Curve != elliptic.P256() {
+		return nil, fmt.Errorf("%w: expected P-256, got %s", ErrInvalidPubKey, ecPub.Curve.Params().Name)
 	}
 	return ecPub, nil
 }

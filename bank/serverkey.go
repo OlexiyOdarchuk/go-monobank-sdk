@@ -5,7 +5,6 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
-	"math/big"
 	"time"
 
 	secp256k1 "github.com/decred/dcrd/dcrec/secp256k1/v4"
@@ -57,12 +56,20 @@ func (r bankSyncResponse) asServerKey() (*ServerKey, error) {
 	if len(pubBytes) != uncompressedPointLength || pubBytes[0] != uncompressedPointPrefix {
 		return nil, ErrInvalidPubKey
 	}
+	// secp256k1.ParsePubKey валідує, що (X, Y) дійсно лежить на
+	// кривій (захист від MITM-атаки, що підмінила б ServerKey
+	// off-curve точкою — інакше всі verify провалювались би 401-ми, а
+	// handler у відповідь DDoS-ив би /bank/sync auto-refresh-ами).
+	pk, err := secp256k1.ParsePubKey(pubBytes)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %s", ErrInvalidPubKey, err)
+	}
 	return &ServerKey{
 		ID: r.ServerKeyID,
 		PubKey: &ecdsa.PublicKey{
 			Curve: secp256k1.S256(),
-			X:     new(big.Int).SetBytes(pubBytes[1 : 1+secp256k1CoordinateBytes]),
-			Y:     new(big.Int).SetBytes(pubBytes[1+secp256k1CoordinateBytes:]),
+			X:     pk.X(),
+			Y:     pk.Y(),
 		},
 		ServerTime: time.UnixMilli(r.ServerTimeMsec),
 	}, nil

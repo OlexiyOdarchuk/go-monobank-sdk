@@ -2,7 +2,6 @@ package auth
 
 import (
 	"crypto/ecdsa"
-	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/sha1"
 	"crypto/sha256"
@@ -21,16 +20,25 @@ import (
 	secp256k1 "github.com/decred/dcrd/dcrec/secp256k1/v4"
 )
 
-// Літери дозволів (permissions) для корпоративної авторизації. Передаються
-// у заголовку X-Permissions при /personal/auth/request і визначають, які
-// дані буде видно після підтвердження клієнтом.
+// Permission — дозволи (permissions) для корпоративної авторизації.
+// Передаються у заголовку X-Permissions при /personal/auth/request і
+// визначають, які дані буде видно після підтвердження клієнтом.
+//
+// Типізація захищає від випадкових опечаток: компілятор не дасть
+// передати "x" туди, де очікується [Permission]. Якщо потрібно
+// проставити перелік як рядок (наприклад, для логів) — конвертуй
+// явно: string(p).
+type Permission string
+
+// Стандартні дозволи. Список — повний на момент написання SDK; якщо
+// Mono додасть нові — використовуй Permission("...") напряму.
 const (
 	// PermSt — виписки (транзакції) і clientInfo фізичної особи.
-	PermSt = "s"
+	PermSt Permission = "s"
 	// PermPI — персональні дані (ім'я та прізвище).
-	PermPI = "p"
+	PermPI Permission = "p"
 	// PermFOP — виписки і clientInfo для рахунків ФОП.
-	PermFOP = "f"
+	PermFOP Permission = "f"
 )
 
 // Помилки, які можуть повернутись із хелперів корпоративної авторизації.
@@ -60,7 +68,7 @@ type CorpAuthMakerAPI interface {
 	// NewPermissions повертає Authorizer для /personal/auth/request,
 	// передаючи permissions у X-Permissions. Порожній список означає
 	// «усі дозволи».
-	NewPermissions(permissions ...string) Authorizer
+	NewPermissions(permissions ...Permission) Authorizer
 }
 
 // CorpAuthMaker зберігає приватний ECDSA-ключ (secp256k1) і обчислений
@@ -94,10 +102,13 @@ func NewCorpAuthMaker(secKey []byte) (*CorpAuthMaker, error) {
 		return nil, ErrDecodePrivateKey
 	}
 
-	publicKey := privateKey.PublicKey
-	data := elliptic.Marshal(publicKey, publicKey.X, publicKey.Y)
-	hash := sha1.New()
-	if _, err := hash.Write(data); err != nil {
+	// X-Key-Id = hex(sha1(uncompressed-pubkey)). SHA-1 — формат банку
+	// (не криптовразливість тут: це лише ідентифікатор, не підпис).
+	// Серіалізація точки — через secp256k1.SerializeUncompressed
+	// (deprecated elliptic.Marshal заміщений нативним методом).
+	pkBytes := serializeECDSAPubKeyUncompressed(&privateKey.PublicKey)
+	hash := sha1.New() //nolint:gosec // SHA-1 — формат X-Key-Id Mono, не для підпису
+	if _, err := hash.Write(pkBytes); err != nil {
 		return nil, ErrEncodePublicKey
 	}
 	keyID := hex.EncodeToString(hash.Sum(nil))
@@ -119,8 +130,12 @@ func (c *CorpAuthMaker) New(requestID string) Authorizer {
 // NewPermissions повертає [Corp]-авторизатор, прив'язаний до набору
 // permissions (передаються у X-Permissions). Використовується тільки для
 // /personal/auth/request — для решти endpoint-ів вживай [CorpAuthMaker.New].
-func (c *CorpAuthMaker) NewPermissions(permissions ...string) Authorizer {
-	return Corp{maker: c, permissions: strings.Join(permissions, "")}
+func (c *CorpAuthMaker) NewPermissions(permissions ...Permission) Authorizer {
+	parts := make([]string, len(permissions))
+	for i, p := range permissions {
+		parts[i] = string(p)
+	}
+	return Corp{maker: c, permissions: strings.Join(parts, "")}
 }
 
 // Corp — корпоративний Authorizer для одного запиту. Напряму не
@@ -190,6 +205,21 @@ func (a Corp) signString(str string) (string, error) {
 	}
 
 	return base64.StdEncoding.EncodeToString(bb), nil
+}
+
+// serializeECDSAPubKeyUncompressed повертає uncompressed-кодування
+// (SEC1 §2.3.3) точки secp256k1: 1 префіксний байт 0x04 + X (32 байти,
+// left-padded) + Y (32 байти, left-padded). Замінює deprecated
+// elliptic.Marshal.
+func serializeECDSAPubKeyUncompressed(pub *ecdsa.PublicKey) []byte {
+	const coordSize = 32
+	out := make([]byte, 1+2*coordSize)
+	out[0] = 0x04
+	xb := pub.X.Bytes()
+	yb := pub.Y.Bytes()
+	copy(out[1+coordSize-len(xb):1+coordSize], xb)
+	copy(out[1+2*coordSize-len(yb):], yb)
+	return out
 }
 
 // decodePrivateKey extracts an ECDSA private key from PEM-encoded SEC1
