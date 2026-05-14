@@ -62,7 +62,9 @@ func main() {
 	// 1. Start an access request.
 	tok, err := cli.Auth(ctx, callback, auth.PermSt, auth.PermPI)
 	if err != nil {
-		log.Fatalf("Auth: %v", err)
+		safeErr := strings.ReplaceAll(err.Error(), "\n", "")
+		safeErr = strings.ReplaceAll(safeErr, "\r", "")
+		log.Fatalf("Auth: %s", safeErr)
 	}
 	fmt.Printf("Request ID: %s\n", tok.RequestID)
 	fmt.Printf("Show this to the client: %s\n", tok.AcceptURL)
@@ -89,7 +91,9 @@ func main() {
 			fmt.Print(".")
 			continue
 		}
-		log.Fatalf("CheckAuth: %v", err)
+		safeErr := strings.ReplaceAll(err.Error(), "\n", "")
+		safeErr = strings.ReplaceAll(safeErr, "\r", "")
+		log.Fatalf("CheckAuth: %s", safeErr)
 	}
 
 	// 3. Fetch client data with the granted request id.
