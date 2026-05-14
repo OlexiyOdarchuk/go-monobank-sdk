@@ -119,6 +119,43 @@ func TestString_currencyAwareDecimals(t *testing.T) {
 		"UAH має 2 знаки після коми")
 }
 
+// Major для звичайних сум (UAH/USD/EUR) дає той самий результат, що
+// й банальне ділення на 100 — math.Pow10(2) точно дорівнює 100.
+// Це фіксація для випадку, якщо хтось колись захоче змінити реалізацію.
+func TestMajor_precisionForCommonAmounts(t *testing.T) {
+	cases := map[string]struct {
+		minor int64
+		code  currency.Code
+		want  float64
+	}{
+		"1 копійка":     {1, currency.UAH, 0.01},
+		"99 копійок":    {99, currency.UAH, 0.99},
+		"100 копійок":   {100, currency.UAH, 1.00},
+		"мільйон грн":   {100_000_000, currency.UAH, 1_000_000.00},
+		"мільярд грн":   {100_000_000_000, currency.UAH, 1_000_000_000.00},
+		"negative":      {-12345, currency.USD, -123.45},
+		"JPY 1 одиниця": {1, currency.JPY, 1.0},
+		"JPY мільйон":   {1_000_000, currency.JPY, 1_000_000.0},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			got := New(tc.minor, tc.code).Major()
+			assert.InDelta(t, tc.want, got, 1e-9)
+		})
+	}
+}
+
+// За дуже великих int64-сум (>2^53 ≈ 9e15) float64 втрачає
+// точність — це задокументоване обмеження `Major`-перетворення.
+// Тест перевіряє, що ми принаймні не панікуємо і повертаємо щось
+// розумне (банк ніколи не повертає таких сум).
+func TestMajor_extremeValues(t *testing.T) {
+	m := New(1<<60, currency.UAH)
+	got := m.Major()
+	assert.False(t, got != got, "Major не повинна давати NaN") // NaN != NaN
+	assert.Greater(t, got, 0.0)
+}
+
 func TestMarshalJSON(t *testing.T) {
 	// Money серіалізується як гола int (Code зберігається у сусідньому полі).
 	out, err := json.Marshal(New(12345, currency.UAH))

@@ -78,6 +78,74 @@ runtime-баги retry/limiter-стеку, DoS-векторів у webhook/insta
 + публічна type-cleanup. Часом source-incompatible — оновлення з v1.0.0
 вимагає реімпорту, але v1.0.0 ще ніхто не використовував.
 
+### Migration з v1.0.0
+
+Рекомендую переходити одразу на v1.1.2 (v1.1.0/v1.1.1 retracted).
+Source-incompatible зміни:
+
+**Currency**: усі int-поля `Ccy` (acquiring) і `CurrencyCode` (bank)
+перейменовані на `Currency` з типом `currency.Code`:
+
+```go
+// До v1.0.0:
+req := acquiring.CreateInvoiceRequest{Amount: 10000, Ccy: 980}
+acc.CurrencyCode == 980
+
+// Починаючи з v1.1.0:
+req := acquiring.CreateInvoiceRequest{Amount: 10000, Currency: 980}
+// або типобезпечно: Currency: currency.UAH
+acc.Currency == currency.UAH
+```
+
+В `business.StatementItem` поле `CurrencyCode string` (alpha-3
+рядок) перейменоване на `CurrencyAlpha3 string` — щоб різниця між
+int-Currency у решті SDK і string-Currency у business кидалася в
+очі.
+
+**Status enums**: сирі `string`-статуси в acquiring перейменовані
+на типізовані `acquiring.ProcessingStatus`:
+
+```go
+// До:
+if resp.Status == "success" { ... }
+// Після:
+if resp.Status == acquiring.StatusSuccess { ... }
+```
+
+Aналогічно `WalletData.Status` → `acquiring.WalletStatus` із
+константами `WalletNew/Created/Failed`.
+
+**Permission**: `auth.PermSt/PermPI/PermFOP` тепер типу
+`auth.Permission`. Сигнатура `corporate.Client.Auth` і
+`CorpAuthMaker.NewPermissions` приймає `...auth.Permission`. З
+константами все працює без змін; зламається лише там, де ти
+передавав сирий рядок:
+
+```go
+cli.Auth(ctx, url, "s", "p")        // зламається
+cli.Auth(ctx, url, auth.PermSt, auth.PermPI) // ок
+```
+
+**KeyedLimiter**: тепер 3-аргументний — додано `idleTTL` для
+eviction. Завжди викликай `Stop()` для long-running сервісів:
+
+```go
+// До:
+klim := monobank.NewKeyedLimiter(time.Minute, 1)
+
+// Після:
+klim := monobank.NewKeyedLimiter(time.Minute, 1, 10*time.Minute)
+defer klim.Stop()
+// Або без eviction (як раніше): NewKeyedLimiter(every, burst, 0)
+```
+
+**Retry POST**: до v1.1.0 будь-який POST/PATCH ретраївся на 5xx —
+це могло створити дублікати на 502/504 від балансера. Тепер вони
+ретраяться ТІЛЬКИ за наявності заголовка `Idempotency-Key`. Якщо
+твій код покладався на старе поводження, увімкни
+`monobank.WithUnsafeRetries(true)`. `business.PreparePayment` і
+`CreateSalaryRegistry` уже додають `Idempotency-Key` автоматично.
+
 ### Fixed (critical)
 
 - **Retry POST з body тепер працює.** До цього `client.Do` не

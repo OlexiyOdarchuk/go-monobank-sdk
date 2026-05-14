@@ -124,12 +124,18 @@ func WithHTTPClient(h *http.Client) Option {
 	return func(c *Client) { c.h = h }
 }
 
-// WithAPIBaseURL перевизначає базовий URL для api.monobank.ua (для тестів).
+// WithAPIBaseURL перевизначає базовий URL для api.monobank.ua.
+// Призначене переважно для тестів через httptest.Server. У production
+// передавай тільки https — jar-ендпоінт публічний, але якщо custom
+// proxy між клієнтом і Mono на http, відповідь може бути підмінена
+// (banker info, jar balance).
 func WithAPIBaseURL(u string) Option {
 	return func(c *Client) { c.apiBase = u }
 }
 
-// WithSendBaseURL перевизначає базовий URL для send.monobank.ua (для тестів).
+// WithSendBaseURL перевизначає базовий URL для send.monobank.ua.
+// Призначене переважно для тестів. Безпекові міркування — як у
+// [WithAPIBaseURL]: тільки https у production.
 func WithSendBaseURL(u string) Option {
 	return func(c *Client) { c.sendBase = u }
 }

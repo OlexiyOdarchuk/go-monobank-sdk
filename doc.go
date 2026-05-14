@@ -1,7 +1,14 @@
 // Package monobank — базовий HTTP-транспорт для всіх поверхонь monobank API.
 // Він публікує тип [Client], тип [Option] і набір конструкторів та опцій
 // ([New], [WithHTTPClient], [WithHTTPDoer], [WithBaseURL], [WithRetry],
-// [WithAuth]), а також спільний тип помилки [APIError].
+// [WithAuth], [WithRateLimiter], [WithUnsafeRetries], [WithLogger],
+// [WithRequestHook], [WithResponseHook]), а також спільний тип
+// помилки [APIError] та sentinel-помилки за HTTP-статусом
+// ([ErrUnauthorized], [ErrForbidden], [ErrNotFound], [ErrTooManyRequests]).
+//
+// Throttling: [NewLimiter] — простий token-bucket; [NewKeyedLimiter] —
+// per-key buckets (наприклад, на accountID), з опційним TTL-eviction;
+// [WithLimiterKey] прокидає ключ через context.Context.
 //
 // Прикладний код зазвичай тягне не цей пакет напряму, а тематичні
 // підпакети, що сидять на ньому згори:

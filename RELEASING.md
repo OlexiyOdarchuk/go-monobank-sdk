@@ -16,45 +16,89 @@
 
 ## Чек-лист релізу
 
-1. **Підготувати `CHANGELOG.md`:**
+Жодного `git tag` без КОЖНОГО пункту нижче. Один пропущений рядок —
+один retract.
+
+### Перед комітом
+
+1. **CHANGELOG**:
    - перенести зміни з `[Unreleased]` у нову секцію
      `## [X.Y.Z] — YYYY-MM-DD`;
+   - якщо breaking — додати розділ `### Migration з vX.Y` із
+     before/after-прикладами;
    - оновити посилання-діффи внизу файла:
      - додати `[X.Y.Z]: …compare/v(prev)...vX.Y.Z`;
      - оновити `[Unreleased]` на `…compare/vX.Y.Z...HEAD`.
 
-2. **Локальна перевірка:**
+2. **README sync**:
+   - перевірити, що жоден код-блок у `README.md` / `README.en.md` не
+     посилається на видалені/перейменовані символи;
+   - якщо додано опцію/функцію — переконатися, що вона згадана хоча б
+     в одній з: `README`, `doc.go`, `Example*` тест.
+
+3. **Локальні перевірки** (фейл — стоп):
 
    ```bash
-   make ci             # fmt-check + vet + test-race
-   make bench          # переконатися, що нічого не повільнішає
-   make fuzz-all FUZZTIME=10s   # швидкий fuzz-прогін усіх цілей
+   make ci                                # fmt + vet + test-race
+   env -u GOFLAGS go test -count=20 -race ./...   # race-stress
+   make bench                             # нічого не сповільнилося
+   make fuzz-all FUZZTIME=10s             # fuzz-прогін усіх цілей
+   govulncheck ./...                      # CVE-сканер
    ```
 
-3. **Закомітити CHANGELOG:**
+4. **README-приклади компілюються**: всі `examples/*` мають збиратися
+   через `make ci` (там є `go build ./examples/...`). Якщо додав
+   новий блок коду в README — додай мінімальний `examples/<feature>`
+   або `Example*`-тест, який цей блок повторює.
+
+5. **retract** старих версій (якщо актуально): якщо попередня
+   `v1.X.Y` має критичний баг або зламану документацію, додай
+   `retract v1.X.Y` у `go.mod` із коротким коментарем у тому ж
+   commit-і, що готує реліз.
+
+### Коміт і CI
+
+6. **Коміт**:
 
    ```bash
-   git add CHANGELOG.md
+   git add CHANGELOG.md README.md README.en.md ...
    git commit -m "Release vX.Y.Z"
    git push origin main
    ```
 
-   Дочекатися зеленого CI на main.
+7. **Дочекатися зеленого CI на main**. **НЕ** тегати раніше — навіть
+   якщо тести проходять локально. CI має повну матрицю Go-версій,
+   яких у тебе локально немає.
 
-4. **Створити signed tag:**
+   ```bash
+   gh run watch --exit-status
+   ```
+
+### Тег
+
+8. **Тільки після зеленого CI** на main — signed tag:
 
    ```bash
    git tag -a vX.Y.Z -m "vX.Y.Z"
    git push origin vX.Y.Z
    ```
 
-5. **Workflow `release.yaml` автоматично:**
+9. **Workflow `release.yaml` автоматично**:
    - витягне секцію `## [X.Y.Z]` з `CHANGELOG.md`;
    - створить GitHub Release із цим body.
 
-6. **Перевірити pkg.go.dev:**
-   - відкрити <https://pkg.go.dev/github.com/OlexiyOdarchuk/go-monobank-sdk@vX.Y.Z>;
-   - якщо нова версія не з'являється протягом 5-10 хв — `GOPROXY=https://proxy.golang.org go list -m github.com/OlexiyOdarchuk/go-monobank-sdk@vX.Y.Z` форсить індексацію.
+   Якщо очікувана GitHub Release не зʼявилася за 2 хв — глянь
+   `gh run list --workflow=release.yaml`.
+
+10. **pkg.go.dev**:
+    - відкрити <https://pkg.go.dev/github.com/OlexiyOdarchuk/go-monobank-sdk@vX.Y.Z>;
+    - якщо нова версія не з'являється протягом 5-10 хв —
+      `GOPROXY=https://proxy.golang.org go list -m github.com/OlexiyOdarchuk/go-monobank-sdk@vX.Y.Z`
+      форсить індексацію.
+
+### Якщо тег виявився поламаним
+
+Див. розділ нижче — НЕ видаляти тег, випустити patch + retract.
 
 ## Реліз `otelmonobank` submodule
 

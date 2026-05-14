@@ -59,6 +59,14 @@ func (e *APIError) Error() string {
 type Option func(*Client)
 
 // WithBaseURL перевизначає базовий URL (за дефолтом — production).
+//
+// УВАГА (безпека): передавай тільки https-URL у не-локальному
+// середовищі. installment-секрет ходить у HMAC-підписі тіла —
+// якщо хтось перехопить пару (body, signature) через http, він
+// зможе підробити callback (бо secret = HMAC-ключ). На відміну від
+// root [monobank.WithBaseURL], тут немає логера для runtime-warn,
+// тому http-схема пропускається мовчки. Localhost / 127.0.0.1 — ОК
+// для тестів через httptest.
 func WithBaseURL(u string) Option { return func(c *Client) { c.baseURL = u } }
 
 // WithHTTPClient підставляє кастомний http.Client.

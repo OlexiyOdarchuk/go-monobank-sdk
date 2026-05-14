@@ -206,6 +206,29 @@ func TestKeyedLimiter_StopIdempotent(t *testing.T) {
 	klim.Stop() // must not panic
 }
 
+// Конкурентні Wait-и одночасно зі sweeper-eviction не повинні
+// падати (race-detector ловить) і не повинні «втрачати» токени
+// (Wait завжди повертає nil для unlimited-режиму every=0).
+func TestKeyedLimiter_EvictionUnderConcurrentLoad(t *testing.T) {
+	klim := NewKeyedLimiter(0, 1, 5*time.Millisecond) // sweeper кожні 2-3 мс
+	defer klim.Stop()
+
+	const workers = 16
+	const opsPerWorker = 200
+	var wg sync.WaitGroup
+	for w := 0; w < workers; w++ {
+		wg.Add(1)
+		go func(w int) {
+			defer wg.Done()
+			for i := 0; i < opsPerWorker; i++ {
+				key := strconv.Itoa((w*opsPerWorker + i) % 32)
+				assert.NoError(t, klim.WaitKey(context.Background(), key))
+			}
+		}(w)
+	}
+	wg.Wait()
+}
+
 func TestKeyedLimiter_ImplementsRateLimiter(t *testing.T) {
 	var _ RateLimiter = (*KeyedLimiter)(nil)
 }
