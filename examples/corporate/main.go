@@ -25,6 +25,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strings"
 	"time"
 
 	monobank "github.com/OlexiyOdarchuk/go-monobank-sdk"
@@ -94,7 +95,9 @@ func main() {
 	// 3. Fetch client data with the granted request id.
 	info, err := cli.ClientInfo(ctx, tok.RequestID)
 	if err != nil {
-		log.Fatalf("ClientInfo: %v", err)
+		safeErr := strings.ReplaceAll(err.Error(), "\n", "")
+		safeErr = strings.ReplaceAll(safeErr, "\r", "")
+		log.Fatalf("ClientInfo: %s", safeErr)
 	}
 	fmt.Printf("\nClient: %s\n", info.Name)
 	for _, a := range info.Accounts {
