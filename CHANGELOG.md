@@ -7,39 +7,35 @@
 
 ## [Unreleased]
 
+## [1.0.0] — 2026-05-14
+
+Перший стабільний реліз. Публічний API зафіксовано: подальші мінорні
+версії додають функціональність без ламань; breaking-зміни вимагатимуть
+`v2.0.0` (з `/v2` у шляху імпорту).
+
+Об'єднує всі зміни з невипущеного `v0.1.1` і подальшої роботи поверх
+`v0.1.0`.
+
 ### Added
 
-- `Makefile` із загальними dev-таргетами: `make test`/`test-race`/`cover`/
-  `cover-html`/`bench`/`fuzz`/`fuzz-all`/`lint`/`fmt`/`vet`/`tidy`/`ci`/
-  `integration`. `make help` (default) — список усіх.
-- `.gitattributes` — фіксує `eol=lf` для всіх текстових файлів і
-  виключає `examples/` зі статистики мов GitHub.
-- `RELEASING.md` — гайд по випуску версії: чек-лист, SemVer, що робити
-  з поламаним тегом (`retract` directive).
-- `go.work` — workspace для одночасної розробки кореня + `otelmonobank`.
-  Зовнішніх споживачів не зачіпає (кожен модуль зберігає авторитетну
-  `go.mod`).
-- `make test-all` — таргет для запуску тестів у всіх workspace-модулях.
-- `.github/workflows/codeql.yaml` — щоденне і per-push сканування
-  GitHub CodeQL (security-and-quality query suite); знахідки в Security tab.
-- govulncheck-job у `ci.yaml` — сканує root і `otelmonobank` на CVE
-  у stdlib і залежностях. `continue-on-error: true`, бо stdlib-фікси
-  часто прилітають швидше за апдейт Go-runner-ів GitHub.
+#### Throttling та обробка помилок
+- `monobank.RateLimiter` — інтерфейс клієнтського throttle із сигнатурою
+  `Wait(ctx) error`, сумісною з `*golang.org/x/time/rate.Limiter`.
+- `monobank.NewLimiter(every, burst)` — вбудований token-bucket без
+  додаткових залежностей. Один токен витрачається на логічний `Do`
+  (а не на кожну спробу retry).
+- `monobank.WithRateLimiter(RateLimiter)` — опція клієнта.
 - `monobank.KeyedLimiter` — per-key token bucket для endpoint-ів із
   per-account/per-resource лімітами (наприклад,
   `/personal/statement/{account}/…`). Реалізує `RateLimiter`; ключ
   береться з контексту через `monobank.WithLimiterKey`.
 - `monobank.WithLimiterKey(ctx, key)` — context helper для прокидання
   ключа в `KeyedLimiter`.
-- `bank/integration_test.go` (`//go:build integration`) — smoke-тести
-  `Rates` і `ServerKey` проти живого `api.monobank.ua`.
-- `.github/workflows/integration.yaml` — щотижневий cron + ручний
-  `workflow_dispatch` для інтеграційних тестів (поза основним PR-pipeline).
-- Godoc `Example`-функції для root (`NewLimiter`, `NewKeyedLimiter`,
-  `APIError`), `bank` (`Rates`, `Rates.Convert`, `ServerKey`), `jar`
-  (`ByLongID`, `ByShortID`), `installment` (`New`, `VerifyCallback`),
-  `money` (`New`, `Add`, `MarshalJSON`) — рендеряться інлайн на
-  pkg.go.dev поруч із сигнатурами.
+- `APIError.ErrorDescription` — розпарсене значення поля `errorDescription`
+  з JSON-тіла відповідей Mono (personal/corporate/business/acquiring).
+  Сирі байти лишаються в `APIError.Body`.
+
+#### Тестування і якість
 - Fuzz-тести для парсерів і верифікаторів підпису:
   `parseErrorDescription`, `parseRetryAfter`, `webhook.Parse`,
   `webhook.Verify`, `money.Money.UnmarshalJSON`, `acquiring.ParsePubKey`,
@@ -48,27 +44,46 @@
   `parseErrorDescription`, `bank.Transaction.UnmarshalJSON`,
   `money.Money.{Add,Scale,String}`, `webhook.{Verify,Parse}`. Запуск —
   `go test -bench=. -benchmem ./...`.
-- Англомовний `README.en.md` із language switcher на верху обох README.
+- `bank/integration_test.go` (`//go:build integration`) — smoke-тести
+  `Rates` і `ServerKey` проти живого `api.monobank.ua`.
+- Godoc `Example`-функції для root (`NewLimiter`, `NewKeyedLimiter`,
+  `APIError`), `bank` (`Rates`, `Rates.Convert`, `ServerKey`), `jar`
+  (`ByLongID`, `ByShortID`), `installment` (`New`, `VerifyCallback`),
+  `money` (`New`, `Add`, `MarshalJSON`) — рендеряться інлайн на
+  pkg.go.dev поруч із сигнатурами.
+
+#### CI / security / dev-tooling
+- `.github/workflows/codeql.yaml` — per-push і weekly CodeQL
+  (security-and-quality query suite); знахідки в Security tab.
+- govulncheck-job у `ci.yaml` — сканує root і `otelmonobank` на CVE
+  у stdlib і залежностях.
+- `.github/workflows/integration.yaml` — щотижневий cron + ручний
+  `workflow_dispatch` для інтеграційних тестів (поза основним PR-pipeline).
 - `.github/workflows/release.yaml` — на push тегу `v*` створює GitHub
   Release з body, витягнутим із відповідної секції `CHANGELOG.md`.
-- `.editorconfig` для уніфікованого indentation/EOL у редакторах.
-- `CONTRIBUTING.md` — гайд для зовнішніх контриб'юторів.
-- `.github/CODEOWNERS` — авто-reviewer на всі PR.
-- `.github/dependabot.yml` — щотижневі апдейти Go-модулів і GitHub Actions.
-- `.github/ISSUE_TEMPLATE/` — шаблони для bug report / feature request
-  + конфіг із посиланням на приватний звіт безпеки.
-- `.github/PULL_REQUEST_TEMPLATE.md` — чек-лист для PR.
+- `.github/CODEOWNERS`, `.github/dependabot.yml`,
+  `.github/ISSUE_TEMPLATE/` (bug + feature + config),
+  `.github/PULL_REQUEST_TEMPLATE.md`.
+- `Makefile` із загальними dev-таргетами: `test`/`test-race`/`test-all`/
+  `cover`/`cover-html`/`bench`/`fuzz`/`fuzz-all`/`lint`/`fmt`/`vet`/`tidy`/
+  `integration`/`ci`. `make help` (default) — список усіх.
+- `go.work` — workspace для одночасної розробки кореня + `otelmonobank`.
+- `CONTRIBUTING.md`, `RELEASING.md`, `SECURITY.md`.
+- Англомовний `README.en.md` із language switcher на верху обох README.
+- `.editorconfig` і `.gitattributes` (eol=lf, Linguist-виключення).
 
 ### Changed
 
-- `.codecov.yml` — patch threshold піднятий з 75% до 80%; додано
-  виключення `**/*_test.go` і `monobanktest/**` з обчислення покриття.
+- `APIError.Error()` тепер показує чисте `ErrorDescription` замість сирого
+  JSON, коли воно доступне. Статус-код, метод, URL — без змін.
 - Усі GitHub Actions запіновано на SHA (а не теги): захист від
   компрометації переписаного тегу. Версія коментується поряд (`# v6.0.2`),
   тож dependabot автоматично оновлює і SHA, і коментар.
 - CI-workflow-и тепер мають `concurrency` блок із
   `cancel-in-progress: true` — на нових пушах в PR старіші прогони
   кенселяться, економить CI-хвилини.
+- `.codecov.yml` — patch threshold піднятий з 75% до 80%; додано
+  виключення `**/*_test.go` і `monobanktest/**` з обчислення покриття.
 - `flake.nix` — прибрано `export GOFLAGS="-mod=mod"`, що конфліктував
   із workspace-режимом (`go.work`).
 
@@ -78,25 +93,6 @@
   base64 (96 символів), але ASN.1 DER підпис ECDSA — змінної довжини
   (8-72 байт), тож ~1% запусків падало. Тепер декодуємо і перевіряємо
   структуру через `asn1.Unmarshal`.
-
-## [0.1.1] — 2026-05-14
-
-### Added
-
-- `monobank.RateLimiter` — інтерфейс клієнтського throttle із сигнатурою
-  `Wait(ctx) error`, сумісною з `*golang.org/x/time/rate.Limiter`.
-- `monobank.NewLimiter(every, burst)` — вбудований token-bucket без
-  додаткових залежностей. Один токен витрачається на логічний `Do`
-  (а не на кожну спробу retry).
-- `monobank.WithRateLimiter(RateLimiter)` — опція клієнта.
-- `APIError.ErrorDescription` — розпарсене значення поля `errorDescription`
-  з JSON-тіла відповідей Mono (personal/corporate/business/acquiring).
-  Сирі байти лишаються в `APIError.Body`.
-
-### Changed
-
-- `APIError.Error()` тепер показує чисте `ErrorDescription` замість сирого
-  JSON, коли воно доступне. Статус-код, метод, URL — без змін.
 
 ## [0.1.0] — 2026-05-13
 
@@ -118,6 +114,6 @@
 - `monobanktest` — мок-сервер на `httptest.Server` із fluent-builder-ами.
 - Пагінатори через `iter.Seq2` (Go 1.23+).
 
-[Unreleased]: https://github.com/OlexiyOdarchuk/go-monobank-sdk/compare/v0.1.1...HEAD
-[0.1.1]: https://github.com/OlexiyOdarchuk/go-monobank-sdk/compare/v0.1.0...v0.1.1
+[Unreleased]: https://github.com/OlexiyOdarchuk/go-monobank-sdk/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/OlexiyOdarchuk/go-monobank-sdk/compare/v0.1.0...v1.0.0
 [0.1.0]: https://github.com/OlexiyOdarchuk/go-monobank-sdk/releases/tag/v0.1.0
