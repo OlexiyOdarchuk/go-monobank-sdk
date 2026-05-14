@@ -7,11 +7,18 @@ import (
 	"context"
 	"log"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/OlexiyOdarchuk/go-monobank-sdk/bank"
 	"github.com/OlexiyOdarchuk/go-monobank-sdk/webhook"
 )
+
+func sanitizeForLog(s string) string {
+	s = strings.ReplaceAll(s, "\n", " ")
+	s = strings.ReplaceAll(s, "\r", " ")
+	return s
+}
 
 func main() {
 	keys := bank.New()
@@ -24,10 +31,10 @@ func main() {
 				event.Data.AccountID, t.Amount, t.Description, t.Hold)
 			return nil
 		},
-		OnError: func(err error) { log.Printf("webhook: %v", err) },
+		OnError: func(err error) { log.Printf("webhook: %s", sanitizeForLog(err.Error())) },
 	})
 	if err != nil {
-		log.Fatal(err)
+		log.Fatal(sanitizeForLog(err.Error()))
 	}
 
 	mux := http.NewServeMux()
