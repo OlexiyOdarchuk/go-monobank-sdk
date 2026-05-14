@@ -109,7 +109,7 @@ func TestSubscriptionCreate(t *testing.T) {
 
 	out, err := c.SubscriptionCreate(context.Background(), &SubscriptionCreateRequest{
 		Amount:   9900,
-		Currency:      980,
+		Currency: 980,
 		Interval: "1m",
 		WebHookURLs: &SubscriptionWebHookURLs{
 			ChargeURL: "https://example.com/charge",

@@ -37,8 +37,8 @@ func main() {
 
 	// Create a 1.00 UAH invoice (100 kopecks).
 	inv, err := cli.CreateInvoice(ctx, &acquiring.CreateInvoiceRequest{
-		Amount: 100,
-		Currency:    980,
+		Amount:   100,
+		Currency: 980,
 		MerchantPaymInfo: &acquiring.MerchantPaymInfo{
 			Reference:   fmt.Sprintf("demo-%d", time.Now().Unix()),
 			Destination: "monobank-sdk example invoice",

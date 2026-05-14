@@ -48,8 +48,8 @@ func TestPaymentDirect(t *testing.T) {
 	})
 
 	out, err := c.PaymentDirect(context.Background(), &PaymentDirectRequest{
-		Amount: 1000,
-		Currency:    980,
+		Amount:   1000,
+		Currency: 980,
 		CardData: CardData{
 			PAN: "4444333322221111", Exp: "1228", CVV: "123",
 		},
@@ -82,8 +82,8 @@ func TestSyncPayment_appleFlow(t *testing.T) {
 	})
 
 	out, err := c.SyncPayment(context.Background(), &SyncPaymentRequest{
-		Amount: 500,
-		Currency:    980,
+		Amount:   500,
+		Currency: 980,
 		ApplePay: &ApplePayPayload{
 			Token:        "tok-apple",
 			Exp:          "1228",

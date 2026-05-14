@@ -24,8 +24,8 @@ func ExampleClient_CreateInvoice() {
 	cli := acquiring.New(os.Getenv("MONO_ACQUIRING_TOKEN"))
 
 	inv, err := cli.CreateInvoice(context.Background(), &acquiring.CreateInvoiceRequest{
-		Amount: 4200, // 42.00 UAH in kopecks
-		Currency:    980,
+		Amount:   4200, // 42.00 UAH in kopecks
+		Currency: 980,
 		MerchantPaymInfo: &acquiring.MerchantPaymInfo{
 			Reference:   "order-2026-42",
 			Destination: "Замовлення №42",
@@ -49,7 +49,7 @@ func ExampleClient_FinalizeInvoice() {
 	// 1. Create with PaymentType: PaymentHold (authorisation only).
 	inv, _ := cli.CreateInvoice(context.Background(), &acquiring.CreateInvoiceRequest{
 		Amount:      10_000,
-		Currency:         980,
+		Currency:    980,
 		PaymentType: acquiring.PaymentHold,
 	})
 

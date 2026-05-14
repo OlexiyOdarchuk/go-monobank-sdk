@@ -47,9 +47,9 @@ type QRList struct {
 
 // QRDetails is the response to /api/merchant/qr/details.
 type QRDetails struct {
-	ShortQrID string      `json:"shortQrId"`
-	InvoiceID string      `json:"invoiceId,omitempty"`
-	Amount    money.Money `json:"amount,omitempty"`
+	ShortQrID string        `json:"shortQrId"`
+	InvoiceID string        `json:"invoiceId,omitempty"`
+	Amount    money.Money   `json:"amount,omitempty"`
 	Currency  currency.Code `json:"ccy,omitempty"`
 }
 
@@ -569,10 +569,10 @@ func (s *StatementInvoice) UnmarshalJSON(data []byte) error {
 type StatementRefund struct {
 	Amount       money.Money   `json:"amount"`
 	Currency     currency.Code `json:"ccy"`
-	Date         string      `json:"date"`
-	ApprovalCode string      `json:"approvalCode,omitempty"`
-	RRN          string      `json:"rrn,omitempty"`
-	MaskedPan    string      `json:"maskedPan"`
+	Date         string        `json:"date"`
+	ApprovalCode string        `json:"approvalCode,omitempty"`
+	RRN          string        `json:"rrn,omitempty"`
+	MaskedPan    string        `json:"maskedPan"`
 }
 
 // UnmarshalJSON прив’язує Currency → Amount.Code.

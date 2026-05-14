@@ -80,7 +80,7 @@ func TestCreateInvoice(t *testing.T) {
 
 	out, err := c.CreateInvoice(context.Background(), &CreateInvoiceRequest{
 		Amount:      1000,
-		Currency:         980,
+		Currency:    980,
 		PaymentType: PaymentHold,
 	})
 	require.NoError(t, err)
@@ -209,7 +209,7 @@ func TestWalletPayment(t *testing.T) {
 	out, err := c.WalletPayment(context.Background(), &WalletPaymentRequest{
 		CardToken:      "tok",
 		Amount:         500,
-		Currency:            980,
+		Currency:       980,
 		InitiationKind: InitMerchant,
 	})
 	require.NoError(t, err)

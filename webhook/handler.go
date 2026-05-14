@@ -94,8 +94,8 @@ type Handler struct {
 
 	refreshGroup singleflight.Group
 
-	refreshMu       sync.Mutex
-	lastRefreshAt   time.Time
+	refreshMu     sync.Mutex
+	lastRefreshAt time.Time
 }
 
 // Помилки конфігурації Handler-а.

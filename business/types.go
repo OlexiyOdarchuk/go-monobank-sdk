@@ -152,12 +152,12 @@ const (
 
 // StatementItem is one operation in an account's statement.
 type StatementItem struct {
-	ID                string          `json:"id"`
-	ExternalReference string          `json:"externalReference,omitempty"`
-	Time              epoch.Seconds   `json:"time"`
-	CompletedTime     epoch.Seconds   `json:"completedTime,omitempty"`
-	Description       string          `json:"description"`
-	Amount            money.Money     `json:"amount"`
+	ID                string        `json:"id"`
+	ExternalReference string        `json:"externalReference,omitempty"`
+	Time              epoch.Seconds `json:"time"`
+	CompletedTime     epoch.Seconds `json:"completedTime,omitempty"`
+	Description       string        `json:"description"`
+	Amount            money.Money   `json:"amount"`
 	// CurrencyAlpha3 — валюта операції у форматі ISO-4217 alpha-3
 	// (наприклад, "UAH"). На відміну від [bank.Account.Currency] чи
 	// [acquiring.InvoiceStatusResponse.Currency], тут wire-формат
@@ -166,11 +166,11 @@ type StatementItem struct {
 	// (UnmarshalJSON робить це автоматично для Amount.Code).
 	CurrencyAlpha3 string          `json:"currencyCode"`
 	ReceiptID      string          `json:"receiptId,omitempty"`
-	CounterEdrpou     string          `json:"counterEdrpou,omitempty"`
-	CounterIBAN       string          `json:"counterIban,omitempty"`
-	CounterName       string          `json:"counterName,omitempty"`
-	Reverse           bool            `json:"reverse,omitempty"`
-	Status            OperationStatus `json:"status"`
+	CounterEdrpou  string          `json:"counterEdrpou,omitempty"`
+	CounterIBAN    string          `json:"counterIban,omitempty"`
+	CounterName    string          `json:"counterName,omitempty"`
+	Reverse        bool            `json:"reverse,omitempty"`
+	Status         OperationStatus `json:"status"`
 }
 
 // UnmarshalJSON прив'язує currency.Code до Amount, конвертуючи з
