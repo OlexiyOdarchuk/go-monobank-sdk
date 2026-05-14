@@ -55,8 +55,20 @@ type SubscriptionWebHookURLs struct {
 }
 
 // SubscriptionCreateRequest is the body of
-// POST /api/merchant/subscription/create. Interval is a string of
-// the form "{N}{unit}": "1d", "2w", "1m", "1y".
+// POST /api/merchant/subscription/create.
+//
+// Interval is a string in the form "{N}{unit}" where unit is one
+// of d (day), w (week), m (month), y (year). Mono's documented
+// examples are exactly:
+//
+//	"1d"  — daily
+//	"2w"  — every two weeks
+//	"1m"  — monthly
+//	"1y"  — yearly
+//
+// N must be a positive integer; "0d", "-1m" and similar are
+// rejected by the bank with a 400. The SDK does not pre-validate
+// the format — pass exactly what the bank's documentation shows.
 type SubscriptionCreateRequest struct {
 	Amount      int64                    `json:"amount"`
 	Currency    currency.Code            `json:"ccy,omitempty"`

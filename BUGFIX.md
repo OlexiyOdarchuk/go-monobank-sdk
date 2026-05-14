@@ -166,9 +166,9 @@
   - Виправити: переносити `Wait` у `attempt`-функцію (всередину retry-loop).
   - Resolution:
 
-- [ ] **acquiring/types.go:324-339** — `InvoiceStatusResponse.UnmarshalJSON` перезаписує `Code` на Fee/AgentFee — для крос-граничних транзакцій валюта Fee може відрізнятись.
+- [x] **acquiring/types.go:324-339** — `InvoiceStatusResponse.UnmarshalJSON` перезаписує `Code` на Fee/AgentFee — для крос-граничних транзакцій валюта Fee може відрізнятись.
   - Виправити: перевірити з docs Mono; якщо різні — не перезаписувати, парсити з власної валюти поля.
-  - Resolution: deferred — потрібна перевірка реальних cross-border payload-ів від Mono support. У поточних docs Fee валюта співпадає з основною, тож override безпечний. Залишено TODO.
+  - Resolution: звірено з community OpenAPI spec (acquiring.json). PaymentInfo.fee і agentFee у Mono — "в мінімальних одиницях" БЕЗ окремого поля валюти. Тобто Fee/AgentFee завжди в тій самій ccy, що й Amount. Override на основну Currency — коректна поведінка SDK; зміни не потрібні.
 
 - [x] **acquiring/subscription.go:260, 296** — `time.RFC3339` форматує локальну TZ.
   - Виправити: `t.UTC().Format(time.RFC3339)`.
@@ -313,9 +313,9 @@
   - Виправити: видалити.
   - Resolution: залишено навмисно — cheap pre-flight check, що економить HTTP setup коли ctx уже скасований.
 
-- [ ] **acquiring/types.go:120,135** — `Tax []int`.
+- [x] **acquiring/types.go:120,135** — `Tax []int`.
   - Виправити: типізована обгортка `TaxRate int` із константами.
-  - Resolution: відкладено — потрібен довідник валідних значень від Mono support; breaking-change без значного value-add.
+  - Resolution: звірено з community OpenAPI spec. `tax` у Mono — це arbitrary integer-індекс податкових ставок із конфігу мерчанта в Checkbox/Вчасно.Каса (НЕ Mono enum). Типована обгортка з константами не має сенсу — значення specifically per-merchant. Залишаю `[]int` із поясненням у godoc.
 
 - [x] **jar/jar.go:200** — magic `"random"`.
   - Виправити: `const jarRandomMode = "random"` із коментарем чому саме «random».
@@ -333,13 +333,13 @@
   - Виправити: `url.QueryEscape` напряму (мікрооптимізація, мала користь).
   - Resolution: skipped — мікрооптимізація без значного value-add; `url.Values{}` лишається для читабельності.
 
-- [ ] **acquiring/subscription.go:55** — godoc-приклади інтервалу можуть бути неточні.
+- [x] **acquiring/subscription.go:55** — godoc-приклади інтервалу можуть бути неточні.
   - Виправити: звірити з docs.monobank.ua/acquiring; зафіксувати приклад.
-  - Resolution: deferred — потрібна звірка з актуальною docs.monobank.ua versionу; не блокує реліз.
+  - Resolution: звірено з community OpenAPI spec — формат `{N}{unit:dwmy}`, документовані приклади `1d/2w/1m/1y`. Godoc оновлено з повним списком units і поясненням обмежень (N > 0, "0d"/"-1m" → 400 від bank).
 
-- [ ] **acquiring/types.go:111-114, 138-148** — `SubscriptionStatusResponse.WalletData` не вказівник; `SubscriptionListItem` без WalletData.
+- [x] **acquiring/types.go:111-114, 138-148** — `SubscriptionStatusResponse.WalletData` не вказівник; `SubscriptionListItem` без WalletData.
   - Виправити: уніфікувати — `*WalletData` всюди.
-  - Resolution: у поточному стані файлу `WalletData *WalletData` (вже pointer); рядки 111-114, 138-148 з BUGFIX посилаються на старий layout.
+  - Resolution: звірено з community OpenAPI spec — `SubscriptionStatusResponse.walletData` дійсно required (значить — non-pointer структура коректна), а `SubscriptionListItem` НЕ має walletData взагалі (Mono не повертає). Поточний layout відповідає docs; не міняю.
 
 - [ ] **business/api.go:34** — `Operation(id, externalReference)` — обидва string, компілятор не страхує.
   - Виправити: типізовані алиаси `type OperationID string`, `type ExternalRef string`.
