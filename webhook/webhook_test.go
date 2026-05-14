@@ -70,6 +70,35 @@ func TestVerify(t *testing.T) {
 		assert.ErrorIs(t, Verify(nil, []byte(testWebhookBody), testWebhookSign),
 			ErrMissingPubKey)
 	})
+
+	// Regression: a valid DER signature followed by trailing bytes
+	// must be REJECTED. Before the switch to ecdsa.VerifyASN1, the
+	// asn1.Unmarshal path silently discarded `rest`, allowing
+	// signature malleability (one payload, infinitely many valid
+	// X-Sign values).
+	t.Run("valid DER with trailing zero byte is rejected", func(t *testing.T) {
+		// Build a valid DER signature for the canonical body.
+		seed := [32]byte{0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08,
+			0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f, 0x10,
+			0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18,
+			0x19, 0x1a, 0x1b, 0x1c, 0x1d, 0x1e, 0x1f, 0x20}
+		priv := secp256k1.PrivKeyFromBytes(seed[:]).ToECDSA()
+		digest := sha256.Sum256([]byte(testWebhookBody))
+		der, err := ecdsa.SignASN1(rand.Reader, priv, digest[:])
+		require.NoError(t, err)
+
+		// Sanity: the clean DER signature verifies.
+		assert.NoError(t, Verify(&priv.PublicKey, []byte(testWebhookBody),
+			base64.StdEncoding.EncodeToString(der)))
+
+		// Append a single zero byte — must be rejected.
+		tainted := append(append([]byte(nil), der...), 0x00)
+		assert.ErrorIs(t,
+			Verify(&priv.PublicKey, []byte(testWebhookBody),
+				base64.StdEncoding.EncodeToString(tainted)),
+			ErrBadSignature,
+			"trailing bytes after DER signature must be rejected (malleability)")
+	})
 }
 
 func TestParse(t *testing.T) {

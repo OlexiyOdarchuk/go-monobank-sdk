@@ -44,7 +44,8 @@ const rawSigLen = 64
 // Verify returns nil only when xSign is a valid ECDSA signature over
 // body produced by the private key that corresponds to pub. Both
 // forms Mono has historically used are supported: raw r||s (64
-// bytes, base64) and ASN.1 DER — both decode transparently.
+// bytes, base64) and ASN.1 DER — both are normalized to DER and
+// verified via [ecdsa.VerifyASN1], which rejects trailing bytes.
 //
 // You typically do not call Verify directly because [Handler] does
 // it for you. Exceptions: integration into an external HTTP
@@ -59,25 +60,33 @@ func Verify(pub *ecdsa.PublicKey, body []byte, xSign string) error {
 	}
 	digest := sha256.Sum256(body)
 
-	if len(sig) == rawSigLen {
-		r := new(big.Int).SetBytes(sig[:rawSigLen/2])
-		s := new(big.Int).SetBytes(sig[rawSigLen/2:])
-		if ecdsa.Verify(pub, digest[:], r, s) {
-			return nil
-		}
-		// raw r||s did not verify — fall through to ASN.1 DER, since some
-		// encoders produce DER that also happens to be 64 bytes long.
+	// Strict DER path first. ecdsa.VerifyASN1 rejects any trailing
+	// bytes, eliminating the signature malleability that plain
+	// asn1.Unmarshal would allow.
+	if ecdsa.VerifyASN1(pub, digest[:], sig) {
+		return nil
 	}
 
-	var asn1Sig struct{ R, S *big.Int }
-	if _, err := asn1.Unmarshal(sig, &asn1Sig); err != nil {
-		return ErrBadSignature
+	// Fallback: raw r||s (64 bytes). Re-marshal to DER and reuse
+	// VerifyASN1 so there is exactly one verification primitive.
+	if len(sig) == rawSigLen {
+		der, err := marshalRawSigToDER(sig)
+		if err == nil && ecdsa.VerifyASN1(pub, digest[:], der) {
+			return nil
+		}
 	}
-	if asn1Sig.R == nil || asn1Sig.S == nil {
-		return ErrBadSignature
+
+	return ErrBadSignature
+}
+
+// marshalRawSigToDER converts a 64-byte r||s big-endian signature
+// (Mono's historical encoding for secp256k1) to a DER SEQUENCE of
+// two INTEGERs, which ecdsa.VerifyASN1 expects.
+func marshalRawSigToDER(sig []byte) ([]byte, error) {
+	if len(sig) != rawSigLen {
+		return nil, errors.New("raw signature must be 64 bytes")
 	}
-	if !ecdsa.Verify(pub, digest[:], asn1Sig.R, asn1Sig.S) {
-		return ErrBadSignature
-	}
-	return nil
+	r := new(big.Int).SetBytes(sig[:rawSigLen/2])
+	s := new(big.Int).SetBytes(sig[rawSigLen/2:])
+	return asn1.Marshal(struct{ R, S *big.Int }{R: r, S: s})
 }
