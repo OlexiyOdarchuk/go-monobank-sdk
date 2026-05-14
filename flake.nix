@@ -21,7 +21,6 @@
           ];
 
           shellHook = ''
-            export GOFLAGS="-mod=mod"
             echo "monobank-sdk dev shell — $(go version)"
           '';
         };

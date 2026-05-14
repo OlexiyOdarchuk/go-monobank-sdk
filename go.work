@@ -1,0 +1,15 @@
+// Workspace covers the root module + the otelmonobank submodule so
+// `go test ./...` from anywhere in the repo sees both. Each module
+// keeps its own go.mod authoritative for external consumers; this file
+// only affects local development.
+//
+// Pinned at 1.25 because otelmonobank requires it (OpenTelemetry
+// dependency); workspace mode unifies on the highest. Devs on
+// Go 1.23/1.24 who only need the root module can `GOWORK=off`.
+
+go 1.25.0
+
+use (
+	.
+	./otelmonobank
+)

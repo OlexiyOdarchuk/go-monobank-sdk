@@ -2,7 +2,7 @@
 # Run `make help` (default) for the list.
 
 .DEFAULT_GOAL := help
-.PHONY: help test test-race cover cover-html lint fmt fmt-check vet bench fuzz fuzz-all integration tidy ci
+.PHONY: help test test-race test-all cover cover-html lint fmt fmt-check vet bench fuzz fuzz-all integration tidy ci
 
 GO          ?= go
 PKGS        := ./...
@@ -18,6 +18,10 @@ test: ## Run unit tests (no race detector — faster).
 
 test-race: ## Run unit tests with the race detector. CI default.
 	$(GO) test -race $(PKGS)
+
+test-all: ## Run tests across every workspace module (root + otelmonobank).
+	$(GO) test -race $(PKGS)
+	cd otelmonobank && $(GO) test -race ./...
 
 cover: ## Generate coverage profile at $(COVER_OUT).
 	$(GO) test -race -coverprofile=$(COVER_OUT) $(PKGS)
