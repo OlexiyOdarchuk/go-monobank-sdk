@@ -28,7 +28,11 @@ func ExampleClient_PreparePayment() {
 
 	// Idempotency-Key must be a fresh UUID v4 for each new payment
 	// attempt — retrying with the same key is safe.
-	out, err := cli.PreparePayment(context.Background(), business.NewIdempotencyKey(),
+	key, err := business.NewIdempotencyKey()
+	if err != nil {
+		log.Fatal(err)
+	}
+	out, err := cli.PreparePayment(context.Background(), key,
 		&business.PaymentRequest{
 			SenderIBAN: "UA293220010000026000000000001",
 			Receiver: business.PaymentReceiver{

@@ -3,6 +3,7 @@ package business
 import (
 	"crypto/rand"
 	"encoding/hex"
+	"fmt"
 )
 
 // NewIdempotencyKey produces a fresh UUID v4 suitable for the
@@ -15,15 +16,18 @@ import (
 // returns the same response without duplicating the operation. A new
 // logical payment requires a new key.
 //
-//	key := business.NewIdempotencyKey()
+//	key, err := business.NewIdempotencyKey()
+//	if err != nil { return err }
 //	out, err := cli.PreparePayment(ctx, key, &business.PaymentRequest{...})
 //
-// Panics if crypto/rand returns an error — that means OS-level
-// entropy starvation, an unrecoverable state.
-func NewIdempotencyKey() string {
+// Returns an error when crypto/rand fails — historically a panic;
+// now the caller can decide whether to abort or retry on entropy
+// starvation. The error is wrapped, use errors.Unwrap if you care
+// about the underlying io.Reader failure.
+func NewIdempotencyKey() (string, error) {
 	var b [16]byte
 	if _, err := rand.Read(b[:]); err != nil {
-		panic("business: crypto/rand failed: " + err.Error())
+		return "", fmt.Errorf("business: crypto/rand failed: %w", err)
 	}
 	// Set the version (4) and variant (RFC 4122) bits per the UUID v4
 	// spec (RFC 4122 §4.4).
@@ -41,5 +45,5 @@ func NewIdempotencyKey() string {
 	hex.Encode(dst[19:23], b[8:10])
 	dst[23] = '-'
 	hex.Encode(dst[24:36], b[10:16])
-	return string(dst[:])
+	return string(dst[:]), nil
 }

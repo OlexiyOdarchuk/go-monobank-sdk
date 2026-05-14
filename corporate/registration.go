@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 )
@@ -24,13 +25,25 @@ const (
 	RegistrationApproved RegistrationState = "Approved"
 )
 
+// MaxRegistrationLogoBytes caps the size of [RegistrationRequest].Logo
+// the SDK is willing to ship: 1 MiB. Mono's manual review rejects
+// anything larger anyway, and the field travels over an
+// ECDSA-signed JSON body — accidentally embedding a multi-MB
+// screenshot would inflate every retry of the registration request.
+const MaxRegistrationLogoBytes = 1 << 20
+
+// ErrLogoTooLarge is returned from [Client.Register] when
+// RegistrationRequest.Logo exceeds [MaxRegistrationLogoBytes].
+var ErrLogoTooLarge = errors.New("corporate: registration logo exceeds the size limit")
+
 // RegistrationRequest is the body of POST /personal/auth/registration:
 // the initial application for corporate-API approval. All fields are
 // required.
 //
 // Pubkey is a PEM-encoded secp256k1 public key (encoding/json
 // automatically base64-encodes []byte for the wire format). Logo is
-// the raw bytes of a PNG/JPEG image, also base64-encoded.
+// the raw bytes of a PNG/JPEG image, also base64-encoded; the SDK
+// enforces a 1 MiB cap (see [MaxRegistrationLogoBytes]).
 type RegistrationRequest struct {
 	Pubkey        []byte `json:"pubkey"`
 	Name          string `json:"name"`
@@ -72,6 +85,10 @@ type RegistrationStatusResponse struct {
 func (c *Client) Register(ctx context.Context, in *RegistrationRequest) (*RegistrationResponse, error) {
 	if in == nil {
 		return nil, ErrNilRequest
+	}
+	if len(in.Logo) > MaxRegistrationLogoBytes {
+		return nil, fmt.Errorf("%w: %d bytes (max %d)",
+			ErrLogoTooLarge, len(in.Logo), MaxRegistrationLogoBytes)
 	}
 	body, err := json.Marshal(in)
 	if err != nil {

@@ -97,8 +97,12 @@ func TestWithRateLimiter_WaitCalledOncePerDo(t *testing.T) {
 	assert.Equal(t, int32(1), lim.calls.Load())
 }
 
-// On retry, the limiter must NOT be re-consumed: 1 logical request = 1 token.
-func TestWithRateLimiter_NotCalledPerRetryAttempt(t *testing.T) {
+// Regression: the limiter MUST be consumed on every attempt,
+// including retries. The previous policy (one token per logical
+// request) let a 502/429 burst blow past the limiter the moment the
+// upstream recovered — exactly the situation a client-side throttle
+// should smooth out. New policy: 1 attempt = 1 token.
+func TestWithRateLimiter_CalledPerRetryAttempt(t *testing.T) {
 	var hits atomic.Int32
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		if hits.Add(1) == 1 {
@@ -120,7 +124,8 @@ func TestWithRateLimiter_NotCalledPerRetryAttempt(t *testing.T) {
 	req, _ := http.NewRequest(http.MethodGet, "/x", http.NoBody)
 	require.NoError(t, c.Do(req, nil))
 	assert.Equal(t, int32(2), hits.Load(), "request should retry once after 429")
-	assert.Equal(t, int32(1), lim.calls.Load(), "limiter should be hit only once per Do call")
+	assert.Equal(t, int32(2), lim.calls.Load(),
+		"limiter must be hit on every attempt (1 initial + 1 retry)")
 }
 
 func TestWithRateLimiter_PropagatesError(t *testing.T) {

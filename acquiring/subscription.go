@@ -234,6 +234,9 @@ func (c *Client) SubscriptionEdit(ctx context.Context, in *SubscriptionEditReque
 // off-switch (no refund). To cancel with a refund use
 // [Client.SubscriptionEdit] with [SubscriptionCancel] + RefundAmount.
 func (c *Client) SubscriptionRemove(ctx context.Context, subscriptionID string) error {
+	if subscriptionID == "" {
+		return ErrEmptyID
+	}
 	body, err := json.Marshal(SubscriptionRemoveRequest{SubscriptionID: subscriptionID})
 	if err != nil {
 		return fmt.Errorf("marshal: %w", err)
@@ -250,6 +253,9 @@ func (c *Client) SubscriptionRemove(ctx context.Context, subscriptionID string) 
 // dates, charge counters, the bound card. Use for reconciliation
 // against your own DB.
 func (c *Client) SubscriptionStatus(ctx context.Context, subscriptionID string) (*SubscriptionStatusResponse, error) {
+	if subscriptionID == "" {
+		return nil, ErrEmptyID
+	}
 	q := url.Values{}
 	q.Set("subscriptionId", subscriptionID)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet,
@@ -272,9 +278,12 @@ func (c *Client) SubscriptionList(ctx context.Context, opts SubscriptionListOpti
 		return nil, fmt.Errorf("SubscriptionList: DateFrom is required")
 	}
 	q := url.Values{}
-	q.Set("dateFrom", opts.DateFrom.Format(time.RFC3339))
+	// Mono expects UTC timestamps; t.Format(time.RFC3339) on a local
+	// time.Time emits the local TZ offset, which the bank rejects on
+	// some endpoints. Normalise to UTC explicitly.
+	q.Set("dateFrom", opts.DateFrom.UTC().Format(time.RFC3339))
 	if !opts.DateTo.IsZero() {
-		q.Set("dateTo", opts.DateTo.Format(time.RFC3339))
+		q.Set("dateTo", opts.DateTo.UTC().Format(time.RFC3339))
 	}
 	if opts.Status != "" {
 		q.Set("status", string(opts.Status))

@@ -132,7 +132,11 @@ type webhookRequest struct {
 
 // SetWebHook subscribes the given URI to StatementItem events. Mono
 // pings the URI with a GET right after subscription to check that it
-// is alive (respond with 200). Pass an empty string to unsubscribe.
+// is alive (respond with 200).
+//
+// Pass an empty string to UNSUBSCRIBE — the bank deletes the
+// existing subscription. This is a destructive operation; if you
+// only meant to validate the URI, do not pass "".
 // https://api.monobank.ua/docs/#tag/Klientski-personalni-dani/paths/~1personal~1webhook/post
 func (c *Client) SetWebHook(ctx context.Context, uri string) error {
 	body, err := json.Marshal(webhookRequest{WebHookURL: uri})

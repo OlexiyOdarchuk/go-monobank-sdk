@@ -37,14 +37,12 @@ func (c *Client) Wallet(ctx context.Context, walletID string) ([]WalletCard, err
 // CardToken becomes invalid for [Client.WalletPayment].
 // https://api.monobank.ua/docs/acquiring.html#tag/Tokenization/paths/~1api~1merchant~1wallet~1card/delete
 func (c *Client) DeleteCard(ctx context.Context, cardToken string) error {
+	if cardToken == "" {
+		return ErrEmptyID
+	}
 	q := url.Values{}
-	if cardToken != "" {
-		q.Set("cardToken", cardToken)
-	}
-	uri := "/api/merchant/wallet/card"
-	if s := q.Encode(); s != "" {
-		uri += "?" + s
-	}
+	q.Set("cardToken", cardToken)
+	uri := "/api/merchant/wallet/card?" + q.Encode()
 	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, uri, http.NoBody)
 	if err != nil {
 		return fmt.Errorf("create request: %w", err)

@@ -615,7 +615,7 @@ type WalletPaymentRequest struct {
 	Currency         currency.Code     `json:"ccy"`
 	RedirectURL      string            `json:"redirectUrl,omitempty"`
 	WebHookURL       string            `json:"webHookUrl,omitempty"`
-	InitiationKind   InitiationKind    `json:"initiationKind"`
+	InitiationKind   InitiationKind    `json:"initiationKind,omitempty"`
 	MerchantPaymInfo *MerchantPaymInfo `json:"merchantPaymInfo,omitempty"`
 	PaymentType      PaymentType       `json:"paymentType,omitempty"`
 }

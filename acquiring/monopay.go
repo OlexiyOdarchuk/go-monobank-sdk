@@ -71,6 +71,9 @@ func (c *Client) MonoPayKeyImport(ctx context.Context, in *MonoPayKeyImportReque
 
 // MonoPayKeyDelete removes a previously imported key by its keyId.
 func (c *Client) MonoPayKeyDelete(ctx context.Context, keyID string) error {
+	if keyID == "" {
+		return ErrEmptyID
+	}
 	body, err := json.Marshal(MonoPayKeyDeleteRequest{KeyID: keyID})
 	if err != nil {
 		return fmt.Errorf("marshal: %w", err)

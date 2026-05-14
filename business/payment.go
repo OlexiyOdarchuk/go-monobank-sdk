@@ -21,6 +21,9 @@ func (c *Client) PreparePayment(ctx context.Context, idempotencyKey string,
 	if in == nil {
 		return nil, ErrNilRequest
 	}
+	if idempotencyKey == "" {
+		return nil, ErrIdempotencyKeyRequired
+	}
 	body, err := json.Marshal(in)
 	if err != nil {
 		return nil, fmt.Errorf("marshal: %w", err)

@@ -264,7 +264,16 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	id := event.Data.Transaction.ID
-	if h.opts.Dedup != nil && h.opts.Dedup.Has(id) {
+	if id == "" {
+		// Mono very rarely sends a webhook whose Transaction.ID is
+		// empty (older event types, jar top-ups in some flows).
+		// Without an ID dedup is a no-op, so every Mono retry of the
+		// same body would fire OnEvent again. Warn the caller —
+		// they can decide whether to write to a fallback dedup key
+		// based on a hash of the body — but still ack 200 so the
+		// bank stops retrying.
+		h.reportError(errors.New("webhook: empty Transaction.ID, dedup skipped"))
+	} else if h.opts.Dedup != nil && h.opts.Dedup.Has(id) {
 		w.WriteHeader(http.StatusOK)
 		return
 	}

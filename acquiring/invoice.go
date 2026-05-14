@@ -45,6 +45,9 @@ func (c *Client) CreateInvoice(ctx context.Context, in *CreateInvoiceRequest) (*
 // for polling when WebHookURL is not configured.
 // https://api.monobank.ua/docs/acquiring.html#tag/Merchant-account/paths/~1api~1merchant~1invoice~1status/get
 func (c *Client) InvoiceStatus(ctx context.Context, invoiceID string) (*InvoiceStatusResponse, error) {
+	if invoiceID == "" {
+		return nil, ErrEmptyID
+	}
 	q := url.Values{}
 	q.Set("invoiceId", invoiceID)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet,
@@ -115,6 +118,9 @@ func (c *Client) FinalizeInvoice(ctx context.Context, in *FinalizeRequest) (*Fin
 // use [Client.CancelInvoice] (refund).
 // https://api.monobank.ua/docs/acquiring.html#tag/Merchant-account/paths/~1api~1merchant~1invoice~1remove/post
 func (c *Client) RemoveInvoice(ctx context.Context, invoiceID string) error {
+	if invoiceID == "" {
+		return ErrEmptyID
+	}
 	body, err := json.Marshal(RemoveRequest{InvoiceID: invoiceID})
 	if err != nil {
 		return fmt.Errorf("marshal: %w", err)
@@ -132,10 +138,11 @@ func (c *Client) RemoveInvoice(ctx context.Context, invoiceID string) error {
 // and a return.
 // https://api.monobank.ua/docs/acquiring.html#tag/Merchant-account/paths/~1api~1merchant~1invoice~1fiscal-checks/get
 func (c *Client) FiscalChecks(ctx context.Context, invoiceID string) ([]FiscalCheck, error) {
-	q := url.Values{}
-	if invoiceID != "" {
-		q.Set("invoiceId", invoiceID)
+	if invoiceID == "" {
+		return nil, ErrEmptyID
 	}
+	q := url.Values{}
+	q.Set("invoiceId", invoiceID)
 	uri := "/api/merchant/invoice/fiscal-checks"
 	if s := q.Encode(); s != "" {
 		uri += "?" + s
@@ -155,6 +162,9 @@ func (c *Client) FiscalChecks(ctx context.Context, invoiceID string) ([]FiscalCh
 // email is non-empty, the bank also sends a copy by email.
 // https://api.monobank.ua/docs/acquiring.html#tag/Merchant-account/paths/~1api~1merchant~1invoice~1receipt/get
 func (c *Client) Receipt(ctx context.Context, invoiceID, email string) (*ReceiptResponse, error) {
+	if invoiceID == "" {
+		return nil, ErrEmptyID
+	}
 	q := url.Values{}
 	q.Set("invoiceId", invoiceID)
 	if email != "" {

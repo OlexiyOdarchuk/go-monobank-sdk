@@ -46,6 +46,11 @@ type webhookRequest struct {
 // EVERY client this service has access to. Unlike a personal webhook
 // (one per user), a corporate webhook is one per service. The event
 // carries an AccountID so you can map it back to the client.
+//
+// Pass an empty string to UNSUBSCRIBE — the bank deletes the
+// existing subscription. This is a destructive operation across
+// every client of the service; if you only meant to validate the
+// URI, do not pass "".
 // https://api.monobank.ua/docs/corporate.html#tag/Avtoryzaciya-ta-nalashtuvannya-kompaniyi/paths/~1personal~1corp~1webhook/post
 func (c *Client) SetWebHook(ctx context.Context, uri string) error {
 	body, err := json.Marshal(webhookRequest{WebHookURL: uri})

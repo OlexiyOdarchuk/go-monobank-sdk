@@ -104,24 +104,24 @@ type SendInfo struct {
 	LongJarID string `json:"-"`
 }
 
-// UnmarshalJSON carefully extracts longJarId/extJarId — different
-// versions use different field names.
+// UnmarshalJSON extracts longJarId/extJarId — different versions
+// use different field names — and embeds the rest of SendInfo in a
+// single decode pass.
 func (s *SendInfo) UnmarshalJSON(data []byte) error {
 	type raw SendInfo
-	var r raw
-	if err := json.Unmarshal(data, &r); err != nil {
-		return err
-	}
-	*s = SendInfo(r)
-	// Look up longJarId or extJarId separately.
-	var aux struct {
+	aux := struct {
+		raw
 		LongJarID string `json:"longJarId"`
 		ExtJarID  string `json:"extJarId"`
+	}{}
+	if err := json.Unmarshal(data, &aux); err != nil {
+		return err
 	}
-	_ = json.Unmarshal(data, &aux)
-	if aux.LongJarID != "" {
+	*s = SendInfo(aux.raw)
+	switch {
+	case aux.LongJarID != "":
 		s.LongJarID = aux.LongJarID
-	} else if aux.ExtJarID != "" {
+	case aux.ExtJarID != "":
 		s.LongJarID = aux.ExtJarID
 	}
 	return nil
@@ -292,11 +292,22 @@ func (c *Client) ByShortID(ctx context.Context, clientID string) (*SendInfo, err
 	if resp.StatusCode != http.StatusOK {
 		return nil, decodeAPIError(resp.StatusCode, respBody)
 	}
-	// send.monobank.ua can return { "errCode": "..." } with status 200.
-	var maybeErr APIError
-	if json.Unmarshal(respBody, &maybeErr) == nil && maybeErr.ErrCode != "" {
-		maybeErr.StatusCode = resp.StatusCode
-		return nil, &maybeErr
+	// send.monobank.ua can return { "errCode": "..." } with status
+	// 200. The previous check looked for ANY JSON shape carrying an
+	// "errCode" field — too loose, since a real success response can
+	// legitimately ship an empty "errCode": "" or be confused with a
+	// future field. Use a strict probe: parse only the error shape
+	// and require BOTH errCode and errText to be present.
+	var probe struct {
+		ErrCode string `json:"errCode"`
+		ErrText string `json:"errText"`
+	}
+	if json.Unmarshal(respBody, &probe) == nil && probe.ErrCode != "" && probe.ErrText != "" {
+		return nil, &APIError{
+			StatusCode: resp.StatusCode,
+			ErrCode:    probe.ErrCode,
+			ErrText:    probe.ErrText,
+		}
 	}
 	var out SendInfo
 	if err := json.Unmarshal(respBody, &out); err != nil {

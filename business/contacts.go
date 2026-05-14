@@ -15,6 +15,13 @@ import (
 // is passed.
 var ErrNilRequest = errors.New("request body is nil")
 
+// ErrIdempotencyKeyRequired is returned by [Client.PreparePayment]
+// and [Client.CreateSalaryRegistry] when the idempotencyKey
+// argument is empty. The bank treats an empty Idempotency-Key as
+// "no dedupe", so a network retry would create a duplicate payment
+// — explicit failure is safer than implicit duplication.
+var ErrIdempotencyKeyRequired = errors.New("business: Idempotency-Key is required")
+
 // ErrInvalidTimeRange is returned by [Client.Statement] and
 // [Client.StatementAll] when the [from, to] window cannot be
 // represented in the API URL: from.IsZero(), to is non-zero and

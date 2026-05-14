@@ -104,13 +104,16 @@ func TestWithTracer_recordsRequestAndResponse(t *testing.T) {
 	assert.Equal(t, codes.Ok, spans[0].status.code)
 
 	// Атрибути.
-	attrs := map[string]string{}
+	attrs := map[string]attribute.Value{}
 	for _, kv := range spans[0].attrs {
-		attrs[string(kv.Key)] = kv.Value.AsString()
+		attrs[string(kv.Key)] = kv.Value
 	}
-	assert.Equal(t, "GET", attrs["http.method"])
-	assert.Contains(t, attrs["http.url"], srv.URL)
-	assert.Equal(t, "200", attrs["http.status_code"])
+	assert.Equal(t, "GET", attrs["http.method"].AsString())
+	// http.url is now redacted (path-only) — must contain the
+	// server's host but never the query (none in this test).
+	assert.Contains(t, attrs["http.url"].AsString(), srv.URL)
+	// http.status_code is now Int (per OTel semconv), not String.
+	assert.Equal(t, int64(200), attrs["http.status_code"].AsInt64())
 }
 
 func TestWithTracer_recordsTransportError(t *testing.T) {

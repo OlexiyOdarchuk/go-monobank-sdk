@@ -298,9 +298,10 @@ func WithUnsafeRetries(enabled bool) Option {
 	}
 }
 
-// WithRateLimiter sets a client-side throttle. [RateLimiter.Wait] is
-// called ONCE per logical request (before the retry loop) — the
-// token is not spent again on retries. nil is ignored.
+// WithRateLimiter sets a client-side throttle. [RateLimiter.Wait]
+// is called on EVERY attempt, including each retry — so a burst of
+// retries after a 502/429 cannot blow past the limiter the moment
+// the upstream recovers. nil is ignored.
 //
 // Mono has strict limits (for example, /personal/client-info is one
 // call per 60 s); without a limiter the SDK relies solely on

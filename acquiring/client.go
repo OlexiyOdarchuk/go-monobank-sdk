@@ -48,11 +48,19 @@
 package acquiring
 
 import (
+	"errors"
 	"log/slog"
 	"net/http"
 
 	monobank "github.com/OlexiyOdarchuk/go-monobank-sdk"
 )
+
+// ErrEmptyID is returned by methods that take a path-parameter
+// identifier (invoiceID, subscriptionID, qrID, cardToken, keyID,
+// walletID) when the supplied string is empty. Catching it locally
+// saves an HTTP round-trip and prevents a malformed URL like
+// "/api/merchant/invoice/status/?invoiceId=" from going on the wire.
+var ErrEmptyID = errors.New("acquiring: empty identifier")
 
 // BaseURL is the acquiring API host. Override via
 // [monobank.WithBaseURL] in tests.
@@ -90,12 +98,17 @@ type TokenAuth struct {
 }
 
 // SetAuth adds X-Token to the outgoing request. A nil request is a
-// no-op.
+// no-op. It also sets Accept: application/json so the bank returns
+// JSON even when content negotiation would otherwise default to
+// HTML (the standard library does not send Accept by default).
 func (a TokenAuth) SetAuth(r *http.Request) error {
 	if r == nil {
 		return nil
 	}
 	r.Header.Set("X-Token", a.Token)
+	if r.Header.Get("Accept") == "" {
+		r.Header.Set("Accept", "application/json")
+	}
 	return nil
 }
 

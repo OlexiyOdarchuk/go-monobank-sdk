@@ -39,6 +39,12 @@ type Data struct {
 // not in the known Type* constants, Response is still returned (with
 // the parsed type) along with [ErrUnknownType]. The caller can then
 // either ignore such events or handle them with generic code.
+//
+// Body-size: Parse does NOT enforce a maximum body size — it expects
+// the caller to wrap r.Body in [http.MaxBytesReader] (or use
+// [Handler], which sets a default of 1 MiB via
+// Options.MaxBodyBytes). Without that, an attacker can send a
+// gigabyte body and exhaust heap before json.Unmarshal returns.
 func Parse(body []byte) (*Response, error) {
 	var v Response
 	if err := json.Unmarshal(body, &v); err != nil {

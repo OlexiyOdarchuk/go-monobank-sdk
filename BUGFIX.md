@@ -26,7 +26,7 @@
   - Виправити: для raw r||s ремаршалити у DER і викликати `ecdsa.VerifyASN1` (одна гілка коду).
   - Resolution: єдина гілка через `ecdsa.VerifyASN1`; raw r||s конвертується у DER через `marshalRawSigToDER`.
 
-- [ ] **otelmonobank/store.go:17 + otel.go:84-94** — `map[*http.Request]trace.Span` тече при `resp == nil` (transport error: `End()` ніколи не викликається) і при retry (повторний request hook перетирає span попередньої спроби).
+- [x] **otelmonobank/store.go:17 + otel.go:84-94** — `map[*http.Request]trace.Span` тече при `resp == nil` (transport error: `End()` ніколи не викликається) і при retry (повторний request hook перетирає span попередньої спроби).
   - Виправити: тримати span у `r.Context()` через `context.WithValue` АБО зберігати стек на ключ із обов'язковим `End()` попереднього перед push нового; у response-hook завжди викликати `End()`, навіть якщо `resp == nil` (брати помилку з аргумента).
   - Додати regression-тест із транспортом, що повертає `(nil, error)`, перевірити, що `len(store) == 0`.
   - Resolution:
@@ -162,83 +162,83 @@
 
 ## MEDIUM
 
-- [ ] **client.go:274-278** — limiter викликається 1× ДО retry-циклу → 4 ретраї проходять як 1 токен.
+- [x] **client.go:274-278** — limiter викликається 1× ДО retry-циклу → 4 ретраї проходять як 1 токен.
   - Виправити: переносити `Wait` у `attempt`-функцію (всередину retry-loop).
   - Resolution:
 
 - [ ] **acquiring/types.go:324-339** — `InvoiceStatusResponse.UnmarshalJSON` перезаписує `Code` на Fee/AgentFee — для крос-граничних транзакцій валюта Fee може відрізнятись.
   - Виправити: перевірити з docs Mono; якщо різні — не перезаписувати, парсити з власної валюти поля.
-  - Resolution:
+  - Resolution: deferred — потрібна перевірка реальних cross-border payload-ів від Mono support. У поточних docs Fee валюта співпадає з основною, тож override безпечний. Залишено TODO.
 
-- [ ] **acquiring/subscription.go:260, 296** — `time.RFC3339` форматує локальну TZ.
+- [x] **acquiring/subscription.go:260, 296** — `time.RFC3339` форматує локальну TZ.
   - Виправити: `t.UTC().Format(time.RFC3339)`.
   - Resolution:
 
-- [ ] **acquiring/types.go:608-617** — `WalletPaymentRequest.InitiationKind` без `omitempty`.
+- [x] **acquiring/types.go:608-617** — `WalletPaymentRequest.InitiationKind` без `omitempty`.
   - Виправити: додати `omitempty`.
   - Resolution:
 
-- [ ] **acquiring/{invoice,qr,wallet,subscription,monopay}.go** — не валідуються порожні ID у мутаційних запитах.
+- [x] **acquiring/{invoice,qr,wallet,subscription,monopay}.go** — не валідуються порожні ID у мутаційних запитах.
   - Виправити: `if id == "" { return ErrEmptyID }` у кожній функції; винести `ErrEmptyID` у спільне місце.
   - Resolution:
 
-- [ ] **business/idempotency.go:23-45** — `panic` при `crypto/rand` fail.
+- [x] **business/idempotency.go:23-45** — `panic` при `crypto/rand` fail.
   - Виправити: повертати `(string, error)` із `NewIdempotencyKey`; внутрішні викликачі обробляють error.
   - Resolution:
 
-- [ ] **business/payment.go:33** — Idempotency-Key не валідується на порожній рядок.
+- [x] **business/payment.go:33** — Idempotency-Key не валідується на порожній рядок.
   - Виправити: повертати `ErrIdempotencyKeyRequired` при `key == ""`.
   - Resolution:
 
-- [ ] **acquiring/client.go:86-92** — `TokenAuth` не ставить `Accept` (на відміну від `business.TokenAuth`).
+- [x] **acquiring/client.go:86-92** — `TokenAuth` не ставить `Accept` (на відміну від `business.TokenAuth`).
   - Виправити: додати `Accept: application/json`.
   - Resolution:
 
-- [ ] **webhook/handler.go:259-263** — якщо `Transaction.ID == ""`, dedup no-op; OnEvent виконається на кожен ретрай.
+- [x] **webhook/handler.go:259-263** — якщо `Transaction.ID == ""`, dedup no-op; OnEvent виконається на кожен ретрай.
   - Виправити: викликати `OnError` із warning, ack-нути 200.
   - Resolution:
 
-- [ ] **webhook/parse.go** — без перевірки розміру тіла (caller покладається на MaxBytesReader).
+- [x] **webhook/parse.go** — без перевірки розміру тіла (caller покладається на MaxBytesReader).
   - Виправити: задокументувати у godoc функції `Parse`.
   - Resolution:
 
-- [ ] **jar/jar.go:97-116** — `UnmarshalJSON` робить два `Unmarshal` і ковтає другу помилку.
+- [x] **jar/jar.go:97-116** — `UnmarshalJSON` робить два `Unmarshal` і ковтає другу помилку.
   - Виправити: один Unmarshal у aux-struct з `*string` для optional-поля.
   - Resolution:
 
-- [ ] **jar/jar.go:243-247** — `if Unmarshal(_, maybeErr)==nil && maybeErr.ErrCode!=""` спрацює на будь-якому JSON із `errCode`.
+- [x] **jar/jar.go:243-247** — `if Unmarshal(_, maybeErr)==nil && maybeErr.ErrCode!=""` спрацює на будь-якому JSON із `errCode`.
   - Виправити: жорсткіше — парсити `{errCode, errText}` із DisallowUnknownFields у тимчасовий struct АБО перевіряти status-code раніше.
   - Resolution:
 
-- [ ] **monobanktest/server.go:117-125** — `HandlePrefix` спрацьовує перший доданий, а не найдовший префікс.
+- [x] **monobanktest/server.go:117-125** — `HandlePrefix` спрацьовує перший доданий, а не найдовший префікс.
   - Виправити: сортувати handlers за довжиною prefix DESC перед матчингом.
   - Resolution:
 
-- [ ] **monobanktest/server.go:129-148** — `s.t.Errorf` із goroutine може race-нути з cleanup при запитах після Close.
+- [x] **monobanktest/server.go:129-148** — `s.t.Errorf` із goroutine може race-нути з cleanup при запитах після Close.
   - Виправити: idempotent close через `sync.Once`; ctx-чек на shutdown; ігнорувати запити після close.
   - Resolution:
 
-- [ ] **otelmonobank/otel.go:103** — `http.status_code` як `attribute.String` (semconv очікує Int).
+- [x] **otelmonobank/otel.go:103** — `http.status_code` як `attribute.String` (semconv очікує Int).
   - Виправити: `attribute.Int("http.status_code", resp.StatusCode)`.
   - Resolution:
 
-- [ ] **otelmonobank/otel.go:72** — `http.url` без query-redaction.
+- [x] **otelmonobank/otel.go:72** — `http.url` без query-redaction.
   - Виправити: записувати тільки `req.URL.Path` АБО фільтрувати query через allowlist.
   - Resolution:
 
-- [ ] **otelmonobank/otel.go:48-51** — `WithTracer` перезаписує існуючі hooks.
+- [x] **otelmonobank/otel.go:48-51** — `WithTracer` перезаписує існуючі hooks.
   - Виправити: chain — викликати попередній hook після власного.
   - Resolution:
 
 - [ ] **installment/types.go** — `float64` для грошей по всьому пакету.
   - Виправити: ввести типовану `Money` обгортку з `MarshalJSON`/`UnmarshalJSON` (рендерить як decimal-string без втрат), застосувати у структурах. Це breaking change → новий мажорний реліз.
-  - Resolution:
+  - Resolution: відкладено до v2 — це масштабний breaking-refactor усього пакета installment. У v1.3.0 БАГ помічено (float64 у Sum, TotalSum, Returns, Bank.CreditAmount), у CHANGELOG включено як known limitation.
 
-- [ ] **currency/currency.go:30,80** — глобальні `var map` мутабельні.
+- [x] **currency/currency.go:30,80** — глобальні `var map` мутабельні.
   - Виправити: закрити за функціями `FromAlpha3(code) (Currency, bool)` / `Decimals(code) int`; саму мапу зробити пакетно-приватною.
   - Resolution:
 
-- [ ] **personal/client.go:127, corporate/settings.go:50** — `SetWebHook("")` дозволено, але семантика не задокументована.
+- [x] **personal/client.go:127, corporate/settings.go:50** — `SetWebHook("")` дозволено, але семантика не задокументована.
   - Виправити: явний godoc «передай порожній рядок, щоб скасувати підписку».
   - Resolution:
 
@@ -246,11 +246,11 @@
   - Виправити: повертати помилку для http://, окрім loopback (та сама логіка, що `monobank.WithBaseURL`).
   - Resolution: `installment.New` тепер відхиляє `http://` для non-loopback з `ErrInsecureBaseURL`; opt-out через `WithInsecureBaseURL(true)`; loopback (`localhost`, `127.0.0.1`, `::1`) дозволений для httptest.
 
-- [ ] **installment/client.go:124-128, 143-153** — `Sign` рахує HMAC лише за body; `VerifyCallback` повертає той самий sentinel для невалідної довжини й невалідного HMAC.
+- [x] **installment/client.go:124-128, 143-153** — `Sign` рахує HMAC лише за body; `VerifyCallback` повертає той самий sentinel для невалідної довжини й невалідного HMAC.
   - Виправити: задокументувати у godoc `Sign`; у `VerifyCallback` різні sentinel-и (`ErrCallbackBadLength`, `ErrCallbackBadSignature`).
   - Resolution:
 
-- [ ] **corporate/registration.go:30-38** — `Logo []byte` без обмеження розміру.
+- [x] **corporate/registration.go:30-38** — `Logo []byte` без обмеження розміру.
   - Виправити: захардкодити max 1 MiB і повертати error раніше.
   - Resolution:
 

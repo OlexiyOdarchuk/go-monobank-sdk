@@ -15,16 +15,19 @@ var uuidV4Re = regexp.MustCompile(
 )
 
 func TestNewIdempotencyKey_format(t *testing.T) {
-	k := NewIdempotencyKey()
+	k, err := NewIdempotencyKey()
+	require.NoError(t, err)
 	require.Len(t, k, 36, "UUID v4 — це 36 символів з тире")
 	assert.Regexp(t, uuidV4Re, k)
+	_ = err
 }
 
 func TestNewIdempotencyKey_versionAndVariantBits(t *testing.T) {
 	// Версія — 13-й символ (індекс 14, після третього "-") має бути '4'.
 	// Variant — індекс 19 має бути одним з 8/9/a/b.
 	for i := 0; i < 32; i++ {
-		k := NewIdempotencyKey()
+		k, err := NewIdempotencyKey()
+		require.NoError(t, err)
 		assert.Equalf(t, byte('4'), k[14], "version nibble for key %q", k)
 		v := k[19]
 		assert.Containsf(t, "89ab", string(v), "variant nibble for key %q", k)
@@ -35,7 +38,8 @@ func TestNewIdempotencyKey_unique(t *testing.T) {
 	const n = 1000
 	seen := make(map[string]struct{}, n)
 	for i := 0; i < n; i++ {
-		k := NewIdempotencyKey()
+		k, err := NewIdempotencyKey()
+		require.NoError(t, err)
 		_, dup := seen[k]
 		require.False(t, dup, "collision after %d keys: %q", i, k)
 		seen[k] = struct{}{}

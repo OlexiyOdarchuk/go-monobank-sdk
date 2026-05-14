@@ -22,7 +22,8 @@ func TestByLongID_success(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c, errNew := jar.New(jar.WithAPIBaseURL(srv.URL)); require.NoError(t, errNew)
+	c, errNew := jar.New(jar.WithAPIBaseURL(srv.URL))
+	require.NoError(t, errNew)
 	info, err := c.ByLongID(context.Background(), "abc123")
 	require.NoError(t, err)
 	assert.Equal(t, "abc123", info.JarID)
@@ -39,7 +40,8 @@ func TestByLongID_notFound(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c, errNew := jar.New(jar.WithAPIBaseURL(srv.URL)); require.NoError(t, errNew)
+	c, errNew := jar.New(jar.WithAPIBaseURL(srv.URL))
+	require.NoError(t, errNew)
 	_, err := c.ByLongID(context.Background(), "missing")
 	assert.ErrorIs(t, err, jar.ErrNotFound)
 }
@@ -51,7 +53,8 @@ func TestByLongID_tmrError(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c, errNew := jar.New(jar.WithAPIBaseURL(srv.URL)); require.NoError(t, errNew)
+	c, errNew := jar.New(jar.WithAPIBaseURL(srv.URL))
+	require.NoError(t, errNew)
 	_, err := c.ByLongID(context.Background(), "x")
 	var apiErr *jar.APIError
 	require.ErrorAs(t, err, &apiErr)
@@ -60,7 +63,8 @@ func TestByLongID_tmrError(t *testing.T) {
 }
 
 func TestByLongID_emptyID(t *testing.T) {
-	c, errNew := jar.New(); require.NoError(t, errNew)
+	c, errNew := jar.New()
+	require.NoError(t, errNew)
 	_, err := c.ByLongID(context.Background(), "")
 	require.Error(t, err)
 }
@@ -90,7 +94,8 @@ func TestByShortID_success(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c, errNew := jar.New(jar.WithSendBaseURL(srv.URL)); require.NoError(t, errNew)
+	c, errNew := jar.New(jar.WithSendBaseURL(srv.URL))
+	require.NoError(t, errNew)
 	info, err := c.ByShortID(context.Background(), "shortXY")
 	require.NoError(t, err)
 	assert.Equal(t, "Bake Sale", info.Name)
@@ -107,7 +112,8 @@ func TestByShortID_extJarId(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c, errNew := jar.New(jar.WithSendBaseURL(srv.URL)); require.NoError(t, errNew)
+	c, errNew := jar.New(jar.WithSendBaseURL(srv.URL))
+	require.NoError(t, errNew)
 	info, err := c.ByShortID(context.Background(), "y")
 	require.NoError(t, err)
 	assert.Equal(t, "extXYZ", info.LongJarID)
@@ -120,7 +126,8 @@ func TestByShortID_errCodeIn200(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c, errNew := jar.New(jar.WithSendBaseURL(srv.URL)); require.NoError(t, errNew)
+	c, errNew := jar.New(jar.WithSendBaseURL(srv.URL))
+	require.NoError(t, errNew)
 	_, err := c.ByShortID(context.Background(), "x")
 	var apiErr *jar.APIError
 	require.ErrorAs(t, err, &apiErr)
@@ -128,7 +135,8 @@ func TestByShortID_errCodeIn200(t *testing.T) {
 }
 
 func TestByShortID_emptyID(t *testing.T) {
-	c, errNew := jar.New(); require.NoError(t, errNew)
+	c, errNew := jar.New()
+	require.NoError(t, errNew)
 	_, err := c.ByShortID(context.Background(), "")
 	require.Error(t, err)
 }

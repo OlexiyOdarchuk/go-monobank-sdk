@@ -30,14 +30,12 @@ func (c *Client) QRList(ctx context.Context) ([]QR, error) {
 // invoice, amount, currency — if a payment is pending).
 // https://api.monobank.ua/docs/acquiring.html#tag/QR-kasy/paths/~1api~1merchant~1qr~1details/get
 func (c *Client) QRDetails(ctx context.Context, qrID string) (*QRDetails, error) {
+	if qrID == "" {
+		return nil, ErrEmptyID
+	}
 	q := url.Values{}
-	if qrID != "" {
-		q.Set("qrId", qrID)
-	}
-	uri := "/api/merchant/qr/details"
-	if s := q.Encode(); s != "" {
-		uri += "?" + s
-	}
+	q.Set("qrId", qrID)
+	uri := "/api/merchant/qr/details?" + q.Encode()
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, uri, http.NoBody)
 	if err != nil {
 		return nil, fmt.Errorf("create request: %w", err)
@@ -55,6 +53,9 @@ func (c *Client) QRDetails(ctx context.Context, qrID string) (*QRDetails, error)
 // needs to be "released".
 // https://api.monobank.ua/docs/acquiring.html#tag/QR-kasy/paths/~1api~1merchant~1qr~1reset-amount/post
 func (c *Client) QRResetAmount(ctx context.Context, qrID string) error {
+	if qrID == "" {
+		return ErrEmptyID
+	}
 	body, err := json.Marshal(ResetAmountRequest{QrID: qrID})
 	if err != nil {
 		return fmt.Errorf("marshal: %w", err)

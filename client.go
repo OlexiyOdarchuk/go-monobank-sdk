@@ -170,6 +170,46 @@ type Client struct {
 	onResp func(*http.Response, error)
 }
 
+// ChainRequestHook composes fn on top of the client's existing
+// request hook so the previous hook still fires (first), then fn.
+// If no hook was installed before, fn becomes the sole hook.
+//
+// Used by integrations that want to add their own request-side
+// behaviour (OpenTelemetry span start, custom headers) without
+// stomping on a hook the application installed via
+// [WithRequestHook]. nil is ignored.
+func (c *Client) ChainRequestHook(fn func(*http.Request)) {
+	if fn == nil {
+		return
+	}
+	prev := c.onReq
+	if prev == nil {
+		c.onReq = fn
+		return
+	}
+	c.onReq = func(r *http.Request) {
+		prev(r)
+		fn(r)
+	}
+}
+
+// ChainResponseHook composes fn on top of the client's existing
+// response hook. Existing hook runs first, then fn. nil is ignored.
+func (c *Client) ChainResponseHook(fn func(*http.Response, error)) {
+	if fn == nil {
+		return
+	}
+	prev := c.onResp
+	if prev == nil {
+		c.onResp = fn
+		return
+	}
+	c.onResp = func(resp *http.Response, err error) {
+		prev(resp, err)
+		fn(resp, err)
+	}
+}
+
 // SetBaseURL overrides the base URL of an already-constructed client.
 // On a parse failure it records the error in c.optErr (which surfaces
 // from the very first [Client.Do]) and leaves the previous value in
@@ -288,13 +328,16 @@ func (c Client) Do(req *http.Request, v any, expectedStatusCodes ...int) error {
 		}
 	}
 
-	if c.limiter != nil {
-		if err := c.limiter.Wait(req.Context()); err != nil {
-			return err
-		}
-	}
-
+	// limiter.Wait is called inside attemptFn so retries also consume
+	// a token. Without that, a burst of retries after a 502/429 would
+	// blow past the limiter the moment the upstream comes back —
+	// exactly the situation a client-side throttle should smooth out.
 	attemptFn := func() error {
+		if c.limiter != nil {
+			if err := c.limiter.Wait(req.Context()); err != nil {
+				return err
+			}
+		}
 		return c.attempt(req, v, expectedStatusCodes)
 	}
 	if !c.shouldRetry(req) {

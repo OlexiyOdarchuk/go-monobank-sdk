@@ -37,6 +37,8 @@ const (
 )
 
 // alpha3 maps the numeric codes above to their alpha-3 equivalents.
+// Kept package-private; access through [Code.String]. The map is
+// effectively read-only at runtime — do not mutate.
 var alpha3 = map[Code]string{
 	UAH: "UAH",
 	USD: "USD",
@@ -59,6 +61,7 @@ var alpha3 = map[Code]string{
 
 // fromAlpha3 is the reverse map of [alpha3]: "UAH" → 980. It is
 // populated in init() from alpha3 to keep a single source of truth.
+// Kept package-private; access through [FromAlpha3].
 var fromAlpha3 map[string]Code
 
 func init() {
@@ -95,7 +98,8 @@ func (c Code) String() string {
 // decimals overrides the default of 2 for currencies for which ISO
 // 4217 fixes a different number of decimal places. Most currencies
 // (UAH/USD/EUR/GBP/PLN/CHF/CZK/CAD/AUD/CNY) have 2 decimals, so they
-// are not in the map.
+// are not in the map. Kept package-private; access through
+// [Code.Decimals].
 var decimals = map[Code]int{
 	// 0 decimals.
 	JPY: 0,

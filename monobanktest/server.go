@@ -23,6 +23,7 @@ package monobanktest
 import (
 	"net/http"
 	"net/http/httptest"
+	"sort"
 	"strings"
 	"sync"
 	"testing"
@@ -40,6 +41,8 @@ type Server struct {
 	mu           sync.Mutex
 	routes       map[routeKey]Responder
 	prefixRoutes []prefixRoute
+	closed       bool
+	closeOnce    sync.Once
 }
 
 type routeKey struct {
@@ -67,16 +70,27 @@ func NewServer(t testing.TB) *Server {
 		routes: make(map[routeKey]Responder),
 	}
 	s.srv = httptest.NewServer(http.HandlerFunc(s.handle))
-	t.Cleanup(s.srv.Close)
+	t.Cleanup(s.Close)
 	return s
 }
 
 // URL returns this server's base URL.
 func (s *Server) URL() string { return s.srv.URL }
 
-// Close stops the server. It is called automatically via t.Cleanup —
-// only needed if you want to close it earlier.
-func (s *Server) Close() { s.srv.Close() }
+// Close stops the server. It is called automatically via t.Cleanup
+// — only needed if you want to close it earlier. Idempotent: calling
+// Close twice (once manually, then again from t.Cleanup) is safe
+// thanks to sync.Once. After Close, any in-flight requests are
+// silently ignored rather than calling s.t.Errorf, which would race
+// against test teardown.
+func (s *Server) Close() {
+	s.closeOnce.Do(func() {
+		s.mu.Lock()
+		s.closed = true
+		s.mu.Unlock()
+		s.srv.Close()
+	})
+}
 
 // Option returns a [monobank.Option] that points the client at this
 // server (WithBaseURL + WithHTTPClient). Pass it into any
@@ -117,7 +131,11 @@ func (s *Server) Handle(method, path string, r Responder) {
 // starting with prefix and matching method. Useful for endpoints
 // with parameters in the path (for example,
 // /personal/statement/{account}/{from}/{to}). Exact matches via
-// [Server.Handle] have higher priority.
+// [Server.Handle] have higher priority; among multiple HandlePrefix
+// routes, the LONGEST matching prefix wins, not the first registered
+// — so a fine-grained handler ("/personal/statement/acc-1/") shadows
+// a coarse fallback ("/personal/statement/") even when the coarse
+// one was added earlier.
 func (s *Server) HandlePrefix(method, prefix string, r Responder) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -126,13 +144,25 @@ func (s *Server) HandlePrefix(method, prefix string, r Responder) {
 		prefix: prefix,
 		resp:   r,
 	})
+	// Sort by descending prefix length so the longest match is tried
+	// first in handle().
+	sort.SliceStable(s.prefixRoutes, func(i, j int) bool {
+		return len(s.prefixRoutes[i].prefix) > len(s.prefixRoutes[j].prefix)
+	})
 }
 
 // handle is the server's root handler; it looks up a Responder by
-// (method, path), trying an exact match first and then a prefix
-// match.
+// (method, path), trying an exact match first and then a longest-
+// matching prefix.
 func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 	s.mu.Lock()
+	if s.closed {
+		s.mu.Unlock()
+		// httptest can deliver a few late requests during Close;
+		// ignore them silently rather than racing test cleanup.
+		http.Error(w, "server closed", http.StatusServiceUnavailable)
+		return
+	}
 	resp, ok := s.routes[routeKey{r.Method, r.URL.Path}]
 	if !ok {
 		for _, pr := range s.prefixRoutes {
