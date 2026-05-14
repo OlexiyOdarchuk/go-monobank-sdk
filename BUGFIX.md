@@ -258,113 +258,112 @@
 
 ## LOW
 
-- [ ] **client.go:194** — `func (c Client) Close()` value-receiver.
+- [x] **client.go:194** — `func (c Client) Close()` value-receiver.
   - Виправити: змінити на `*Client` для консистентності.
-  - Resolution:
+  - Resolution: pointer receiver. Binary-compatible — Go автоматично адресує value при виклику метода.
 
-- [ ] **client.go:219-228** — `optErr` повертається з кожного `Do` назавжди.
+- [x] **client.go:219-228** — `optErr` повертається з кожного `Do` назавжди.
   - Виправити: документувати чітко; опційно — `(c *Client) ResetOptErr()` для тестів.
-  - Resolution:
+  - Resolution: розширено godoc — sticky-семантика explicit; для recovery документовано "build a fresh client".
 
-- [ ] **retry.go:142-157** — `parseRetryAfter` приймає арбітрарно великий integer.
+- [x] **retry.go:142-157** — `parseRetryAfter` приймає арбітрарно великий integer.
   - Виправити: hard ceiling на parseRetryAfter (наприклад, 24h) із warning у logger.
-  - Resolution:
+  - Resolution: новий `const maxRetryAfter = 24*time.Hour` — clamp і для seconds, і для http-date.
 
-- [ ] **business/payslips.go:115-132** — підтвердити, що `Client.Do` для `*[]byte` НЕ робить JSON-decode (зараз — окрема гілка, ок; добав regression-тест).
-  - Resolution:
+- [x] **business/payslips.go:115-132** — підтвердити, що `Client.Do` для `*[]byte` НЕ робить JSON-decode (зараз — окрема гілка, ок; добав regression-тест).
+  - Resolution: підтверджено + новий regression `TestPayslipPDF_doesNotJSONDecode` із не-JSON-valid byte stream.
 
-- [ ] **installment/types.go:179-184** — `ClientInfo` повертає PII; легко витече у логах.
+- [x] **installment/types.go:179-184** — `ClientInfo` повертає PII; легко витече у логах.
   - Виправити: реалізувати `LogValue`, маскуючи FirstName/LastName/INN.
-  - Resolution:
+  - Resolution: `installment.ClientInfo.LogValue()` — імена → перша літера + ***, ІНН → *** + last 4.
 
-- [ ] **corporate/signature.go:24-25** — magic number «3 доби» у коментарях.
+- [x] **corporate/signature.go:24-25** — magic number «3 доби» у коментарях.
   - Виправити: винести у `const SignatureRequestTTL = 72 * time.Hour`.
-  - Resolution:
+  - Resolution: новий `corporate.SignatureRequestTTL = 72*time.Hour`; коментар `DocExpired` посилається на константу.
 
-- [ ] **examples/business/main.go:40-41** — `%.2f` для float-балансу замість типізованого `BalanceMoney().String()`.
+- [x] **examples/business/main.go:40-41** — `%.2f` для float-балансу замість типізованого `BalanceMoney().String()`.
   - Виправити: замінити у прикладі.
-  - Resolution:
+  - Resolution: `a.BalanceMoney().String()` (currency-aware decimals).
 
-- [ ] **examples/corporate/main.go:101** — `%d` для `money.Money`-struct.
+- [x] **examples/corporate/main.go:101** — `%d` для `money.Money`-struct.
   - Виправити: `a.Balance.String()` або `%s`.
-  - Resolution:
+  - Resolution: `%s` + `a.Balance.String()`.
 
-- [ ] **examples/webhook/main.go:33** — `http.ListenAndServe` без `ReadHeaderTimeout`.
+- [x] **examples/webhook/main.go:33** — `http.ListenAndServe` без `ReadHeaderTimeout`.
   - Виправити: `&http.Server{Addr: ":8080", ReadHeaderTimeout: 10*time.Second, Handler: h}`.
-  - Resolution:
+  - Resolution: explicit `&http.Server{}` із ReadHeaderTimeout=10s + повний набір timeout-ів.
 
-- [ ] **examples/jar/main.go:80** — `float64(info.Amount)/float64(info.Goal)*100` без коментаря «not for accounting».
+- [x] **examples/jar/main.go:80** — `float64(info.Amount)/float64(info.Goal)*100` без коментаря «not for accounting».
   - Виправити: коментар у прикладі.
-  - Resolution:
+  - Resolution: коментар "Display-only percentage — DO NOT use for accounting".
 
-- [ ] **examples/installment/main.go:55-67** — `TotalSum: 2499.99` як float64.
+- [x] **examples/installment/main.go:55-67** — `TotalSum: 2499.99` як float64.
   - Виправити: коли буде типована Money — використати її.
-  - Resolution:
+  - Resolution: документація про known-limitation у прикладі та CHANGELOG; до v2 чекаємо breaking-refactor.
 
-- [ ] **doc.go** — англійська, тоді як решта пакетів — українська.
+- [x] **doc.go** — англійська, тоді як решта пакетів — українська.
   - Виправити: узгодити стиль (рекомендую залишити англійською кореневий пакет, оскільки godoc.org).
-  - Resolution:
+  - Resolution: у попередніх комітах (3e5225e, 366b0a8) — godoc перекладено на англ. для всіх пакетів.
 
-- [ ] **monobanktest/responder.go:39** — `Error` шле тільки `errorDescription`.
+- [x] **monobanktest/responder.go:39** — `Error` шле тільки `errorDescription`.
   - Виправити: додати поле `errCode` (опт-аут default ""). Не ламати існуючий API.
-  - Resolution:
+  - Resolution: новий `ErrorWithCode(status, code, msg)` — старий `Error()` не торкнуто.
 
 - [ ] **personal/iter.go:35, corporate/iter.go:29** — зайвий `ctx.Err()` (дублюється нижче).
   - Виправити: видалити.
-  - Resolution:
+  - Resolution: залишено навмисно — cheap pre-flight check, що економить HTTP setup коли ctx уже скасований.
 
 - [ ] **acquiring/types.go:120,135** — `Tax []int`.
   - Виправити: типізована обгортка `TaxRate int` із константами.
-  - Resolution:
+  - Resolution: відкладено — потрібен довідник валідних значень від Mono support; breaking-change без значного value-add.
 
-- [ ] **jar/jar.go:200** — magic `"random"`.
+- [x] **jar/jar.go:200** — magic `"random"`.
   - Виправити: `const jarRandomMode = "random"` із коментарем чому саме «random».
-  - Resolution:
+  - Resolution: `const jarShortIDMode = "random"` із коментарем про походження від bank's client-side code.
 
 ---
 
 ## NIT
 
-- [ ] **acquiring/webhook.go:42** — `string(keyB64)` зайва копія.
+- [x] **acquiring/webhook.go:42** — `string(keyB64)` зайва копія.
   - Виправити: `base64.StdEncoding.Decode(dst, keyB64)`.
-  - Resolution:
+  - Resolution: pre-sized buffer + `Decode(dst, keyB64)` напряму, без `string()` копії.
 
 - [ ] **business/payment.go:65, payslips.go:64**, тощо — `url.Values{}` коли є рівно один параметр.
   - Виправити: `url.QueryEscape` напряму (мікрооптимізація, мала користь).
-  - Resolution:
+  - Resolution: skipped — мікрооптимізація без значного value-add; `url.Values{}` лишається для читабельності.
 
 - [ ] **acquiring/subscription.go:55** — godoc-приклади інтервалу можуть бути неточні.
   - Виправити: звірити з docs.monobank.ua/acquiring; зафіксувати приклад.
-  - Resolution:
+  - Resolution: deferred — потрібна звірка з актуальною docs.monobank.ua versionу; не блокує реліз.
 
 - [ ] **acquiring/types.go:111-114, 138-148** — `SubscriptionStatusResponse.WalletData` не вказівник; `SubscriptionListItem` без WalletData.
   - Виправити: уніфікувати — `*WalletData` всюди.
-  - Resolution:
+  - Resolution: у поточному стані файлу `WalletData *WalletData` (вже pointer); рядки 111-114, 138-148 з BUGFIX посилаються на старий layout.
 
 - [ ] **business/api.go:34** — `Operation(id, externalReference)` — обидва string, компілятор не страхує.
   - Виправити: типізовані алиаси `type OperationID string`, `type ExternalRef string`.
-  - Resolution:
+  - Resolution: відкладено — потенційно breaking; до v2.
 
 - [ ] **client.go ResolveReference** — якщо `req.URL` уже абсолютний — пройде у запит.
   - Виправити: явно вимагати path-only у docstring `Do`; опційно — error при абсолютному.
-  - Resolution:
+  - Resolution: deferred — потрібен реальний reproducer SSRF; задокументовано в `Do` godoc, що очікується path-only.
 
-- [ ] **monobanktest/server.go:38** — `sync.Mutex` замість `sync.RWMutex`.
+- [x] **monobanktest/server.go:38** — `sync.Mutex` замість `sync.RWMutex`.
   - Виправити: тільки якщо тести стануть гарячими — наразі overkill.
-  - Resolution:
+  - Resolution: per BUGFIX hint — naразі overkill; skip.
 
-- [ ] **currency/currency.go:48-53** — `init()` для побудови оберненої мапи.
+- [x] **currency/currency.go:48-53** — `init()` для побудови оберненої мапи.
   - Виправити: `sync.OnceValue` (Go 1.21+) — не критично.
-  - Resolution:
+  - Resolution: per BUGFIX hint — не критично; skip.
 
-- [ ] **examples/personal/main.go:65** — не критично, але `len(info.Accounts) > 0` перевіряється вище — OK.
+- [x] **examples/personal/main.go:65** — не критично, але `len(info.Accounts) > 0` перевіряється вище — OK.
   - Resolution: not actionable.
 
-- [ ] **bank/serverkey.go:69-73** — годний коментар про MITM ✅.
+- [x] **bank/serverkey.go:69-73** — годний коментар про MITM ✅.
   - Resolution: не потребує дій.
 
 ---
-
 ## Інструкції для агента
 
 1. Виправляй пункти **знизу вгору серйозності НЕ варто** — починай з CRITICAL.

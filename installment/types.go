@@ -1,5 +1,7 @@
 package installment
 
+import "log/slog"
+
 // OrderState is the overall state of an order (the state field in
 // the callback and in [OrderStateInfo]).
 type OrderState string
@@ -187,6 +189,37 @@ type ClientInfo struct {
 	LastName   string `json:"last_name,omitempty"`
 	MiddleName string `json:"middle_name,omitempty"`
 	INN        string `json:"inn,omitempty"`
+}
+
+// LogValue redacts the personal data on a ClientInfo so a
+// Debug-level slog.Info call does not leak full name / INN into
+// the log aggregator. The first letter of each name is kept as a
+// visual anchor; the INN keeps only its last 4 digits.
+func (c ClientInfo) LogValue() slog.Value {
+	return slog.GroupValue(
+		slog.String("first_name", maskNameInitial(c.FirstName)),
+		slog.String("last_name", maskNameInitial(c.LastName)),
+		slog.String("middle_name", maskNameInitial(c.MiddleName)),
+		slog.String("inn", maskINN(c.INN)),
+	)
+}
+
+func maskNameInitial(s string) string {
+	if s == "" {
+		return ""
+	}
+	r := []rune(s)
+	if len(r) == 1 {
+		return "*"
+	}
+	return string(r[0]) + "***"
+}
+
+func maskINN(inn string) string {
+	if len(inn) <= 4 {
+		return "***"
+	}
+	return "***" + inn[len(inn)-4:]
 }
 
 // ValidateClientSimpleResponse is the response of

@@ -7,7 +7,14 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"time"
 )
+
+// SignatureRequestTTL is how long a monoKEP request stays valid on
+// Mono's side. After this window every unsigned document moves to
+// [DocExpired] and the deeplink stops working. Used in godoc and
+// available to callers who poll status.
+const SignatureRequestTTL = 72 * time.Hour
 
 // DocumentStatus is the state of a single document in a monoKEP
 // request.
@@ -23,7 +30,7 @@ const (
 	// DocCanceled — the request was canceled (by the client or via
 	// [Client.SignatureCancel]).
 	DocCanceled DocumentStatus = "canceled"
-	// DocExpired — the request has expired (3 days).
+	// DocExpired — the request has expired ([SignatureRequestTTL]).
 	DocExpired DocumentStatus = "expired"
 )
 

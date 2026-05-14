@@ -248,6 +248,12 @@ func (c *Client) ByLongID(ctx context.Context, longJarID string) (*Info, error) 
 	return &out, nil
 }
 
+// jarShortIDMode is the value of the "Pc" field expected by
+// send.monobank.ua/api/handler. Mono treats it as a request-flow
+// marker; "random" comes from the bank's own client-side code and
+// is the only value confirmed to work in production.
+const jarShortIDMode = "random"
+
 // shortIDRequest is the body of POST to send.monobank.ua/api/handler.
 type shortIDRequest struct {
 	C        string `json:"c"`
@@ -266,7 +272,7 @@ func (c *Client) ByShortID(ctx context.Context, clientID string) (*SendInfo, err
 	if clientID == "" {
 		return nil, ErrEmptyClientID
 	}
-	body, err := json.Marshal(shortIDRequest{C: "hello", ClientID: clientID, Pc: "random"})
+	body, err := json.Marshal(shortIDRequest{C: "hello", ClientID: clientID, Pc: jarShortIDMode})
 	if err != nil {
 		return nil, fmt.Errorf("jar: marshal: %w", err)
 	}

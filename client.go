@@ -161,8 +161,12 @@ type Client struct {
 	allowInsecureBaseURL bool
 
 	// optErr holds the error produced while applying an Option (for
-	// example, insecure base URL). It is returned from the first Do
-	// so the error does not get lost between constructor and call.
+	// example, insecure base URL or a parse failure in SetBaseURL).
+	// It is STICKY — every subsequent [Client.Do] returns the same
+	// error. Construction-time misconfiguration is treated as fatal
+	// for the lifetime of the client. If a test needs to recover
+	// from a deliberately-broken option, build a fresh client via
+	// [New] rather than mutating in place.
 	optErr error
 
 	logger *slog.Logger
@@ -247,7 +251,12 @@ func (c *Client) SetBaseURL(uri string) {
 // Without Close, the sweeper goroutine of [KeyedLimiter] stays alive
 // until the process exits (a leak in tests, but normal in long-running
 // services with a single global client).
-func (c Client) Close() error {
+//
+// Pointer receiver for consistency with [Client.SetBaseURL] /
+// ChainRequestHook / ChainResponseHook. Existing callers using a
+// value receiver via sub-package wrappers still work — Go addresses
+// values automatically when needed.
+func (c *Client) Close() error {
 	if closer, ok := c.limiter.(interface{ Stop() }); ok {
 		closer.Stop()
 	}

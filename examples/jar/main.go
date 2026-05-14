@@ -80,6 +80,10 @@ func main() {
 	fmt.Printf("  amount:    %d (minor units of ccy %d)\n", info.Amount, info.Currency)
 	fmt.Printf("  goal:      %d\n", info.Goal)
 	if info.Goal > 0 {
+		// Display-only percentage — DO NOT use this float for
+		// accounting or threshold checks. For accounting-grade
+		// progress (e.g. "is the jar exactly 50% full") work with
+		// integer minor units directly.
 		fmt.Printf("  progress:  %.1f%%\n", float64(info.Amount)/float64(info.Goal)*100)
 	}
 }

@@ -64,6 +64,11 @@ func main() {
 	}
 
 	// 2. Створюємо заявку.
+	//
+	// TotalSum/Sum are float64 in the current installment package —
+	// see the known limitation in CHANGELOG; a typed Money wrapper
+	// is planned for v2. For now, keep sums to 2 decimal places so
+	// JSON-marshalled values match what Mono's sandbox expects.
 	order, err := cli.CreateOrder(ctx, &installment.CreateOrderRequest{
 		StoreOrderID: storeOrderID,
 		ClientPhone:  phone,

@@ -37,8 +37,12 @@ func main() {
 	}
 	fmt.Println("# Accounts")
 	for _, a := range accs {
-		fmt.Printf("  %s · balance %.2f %s\n",
-			a.IBAN, a.Balance, currency.Code(a.Currency))
+		// BalanceMoney() rounds to the correct minor unit per
+		// currency (1 for JPY, 100 for UAH/USD/EUR, 1000 for BHD/JOD)
+		// — safer than %.2f, which silently truncates for JPY and
+		// underflows for 3-decimal currencies.
+		_ = currency.Code(a.Currency) // keep currency import in case of future use
+		fmt.Printf("  %s · balance %s\n", a.IBAN, a.BalanceMoney().String())
 	}
 
 	if len(accs) == 0 {

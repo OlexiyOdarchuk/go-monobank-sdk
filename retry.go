@@ -151,25 +151,40 @@ func (e *transientStatus) Error() string {
 
 func (e *transientStatus) Unwrap() error { return e.cause }
 
+// maxRetryAfter caps a server-supplied Retry-After value. Mono
+// would never legitimately ask the client to wait days, and an
+// adversarial proxy could request hours of backoff to wedge the
+// client's connection pool. 24h is generous enough for genuine
+// outage windows without letting the header become a DoS vector.
+const maxRetryAfter = 24 * time.Hour
+
 // parseRetryAfter parses a Retry-After header value per RFC 7231 §7.1.3.
 // Returns the duration the client should wait. Special cases:
 //   - header missing or unparseable → [noRetryAfter] (-1)
 //   - explicit "0" or HTTP-date in the past → 0 (retry immediately)
-//   - any positive value → that value
+//   - any positive value → that value, clamped to [maxRetryAfter]
 //
 // Distinguishing "absent" from "0" lets the retry logic apply
 // exponential backoff only when the server gave no hint, rather than
-// when it said "retry now".
+// when it said "retry now". The 24-hour ceiling protects against a
+// malicious or misconfigured proxy returning a multi-day wait.
 func parseRetryAfter(h http.Header) time.Duration {
 	v := strings.TrimSpace(h.Get("Retry-After"))
 	if v == "" {
 		return noRetryAfter
 	}
 	if secs, err := strconv.Atoi(v); err == nil && secs >= 0 {
-		return time.Duration(secs) * time.Second
+		d := time.Duration(secs) * time.Second
+		if d > maxRetryAfter {
+			d = maxRetryAfter
+		}
+		return d
 	}
 	if t, err := http.ParseTime(v); err == nil {
 		if d := time.Until(t); d > 0 {
+			if d > maxRetryAfter {
+				d = maxRetryAfter
+			}
 			return d
 		}
 		return 0 // past date → retry immediately

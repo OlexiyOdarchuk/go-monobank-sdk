@@ -54,10 +54,14 @@ func ParsePubKey(keyB64 []byte) (*ecdsa.PublicKey, error) {
 	if len(keyB64) == 0 {
 		return nil, fmt.Errorf("%w: empty key", ErrInvalidPubKey)
 	}
-	pemBytes, err := base64.StdEncoding.DecodeString(string(keyB64))
+	// Avoid the string(keyB64) copy by decoding directly into a
+	// pre-sized buffer.
+	pemBytes := make([]byte, base64.StdEncoding.DecodedLen(len(keyB64)))
+	n, err := base64.StdEncoding.Decode(pemBytes, keyB64)
 	if err != nil {
 		return nil, fmt.Errorf("%w: base64 decode: %v", ErrInvalidPubKey, err)
 	}
+	pemBytes = pemBytes[:n]
 	block, _ := pem.Decode(pemBytes)
 	if block == nil {
 		return nil, fmt.Errorf("%w: no PEM block found", ErrInvalidPubKey)

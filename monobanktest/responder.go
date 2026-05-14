@@ -32,11 +32,34 @@ func JSON(body any) Responder {
 
 // Error returns a Responder that replies with the given status and
 // a JSON body `{"errorDescription": msg}` (Mono's error format).
+//
+// For more elaborate error fixtures use [ErrorWithCode], which also
+// sets `errCode` alongside `errorDescription` to match exactly what
+// the bank ships on 4xx responses.
 func Error(status int, msg string) Responder {
 	return ResponderFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(status)
 		_ = json.NewEncoder(w).Encode(map[string]string{"errorDescription": msg})
+	})
+}
+
+// ErrorWithCode is [Error] plus the structured errCode field that
+// some Mono endpoints (jar, certain corporate edges) ship alongside
+// errorDescription. Pass code = "" to fall back to the [Error]
+// shape. Useful when a test exercises errCode-based branching in
+// client code.
+func ErrorWithCode(status int, code, msg string) Responder {
+	if code == "" {
+		return Error(status, msg)
+	}
+	return ResponderFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(status)
+		_ = json.NewEncoder(w).Encode(map[string]string{
+			"errorDescription": msg,
+			"errCode":          code,
+		})
 	})
 }
 

@@ -204,6 +204,23 @@ func TestPayslipPDF_returnsRawBytes(t *testing.T) {
 	assert.Equal(t, pdfBytes, got)
 }
 
+// Regression: PayslipPDF passes a *[]byte to Client.Do, which must
+// route through the raw-bytes branch, NOT json.Decode. A body that
+// is not even valid JSON should come back verbatim — proving the
+// SDK does not accidentally try to parse a PDF as JSON.
+func TestPayslipPDF_doesNotJSONDecode(t *testing.T) {
+	// Body is intentionally not valid JSON.
+	raw := []byte{0x00, 0xFF, '%', 'P', 'D', 'F', 0x01, 0x02, 0x03, '}'}
+	c, _ := newTestClient(t, func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/pdf")
+		_, _ = w.Write(raw)
+	})
+
+	got, err := c.PayslipPDF(context.Background(), "x", "2026-01")
+	require.NoError(t, err, "Client.Do must take the *[]byte branch, not json.Decode")
+	assert.Equal(t, raw, got)
+}
+
 func TestSalaryRegistryTypes(t *testing.T) {
 	c, _ := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte(`[{"alias":"SALARY_ADVANCE","description":"Аванс"}]`))

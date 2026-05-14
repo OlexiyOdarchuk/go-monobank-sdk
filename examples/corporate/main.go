@@ -98,6 +98,6 @@ func main() {
 	}
 	fmt.Printf("\nClient: %s\n", info.Name)
 	for _, a := range info.Accounts {
-		fmt.Printf("  %s %s · balance %d\n", a.Type, a.IBAN, a.Balance)
+		fmt.Printf("  %s %s · balance %s\n", a.Type, a.IBAN, a.Balance.String())
 	}
 }
