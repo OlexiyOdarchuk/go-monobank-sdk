@@ -14,6 +14,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/OlexiyOdarchuk/go-monobank-sdk/business"
@@ -54,7 +55,9 @@ func main() {
 	to := time.Now()
 	items, err := cli.Statement(ctx, accs[0].IBAN, from, to, business.StatementDown, 50)
 	if err != nil {
-		log.Fatalf("Statement: %v", err)
+		safeErr := strings.ReplaceAll(err.Error(), "\n", "")
+		safeErr = strings.ReplaceAll(safeErr, "\r", "")
+		log.Fatalf("Statement: %s", safeErr)
 	}
 	fmt.Println()
 	fmt.Println("# Recent operations on", accs[0].IBAN)
