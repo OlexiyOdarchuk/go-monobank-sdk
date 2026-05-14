@@ -47,6 +47,9 @@ var ErrNilRequest = errors.New("request body is nil")
 type Client struct {
 	c         monobank.Client
 	authMaker auth.CorpAuthMakerAPI
+	// allowInsecureCallback bypasses the https check for X-Callback
+	// in [Client.Auth]. Default false.
+	allowInsecureCallback bool
 }
 
 // New returns a corporate [Client] that uses authMaker to sign every

@@ -18,6 +18,9 @@ package bank
 
 import (
 	"encoding/json"
+	"log/slog"
+	"net/url"
+	"strings"
 	"time"
 
 	"github.com/OlexiyOdarchuk/go-monobank-sdk/currency"
@@ -41,6 +44,97 @@ type ClientInfo struct {
 	WebHookURL string   `json:"webHookUrl"`
 	Accounts   Accounts `json:"accounts"`
 	Jars       Jars     `json:"jars"`
+}
+
+// LogValue implements [slog.LogValuer] so that logging a ClientInfo
+// does not splash full name, IBANs and card masks into the log. Each
+// sensitive field is replaced by a redacted summary (length / count
+// only) — enough for debugging that the SDK fetched something, not
+// enough to leak banking secrecy if the log winds up in a corporate
+// log aggregator.
+//
+// Without this, slog at Debug level would render the raw struct,
+// including every account's IBAN and every CardMask. Convert
+// manually via the named fields if you really need the cleartext
+// values in a controlled context.
+func (c ClientInfo) LogValue() slog.Value {
+	return slog.GroupValue(
+		slog.String("clientId", c.ID),
+		slog.String("name", maskName(c.Name)),
+		slog.String("webHookUrl", redactURL(c.WebHookURL)),
+		slog.Int("accounts", len(c.Accounts)),
+		slog.Int("jars", len(c.Jars)),
+	)
+}
+
+// LogValue implements [slog.LogValuer] for a single Account, hiding
+// the IBAN and card masks.
+func (a Account) LogValue() slog.Value {
+	masks := make([]string, len(a.CardMasks))
+	for i, m := range a.CardMasks {
+		masks[i] = redactCardMask(m)
+	}
+	return slog.GroupValue(
+		slog.String("id", a.AccountID),
+		slog.String("type", string(a.Type)),
+		slog.String("currency", a.Currency.String()),
+		slog.String("iban", redactIBAN(a.IBAN)),
+		slog.Any("cardMasks", masks),
+		slog.String("balance", a.Balance.String()),
+	)
+}
+
+// maskName keeps the first character and turns the rest into stars,
+// so the field length is visible without leaking the actual name.
+func maskName(name string) string {
+	if name == "" {
+		return ""
+	}
+	r := []rune(name)
+	if len(r) <= 1 {
+		return "*"
+	}
+	return string(r[0]) + strings.Repeat("*", len(r)-1)
+}
+
+// redactURL keeps the scheme and host of a webhook URL but masks the
+// path so a tenant-specific secret in the path (which Mono tolerates)
+// does not leak into logs.
+func redactURL(u string) string {
+	if u == "" {
+		return ""
+	}
+	parsed, err := url.Parse(u)
+	if err != nil || parsed == nil || parsed.Host == "" {
+		return "***"
+	}
+	if parsed.Path == "" || parsed.Path == "/" {
+		return parsed.Scheme + "://" + parsed.Host
+	}
+	return parsed.Scheme + "://" + parsed.Host + "/***"
+}
+
+// redactIBAN keeps the country code (first 2 chars) and the last 4
+// digits — the same shape banks themselves use in user-facing UIs.
+func redactIBAN(iban string) string {
+	if iban == "" {
+		return ""
+	}
+	if len(iban) <= 6 {
+		return "***"
+	}
+	return iban[:2] + "***" + iban[len(iban)-4:]
+}
+
+// redactCardMask keeps the last 4 digits of a card mask. Mono's mask
+// already replaces the middle digits, but the BIN (first 6) plus the
+// last 4 still uniquely identify the issuer + a specific card to
+// anyone with a small BIN table.
+func redactCardMask(m string) string {
+	if len(m) <= 4 {
+		return "****"
+	}
+	return "****" + m[len(m)-4:]
 }
 
 // Account is a single client bank account. Balance and CreditLimit

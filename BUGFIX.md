@@ -89,29 +89,29 @@
   - Виправити: окремий ліміт для JSON (1 MiB) і PDF (50 MiB); вибирати за endpoint-ом.
   - Resolution: нові константи `MaxJSONResponseBytes = 1 MiB`, `MaxPDFResponseBytes = 50 MiB`; `doJSON` обмежений JSON-cap-ом, `doPDF` — PDF-cap-ом. `MaxResponseBytes` залишений як deprecated alias на 50 MiB.
 
-- [ ] **corporate/auth.go:33** — `X-Callback` ставиться сирим, без валідації scheme.
+- [x] **corporate/auth.go:33** — `X-Callback` ставиться сирим, без валідації scheme.
   - Виправити: парсити `url.Parse`, відхиляти не-https (з опт-аутом, як у `WithInsecureBaseURL`).
-  - Resolution:
+  - Resolution: `validateCallbackURL()` — пуст / unparseable → `ErrInvalidCallback`; non-https non-loopback → `ErrInsecureCallback`; loopback (`localhost`, IsLoopback IP) і https — OK. Opt-out — `Client.AllowInsecureCallback(true)`. Regression: 4 тести (`TestAuth_rejectsInsecureCallback`, `_loopbackHTTPCallbackAllowed`, `_insecureCallbackOptOut`, `_invalidCallback`).
 
-- [ ] **auth/corporate.go:191** — `timestamp = time.Now().Unix()` без захисту від clock-skew.
+- [x] **auth/corporate.go:191** — `timestamp = time.Now().Unix()` без захисту від clock-skew.
   - Виправити: задокументувати у godoc; опційно — порівняти з останнім `Date` response-заголовком і warn-логнути drift > N сек.
-  - Resolution:
+  - Resolution: godoc-блок «Clock skew» у `Corp.SetAuth`: NTP-вимога + рекомендація алертити drift > 30s.
 
-- [ ] **auth/corporate.go:218** — deprecated `ecdsa.Sign` + ручний ASN.1 marshal.
+- [x] **auth/corporate.go:218** — deprecated `ecdsa.Sign` + ручний ASN.1 marshal.
   - Виправити: перейти на `ecdsa.SignASN1` (один виклик повертає DER).
-  - Resolution:
+  - Resolution: `signString` тепер `ecdsa.SignASN1(rand.Reader, priv, hash)` — DER з коробки, прибрано `math/big` + `asn1.Marshal` із hot path.
 
-- [ ] **auth/personal.go:20** — `Personal.SetAuth` ставить X-Token навіть якщо `token == ""`.
+- [x] **auth/personal.go:20** — `Personal.SetAuth` ставить X-Token навіть якщо `token == ""`.
   - Виправити: повернути error при порожньому токені у `NewPersonal` АБО у `SetAuth`.
-  - Resolution:
+  - Resolution: `Personal.SetAuth` тепер повертає `ErrEmptyToken` коли `token == ""` (не ламає `NewPersonal` signature; failure fail-fast на першому Do).
 
-- [ ] **personal/client.go:55-64, corporate/client_data.go:19-29** — `ClientInfo` повертає ПІБ/IBAN/маски карток; SDK логує url-шлях з accountID на Debug.
+- [x] **personal/client.go:55-64, corporate/client_data.go:19-29** — `ClientInfo` повертає ПІБ/IBAN/маски карток; SDK логує url-шлях з accountID на Debug.
   - Виправити: реалізувати `slog.LogValuer` на `bank.ClientInfo`, маскуючи IBAN/маски/ПІБ у логах.
-  - Resolution:
+  - Resolution: `bank.ClientInfo.LogValue()` — маскує `Name` (перша літера + ****), redact-ить `WebHookURL` (тільки scheme+host), `Accounts`/`Jars` — count-and. `bank.Account.LogValue()` — maskує IBAN (country + last4) + cardMasks (last4). Helper-функції `maskName`, `redactURL`, `redactIBAN`, `redactCardMask` приватні до пакета.
 
-- [ ] **client.go:397** — `json.NewDecoder(resp.Body).Decode(v)` не вичерпує тіло → connection re-use страждає.
+- [x] **client.go:397** — `json.NewDecoder(resp.Body).Decode(v)` не вичерпує тіло → connection re-use страждає.
   - Виправити: після Decode додати `io.Copy(io.Discard, resp.Body)`.
-  - Resolution:
+  - Resolution: `io.Copy(io.Discard, resp.Body)` додано після `Decode` у JSON-гілці `Do`. Інші гілки (nil, *[]byte, io.Writer) вже вичерпують body коректно.
 
 ---
 

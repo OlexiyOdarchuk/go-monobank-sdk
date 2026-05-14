@@ -405,6 +405,12 @@ func (c Client) attempt(req *http.Request, v any, expectedStatusCodes []int) err
 		if err := json.NewDecoder(resp.Body).Decode(v); err != nil {
 			return fmt.Errorf("decode response: %w", err)
 		}
+		// json.Decoder.Decode stops at the end of the first JSON
+		// value but may leave trailing bytes (whitespace, an extra
+		// newline, a sneaky proxy footer). Drain them so net/http
+		// can return the underlying TCP connection to the pool
+		// instead of closing it — measurable win on hot endpoints.
+		_, _ = io.Copy(io.Discard, resp.Body)
 		return nil
 	}
 }

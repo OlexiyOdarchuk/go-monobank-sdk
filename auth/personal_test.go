@@ -27,6 +27,18 @@ func TestPersonal_nilRequestIsNoOp(t *testing.T) {
 	assert.NoError(t, a.SetAuth(nil))
 }
 
+// Regression: an empty token must surface as ErrEmptyToken on the
+// first request — otherwise the SDK silently sends X-Token: "" and
+// Mono returns a generic 403 that hides the real cause.
+func TestPersonal_emptyTokenRejected(t *testing.T) {
+	a := NewPersonal("")
+	r, err := http.NewRequest(http.MethodGet, "/personal/client-info", http.NoBody)
+	require.NoError(t, err)
+	assert.ErrorIs(t, a.SetAuth(r), ErrEmptyToken)
+	assert.Empty(t, r.Header.Get("X-Token"),
+		"empty X-Token must not be written on rejection")
+}
+
 func TestPublic_isNoOp(t *testing.T) {
 	r, _ := http.NewRequest(http.MethodGet, "/bank/currency", http.NoBody)
 

@@ -74,3 +74,50 @@ func TestAuth_setsXCallback(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "https://yourapp/cb", seen)
 }
+
+// Regression: Auth must reject an http:// callback on a non-loopback
+// host before signing any request, because Mono will POST a usable
+// requestID into it.
+func TestAuth_rejectsInsecureCallback(t *testing.T) {
+	c := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		t.Fatal("Auth must not reach the server with a bad callback")
+	})
+	_, err := c.Auth(context.Background(), "http://yourapp/cb")
+	assert.ErrorIs(t, err, ErrInsecureCallback)
+}
+
+// Loopback http:// callbacks are accepted (httptest, local dev).
+func TestAuth_loopbackHTTPCallbackAllowed(t *testing.T) {
+	c := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`{"tokenRequestId":"r","acceptUrl":"u"}`))
+	})
+	for _, cb := range []string{
+		"http://localhost:8080/cb",
+		"http://127.0.0.1:9000/cb",
+		"http://[::1]:8080/cb",
+	} {
+		_, err := c.Auth(context.Background(), cb)
+		assert.NoError(t, err, cb)
+	}
+}
+
+// AllowInsecureCallback opt-out lets http://non-loopback through.
+func TestAuth_insecureCallbackOptOut(t *testing.T) {
+	c := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`{"tokenRequestId":"r","acceptUrl":"u"}`))
+	})
+	c.AllowInsecureCallback(true)
+	_, err := c.Auth(context.Background(), "http://staging.internal/cb")
+	assert.NoError(t, err)
+}
+
+// Empty / unparseable callbacks are rejected before signing.
+func TestAuth_invalidCallback(t *testing.T) {
+	c := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		t.Fatal("Auth must not reach the server with invalid callback")
+	})
+	for _, bad := range []string{"", "not-a-url", "no-scheme/foo"} {
+		_, err := c.Auth(context.Background(), bad)
+		assert.ErrorIs(t, err, ErrInvalidCallback, bad)
+	}
+}

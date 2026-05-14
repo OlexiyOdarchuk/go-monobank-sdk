@@ -173,6 +173,11 @@ type Corp struct {
 // on how this Corp was constructed. A nil request is a no-op; a
 // request without a URL returns an error (the signature requires the
 // path).
+//
+// Clock skew: X-Time is time.Now().Unix() on the caller's host. Mono
+// accepts requests within a small window (a few minutes); if your
+// server clock drifts past that, every request fails with HTTP 403.
+// Run NTP (chrony / systemd-timesyncd) and alert on drift > 30s.
 func (a Corp) SetAuth(r *http.Request) error {
 	if r == nil {
 		return nil
@@ -215,18 +220,15 @@ func (a Corp) sign(timestamp, actor, urlPath string) (string, error) {
 func (a Corp) signString(str string) (string, error) {
 	hash := sha256.Sum256([]byte(str))
 
-	r, s, err := ecdsa.Sign(rand.Reader, a.maker.privateKey, hash[:])
+	// ecdsa.SignASN1 produces DER-encoded (r,s) directly, replacing
+	// the manual ecdsa.Sign + asn1.Marshal pair and dropping the
+	// math/big dependency on the hot path.
+	der, err := ecdsa.SignASN1(rand.Reader, a.maker.privateKey, hash[:])
 	if err != nil {
 		return "", err
 	}
 
-	asn1Data := []*big.Int{r, s}
-	bb, err := asn1.Marshal(asn1Data)
-	if err != nil {
-		return "", err
-	}
-
-	return base64.StdEncoding.EncodeToString(bb), nil
+	return base64.StdEncoding.EncodeToString(der), nil
 }
 
 // serializeECDSAPubKeyUncompressed returns the uncompressed encoding
