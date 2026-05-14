@@ -10,6 +10,7 @@ import (
 	"encoding/base64"
 	"encoding/pem"
 	"testing"
+	"time"
 
 	"github.com/OlexiyOdarchuk/go-monobank-sdk/acquiring"
 	"github.com/stretchr/testify/assert"
@@ -167,4 +168,60 @@ func TestParseWebhook(t *testing.T) {
 func TestParseWebhook_malformed(t *testing.T) {
 	_, err := acquiring.ParseWebhook([]byte(`{not json}`))
 	require.Error(t, err)
+}
+
+// VerifyWebhookFresh: signature must be checked FIRST (so this
+// helper can never be used as a partial-trust oracle), then
+// modifiedDate freshness is enforced.
+func TestVerifyWebhookFresh(t *testing.T) {
+	priv, _ := genKey(t)
+	now := time.Now().UTC()
+
+	makeBody := func(modified time.Time) []byte {
+		return []byte(`{"invoiceId":"i-1","status":"success","amount":1000,"ccy":980,"modifiedDate":"` +
+			modified.Format(time.RFC3339) + `"}`)
+	}
+
+	t.Run("fresh body passes", func(t *testing.T) {
+		body := makeBody(now.Add(-30 * time.Second))
+		sig := signBody(t, priv, body)
+		require.NoError(t, acquiring.VerifyWebhookFresh(&priv.PublicKey, body, sig, 5*time.Minute))
+	})
+
+	t.Run("stale body rejected", func(t *testing.T) {
+		body := makeBody(now.Add(-1 * time.Hour))
+		sig := signBody(t, priv, body)
+		err := acquiring.VerifyWebhookFresh(&priv.PublicKey, body, sig, 5*time.Minute)
+		assert.ErrorIs(t, err, acquiring.ErrWebhookStale)
+	})
+
+	t.Run("missing modifiedDate rejected", func(t *testing.T) {
+		body := []byte(`{"invoiceId":"i-1","status":"success","amount":1000,"ccy":980}`)
+		sig := signBody(t, priv, body)
+		err := acquiring.VerifyWebhookFresh(&priv.PublicKey, body, sig, 5*time.Minute)
+		assert.ErrorIs(t, err, acquiring.ErrWebhookNoTimestamp)
+	})
+
+	t.Run("tampered body never reaches the timestamp check", func(t *testing.T) {
+		body := makeBody(now.Add(-30 * time.Second))
+		sig := signBody(t, priv, body)
+		tampered := append(body[:len(body)-1], `,"x":1}`...)
+		err := acquiring.VerifyWebhookFresh(&priv.PublicKey, tampered, sig, 5*time.Minute)
+		assert.ErrorIs(t, err, acquiring.ErrBadSignature,
+			"signature failure must surface even when the body parses cleanly")
+	})
+
+	t.Run("RFC3339 with millis is accepted", func(t *testing.T) {
+		body := []byte(`{"invoiceId":"i-1","modifiedDate":"` +
+			now.Add(-10*time.Second).Format("2006-01-02T15:04:05.000Z") + `"}`)
+		sig := signBody(t, priv, body)
+		require.NoError(t, acquiring.VerifyWebhookFresh(&priv.PublicKey, body, sig, time.Minute))
+	})
+
+	t.Run("maxAge=0 disables freshness check", func(t *testing.T) {
+		body := makeBody(now.Add(-30 * 24 * time.Hour))
+		sig := signBody(t, priv, body)
+		require.NoError(t, acquiring.VerifyWebhookFresh(&priv.PublicKey, body, sig, 0),
+			"maxAge=0 must skip the staleness check (signature-only mode)")
+	})
 }

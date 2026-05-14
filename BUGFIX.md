@@ -61,9 +61,9 @@
   - Виправити: повернути `(*Client, error)`; помилка при порожніх обов'язкових параметрах.
   - Resolution: BREAKING — `installment.New` тепер `(*Client, error)`; sentinel `ErrEmptyStoreID`, `ErrEmptySecret`; також відхиляє `http://` для non-loopback (`ErrInsecureBaseURL`) з opt-out через `WithInsecureBaseURL`. Regression: `TestNew_rejectsEmptyCredentials`, `TestNew_rejectsInsecureBaseURL`, `TestNew_allowsLoopbackHTTP`, `TestNew_insecureOptOut`.
 
-- [ ] **acquiring/webhook.go:89-102** — `VerifyWebhook` не має replay-захисту.
+- [x] **acquiring/webhook.go:89-102** — `VerifyWebhook` не має replay-захисту.
   - Виправити: явно задокументувати, що caller ОБОВ'ЯЗКОВО має робити persistent dedup за `(invoiceId, modifiedDate)`. Додати опціональний helper `VerifyWebhookFresh(pub, body, xSign, maxAge time.Duration)`, який парсить `modifiedDate` із payload і відкидає старіші за `maxAge`.
-  - Resolution:
+  - Resolution: docstring `VerifyWebhook` поповнено IMPORTANT-блоком про persistent dedup. Новий хелпер `VerifyWebhookFresh(pub, body, xSign, maxAge)` що (1) перевіряє підпис, (2) парсить `modifiedDate` (RFC3339Nano/RFC3339/millis-Z/тощо), (3) відкидає старіші за `maxAge`. Sentinel-помилки `ErrWebhookStale`, `ErrWebhookNoTimestamp`. Regression-тести `TestVerifyWebhookFresh` (6 sub-cases).
 
 - [x] **examples/installment/main.go:33-34** — hardcoded дефолтні sandbox-credentials (`test_store_with_confirm`, `secret_98765432...`).
   - Виправити: прибрати fallback; якщо env пустий — `log.Fatal` з інструкцією, як отримати ключі.
