@@ -329,9 +329,11 @@ func (c *Client) SubscriptionPayments(ctx context.Context, opts SubscriptionPaym
 	}
 	q := url.Values{}
 	q.Set("subscriptionId", opts.SubscriptionID)
-	q.Set("dateFrom", opts.DateFrom.Format(time.RFC3339))
+	// Same UTC normalisation as SubscriptionList — Mono rejects local
+	// TZ offsets on some date filters.
+	q.Set("dateFrom", opts.DateFrom.UTC().Format(time.RFC3339))
 	if !opts.DateTo.IsZero() {
-		q.Set("dateTo", opts.DateTo.Format(time.RFC3339))
+		q.Set("dateTo", opts.DateTo.UTC().Format(time.RFC3339))
 	}
 	if opts.Limit > 0 {
 		q.Set("limit", strconv.Itoa(opts.Limit))

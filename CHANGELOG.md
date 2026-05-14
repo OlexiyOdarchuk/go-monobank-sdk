@@ -7,7 +7,9 @@
 
 ## [Unreleased]
 
-Підготовка до v1.3.0 — повний прохід багфіксів за результатами code review, фокус на correctness/security/data-loss. Багато breaking changes у тому, як обробляються помилки конфігурації (раніше `panic` чи silent default, тепер `(*T, error)`).
+## [1.3.0] — 2026-05-14
+
+Повний прохід багфіксів за результатами code review, фокус на correctness/security/data-loss. Багато breaking changes у тому, як обробляються помилки конфігурації (раніше `panic` чи silent default, тепер `(*T, error)`).
 
 ### Added
 
@@ -68,7 +70,7 @@
 - **MEDIUM monobanktest** — `HandlePrefix` longest-match-wins; idempotent `Close()` через `sync.Once`; in-flight requests після Close ігноруються (race-free cleanup).
 - **MEDIUM otelmonobank** — span store не тече при `resp == nil` або retry; `http.status_code` тепер `attribute.Int`; `http.url` redacts query; hooks chain.
 - **MEDIUM jar/jar.go** — `SendInfo.UnmarshalJSON` через single decode pass; error detection вимагає `errCode`+`errText` обидва (раніше match на будь-який JSON з `errCode`).
-- **MEDIUM acquiring** — `subscription` date params normalised to UTC; `TokenAuth` sets `Accept`; `WalletPaymentRequest.InitiationKind` `omitempty`.
+- **MEDIUM acquiring** — `SubscriptionList` і `SubscriptionPayments` date params normalised to UTC; `TokenAuth` sets `Accept`; `WalletPaymentRequest.InitiationKind` `omitempty`.
 
 ### Removed
 
@@ -506,7 +508,8 @@ defer klim.Stop()
 - `monobanktest` — мок-сервер на `httptest.Server` із fluent-builder-ами.
 - Пагінатори через `iter.Seq2` (Go 1.23+).
 
-[Unreleased]: https://github.com/OlexiyOdarchuk/go-monobank-sdk/compare/v1.2.0...HEAD
+[Unreleased]: https://github.com/OlexiyOdarchuk/go-monobank-sdk/compare/v1.3.0...HEAD
+[1.3.0]: https://github.com/OlexiyOdarchuk/go-monobank-sdk/compare/v1.2.0...v1.3.0
 [1.2.0]: https://github.com/OlexiyOdarchuk/go-monobank-sdk/compare/v1.1.3...v1.2.0
 [1.1.3]: https://github.com/OlexiyOdarchuk/go-monobank-sdk/compare/v1.1.2...v1.1.3
 [1.1.2]: https://github.com/OlexiyOdarchuk/go-monobank-sdk/compare/v1.1.1...v1.1.2
