@@ -49,6 +49,38 @@ func TestVerifyCallback(t *testing.T) {
 	require.Error(t, c.VerifyCallback(body, "tampered"))
 }
 
+// Регресія H5: VerifyCallback з підписом некоректної довжини мусить
+// бути відхиленим БЕЗ обчислення HMAC. До фіксу великий body + короткий/
+// порожній signature змушував сервер витратити CPU на HMAC-SHA256 від N
+// байтів, перш ніж відмовити. Тут перевіряємо лише результат (sentinel),
+// бо хронометраж — крихкий у CI; саме виявлення короткого підпису
+// раніше за HMAC задокументовано в коді.
+func TestVerifyCallback_lengthFastPath(t *testing.T) {
+	c := installment.New(testStoreID, testSecret)
+	body := []byte(`{"order_id":"o","state":"IN_PROCESS"}`)
+
+	cases := map[string]string{
+		"empty":           "",
+		"short":           "AAAA",
+		"43-chars":        "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",   // 43, want 44
+		"45-chars":        "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA", // 45
+		"correct-len-bad": expectedSign(t, []byte("different body")),       // 44 chars, wrong MAC
+	}
+	for name, sig := range cases {
+		t.Run(name, func(t *testing.T) {
+			err := c.VerifyCallback(body, sig)
+			assert.ErrorIs(t, err, installment.ErrCallbackSignatureMismatch)
+		})
+	}
+}
+
+func TestVerifyCallback_sentinelComparable(t *testing.T) {
+	c := installment.New(testStoreID, testSecret)
+	err := c.VerifyCallback([]byte(`{}`), "")
+	assert.ErrorIs(t, err, installment.ErrCallbackSignatureMismatch,
+		"errors.Is must work against the package sentinel")
+}
+
 func TestCreateOrder_success(t *testing.T) {
 	var capturedBody []byte
 	var capturedSig string

@@ -386,6 +386,115 @@ func TestHandler_failureLetsMonoRetryWithDedup(t *testing.T) {
 	assert.Equal(t, int32(2), attempts.Load(), "duplicates must not run OnEvent")
 }
 
+// Регресія H1: тіло, що перевищує MaxBodyBytes, має повернути 413,
+// причому ДО спроби верифікувати підпис (захист від memory-DoS).
+func TestHandler_bodyTooLarge_returns413(t *testing.T) {
+	var verified atomic.Bool
+	h, _ := newTestHandler(t, Options{
+		MaxBodyBytes: 1024,
+		OnEvent: func(context.Context, *Response) error {
+			verified.Store(true)
+			return nil
+		},
+	})
+
+	huge := strings.Repeat("x", 4096) // 4 KiB > 1 KiB limit
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, signedPOST(huge, testWebhookSign, testServerKeyID))
+
+	assert.Equal(t, http.StatusRequestEntityTooLarge, w.Code)
+	assert.False(t, verified.Load(), "OnEvent must not run when body is rejected")
+}
+
+func TestHandler_bodyAtLimit_passes(t *testing.T) {
+	// Default limit is 1 MiB; the canonical test payload is ~600 bytes.
+	h, _ := newTestHandler(t, Options{
+		OnEvent: func(context.Context, *Response) error { return nil },
+	})
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, signedPOST(testWebhookBody, testWebhookSign, testServerKeyID))
+	assert.Equal(t, http.StatusOK, w.Code)
+}
+
+// Регресія H3: N конкурентних webhook-ів із одним і тим самим невідомим
+// X-Key-Id мають викликати ServerKey() ОДИН РАЗ (singleflight), а не N.
+// Без цього атакуючий, що шле випадкові X-Key-Id, амплифікує DoS на
+// /bank/sync 1:1.
+func TestHandler_refreshSingleflight(t *testing.T) {
+	pub := testServerPubKey(t)
+	prov := &fakeKeyProvider{key: &bank.ServerKey{ID: "stale", PubKey: pub}}
+	h, err := NewHandler(context.Background(), Options{
+		Keys:    prov,
+		OnEvent: func(context.Context, *Response) error { return nil },
+	})
+	require.NoError(t, err)
+	require.Equal(t, int32(1), prov.calls.Load())
+
+	prov.key = &bank.ServerKey{ID: testServerKeyID, PubKey: pub}
+
+	const workers = 50
+	var wg sync.WaitGroup
+	for i := 0; i < workers; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			w := httptest.NewRecorder()
+			h.ServeHTTP(w, signedPOST(testWebhookBody, testWebhookSign, testServerKeyID))
+		}()
+	}
+	wg.Wait()
+
+	// 1 initial + 1 coalesced refresh = 2 max. Without singleflight
+	// this would be 1 + N ≈ 51.
+	total := prov.calls.Load()
+	assert.LessOrEqual(t, total, int32(2),
+		"expected ≤2 ServerKey calls (initial + 1 coalesced refresh), got %d", total)
+}
+
+// Регресія H3: повторні запити з невідомим X-Key-Id у короткому вікні
+// мають дросселюватися (minRefreshInterval).
+func TestHandler_refreshThrottled(t *testing.T) {
+	pub := testServerPubKey(t)
+	prov := &fakeKeyProvider{key: &bank.ServerKey{ID: "stale", PubKey: pub}}
+	h, err := NewHandler(context.Background(), Options{
+		Keys:    prov,
+		OnEvent: func(context.Context, *Response) error { return nil },
+	})
+	require.NoError(t, err)
+	// initial = 1
+	prov.key = &bank.ServerKey{ID: testServerKeyID, PubKey: pub}
+
+	// First mismatch — triggers refresh.
+	w1 := httptest.NewRecorder()
+	h.ServeHTTP(w1, signedPOST(testWebhookBody, testWebhookSign, "another-bogus-id"))
+	assert.GreaterOrEqual(t, prov.calls.Load(), int32(2))
+
+	callsAfterFirst := prov.calls.Load()
+
+	// Immediate second mismatch with a different bogus id — must be
+	// throttled (lastRefreshAt < minRefreshInterval).
+	w2 := httptest.NewRecorder()
+	h.ServeHTTP(w2, signedPOST(testWebhookBody, testWebhookSign, "yet-another-id"))
+	assert.Equal(t, callsAfterFirst, prov.calls.Load(),
+		"second mismatch within %s must be throttled", minRefreshInterval)
+}
+
+// Регресія: Handler{} без NewHandler (nil-key) не повинен NPE-ити; має
+// повернути 503.
+func TestHandler_nilKey_returns503(t *testing.T) {
+	h := &Handler{
+		opts: Options{
+			Keys:    &fakeKeyProvider{},
+			OnEvent: func(context.Context, *Response) error { return nil },
+			OnError: func(error) {},
+		},
+		maxBodyBytes: DefaultMaxBodyBytes,
+	}
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, signedPOST(testWebhookBody, testWebhookSign, testServerKeyID))
+	assert.Equal(t, http.StatusServiceUnavailable, w.Code)
+}
+
 func TestHandler_endToEnd_overHTTP(t *testing.T) {
 	var got *Response
 	h, _ := newTestHandler(t, Options{

@@ -2,6 +2,7 @@ package monobank
 
 import (
 	"context"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -193,6 +194,122 @@ func TestClient_Do_postWithIdempotencyKeyRetried(t *testing.T) {
 	req.Header.Set("Idempotency-Key", "k1")
 	require.NoError(t, c.Do(req, nil))
 	assert.Equal(t, int32(2), hits.Load())
+}
+
+// Регресія M9: 204 No Content із non-nil v — не повинно бути EOF-помилки.
+func TestClient_Do_204NoContent(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer srv.Close()
+
+	c := New(WithBaseURL(srv.URL), WithHTTPClient(srv.Client()))
+	req, _ := http.NewRequest(http.MethodDelete, "/x", http.NoBody)
+
+	var out testPayload
+	err := c.Do(req, &out, http.StatusNoContent)
+	assert.NoError(t, err, "204 must not cause decode EOF")
+	assert.Equal(t, "", out.Message, "out unchanged when body is empty")
+}
+
+// Регресія M9: Content-Length: 0 з очікуваним 200 (нестандартно, але
+// можливо) — також не EOF.
+func TestClient_Do_emptyBody200(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Length", "0")
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+
+	c := New(WithBaseURL(srv.URL), WithHTTPClient(srv.Client()))
+	req, _ := http.NewRequest(http.MethodGet, "/x", http.NoBody)
+	var out testPayload
+	assert.NoError(t, c.Do(req, &out))
+}
+
+// Регресія L7: APIError.Is має зробити errors.Is(err, ErrUnauthorized)
+// тощо валідним для відповідних HTTP-статусів.
+func TestAPIError_IsSentinels(t *testing.T) {
+	cases := map[int]error{
+		http.StatusUnauthorized:    ErrUnauthorized,
+		http.StatusForbidden:       ErrForbidden,
+		http.StatusNotFound:        ErrNotFound,
+		http.StatusTooManyRequests: ErrTooManyRequests,
+	}
+	for code, sentinel := range cases {
+		t.Run(http.StatusText(code), func(t *testing.T) {
+			apiErr := &APIError{StatusCode: code}
+			assert.True(t, apiErr.Is(sentinel),
+				"APIError(%d).Is must match its sentinel", code)
+			assert.True(t, errors.Is(apiErr, sentinel),
+				"errors.Is must chain through APIError")
+		})
+	}
+
+	// Status, який не має sentinel-у, — не матчиться.
+	apiErr := &APIError{StatusCode: http.StatusInternalServerError}
+	assert.False(t, errors.Is(apiErr, ErrUnauthorized))
+}
+
+// Регресія L7: errors.As повинен витягати APIError навіть коли
+// користувач робив errors.Is(err, ErrUnauthorized) — тобто і chain, і
+// sentinel працюють одночасно.
+func TestAPIError_AsAndIsBoth(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusUnauthorized)
+		_, _ = w.Write([]byte(`{"errorDescription":"Unknown 'X-Token'"}`))
+	}))
+	defer srv.Close()
+
+	c := New(WithBaseURL(srv.URL), WithHTTPClient(srv.Client()))
+	req, _ := http.NewRequest(http.MethodGet, "/x", http.NoBody)
+	err := c.Do(req, nil)
+
+	assert.True(t, errors.Is(err, ErrUnauthorized))
+
+	var apiErr *APIError
+	require.True(t, errors.As(err, &apiErr))
+	assert.Equal(t, http.StatusUnauthorized, apiErr.StatusCode)
+	assert.Equal(t, "Unknown 'X-Token'", apiErr.ErrorDescription)
+}
+
+// Регресія L2: WithBaseURL мусить warn-логнути при не-https + не-localhost.
+func TestWithBaseURL_warnsOnInsecureScheme(t *testing.T) {
+	cases := map[string]bool{
+		"http://api.example.com":  true,  // має варн
+		"http://localhost:8080":   false, // ОК
+		"http://127.0.0.1":        false, // ОК
+		"https://api.example.com": false, // ОК
+	}
+	for uri, wantInsecure := range cases {
+		t.Run(uri, func(t *testing.T) {
+			assert.Equal(t, wantInsecure, isInsecureBaseURL(uri))
+		})
+	}
+}
+
+// Регресія C2: shouldRetry правильно різнить методи.
+func TestShouldRetry_methodMatrix(t *testing.T) {
+	mkReq := func(method string, idem bool) *http.Request {
+		r, _ := http.NewRequest(method, "/x", nil)
+		if idem {
+			r.Header.Set("Idempotency-Key", "k1")
+		}
+		return r
+	}
+	c := New()
+	assert.True(t, c.shouldRetry(mkReq(http.MethodGet, false)))
+	assert.True(t, c.shouldRetry(mkReq(http.MethodHead, false)))
+	assert.True(t, c.shouldRetry(mkReq(http.MethodPut, false)))
+	assert.True(t, c.shouldRetry(mkReq(http.MethodDelete, false)))
+	assert.False(t, c.shouldRetry(mkReq(http.MethodPost, false)))
+	assert.True(t, c.shouldRetry(mkReq(http.MethodPost, true)), "POST з Idempotency-Key — ретрай дозволений")
+	assert.False(t, c.shouldRetry(mkReq(http.MethodPatch, false)))
+	assert.True(t, c.shouldRetry(mkReq(http.MethodPatch, true)))
+
+	cUnsafe := New(WithUnsafeRetries(true))
+	assert.True(t, cUnsafe.shouldRetry(mkReq(http.MethodPost, false)),
+		"WithUnsafeRetries дозволяє POST без ключа")
 }
 
 // Регресія C2: WithUnsafeRetries(true) дозволяє ретраїти POST без ключа.

@@ -285,3 +285,73 @@ func TestSubscriptionPayments_requiresFields(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "DateFrom is required")
 }
+
+// Регресія L8: SubscriptionListAll лінько пагінує всі сторінки.
+func TestSubscriptionListAll_paginates(t *testing.T) {
+	var calls int
+	c := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		calls++
+		page := r.URL.Query().Get("page")
+		switch page {
+		case "", "1":
+			_, _ = w.Write([]byte(`{"list":[{"subscriptionId":"s1"},{"subscriptionId":"s2"}],"pagination":{"totalItems":3,"itemsPerPage":2,"currentPage":1,"totalPages":2}}`))
+		case "2":
+			_, _ = w.Write([]byte(`{"list":[{"subscriptionId":"s3"}],"pagination":{"totalItems":3,"itemsPerPage":2,"currentPage":2,"totalPages":2}}`))
+		default:
+			t.Fatalf("unexpected page %q", page)
+		}
+	})
+
+	var got []string
+	for s, err := range c.SubscriptionListAll(context.Background(),
+		SubscriptionListOptions{DateFrom: time.Now().Add(-24 * time.Hour), Limit: 2}) {
+		require.NoError(t, err)
+		got = append(got, s.SubscriptionID)
+	}
+	assert.Equal(t, []string{"s1", "s2", "s3"}, got)
+	assert.Equal(t, 2, calls)
+}
+
+func TestSubscriptionListAll_breakStops(t *testing.T) {
+	var calls int
+	c := newTestClient(t, func(w http.ResponseWriter, _ *http.Request) {
+		calls++
+		_, _ = w.Write([]byte(`{"list":[{"subscriptionId":"s1"},{"subscriptionId":"s2"}],"pagination":{"totalItems":4,"itemsPerPage":2,"currentPage":1,"totalPages":2}}`))
+	})
+	var n int
+	for _, err := range c.SubscriptionListAll(context.Background(),
+		SubscriptionListOptions{DateFrom: time.Now()}) {
+		require.NoError(t, err)
+		n++
+		if n == 1 {
+			break
+		}
+	}
+	assert.Equal(t, 1, n)
+	assert.Equal(t, 1, calls, "break — без додаткових сторінок")
+}
+
+func TestSubscriptionPaymentsAll_paginates(t *testing.T) {
+	var calls int
+	c := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		calls++
+		page := r.URL.Query().Get("page")
+		switch page {
+		case "", "1":
+			_, _ = w.Write([]byte(`{"payments":[{"amount":100,"ccy":980,"status":"success","chargedAt":"2026-01-01"}],"pagination":{"totalItems":2,"itemsPerPage":1,"currentPage":1,"totalPages":2}}`))
+		case "2":
+			_, _ = w.Write([]byte(`{"payments":[{"amount":200,"ccy":980,"status":"failure","chargedAt":"2026-02-01"}],"pagination":{"totalItems":2,"itemsPerPage":1,"currentPage":2,"totalPages":2}}`))
+		default:
+			t.Fatalf("unexpected page %q", page)
+		}
+	})
+	var n int
+	for p, err := range c.SubscriptionPaymentsAll(context.Background(),
+		SubscriptionPaymentsOptions{SubscriptionID: "s1", DateFrom: time.Now().Add(-time.Hour)}) {
+		require.NoError(t, err)
+		_ = p
+		n++
+	}
+	assert.Equal(t, 2, n)
+	assert.Equal(t, 2, calls)
+}

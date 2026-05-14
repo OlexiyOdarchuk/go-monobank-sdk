@@ -9,6 +9,7 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -111,6 +112,94 @@ func TestContactsAll_contextCancel(t *testing.T) {
 		assert.True(t, errors.Is(err, context.Canceled))
 		return
 	}
+}
+
+// Регресія L8: StatementAll лінько пагінує операції через DOWN-курсор.
+func TestStatementAll_paginatesDownByTime(t *testing.T) {
+	from := time.Unix(1_700_000_000, 0)
+	to := time.Unix(1_700_009_000, 0)
+
+	// Симулюємо 3 сторінки по 2 елементи, з спаданням time-у.
+	pages := [][]int64{
+		{1_700_008_000, 1_700_007_000},
+		{1_700_006_000, 1_700_005_000},
+		{1_700_004_000, 1_700_003_000},
+	}
+	var pageIdx atomic.Int32
+	c, _ := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		idx := int(pageIdx.Add(1)) - 1
+		if idx >= len(pages) {
+			_, _ = w.Write([]byte(`[]`))
+			return
+		}
+		var items []string
+		for _, ts := range pages[idx] {
+			items = append(items,
+				fmt.Sprintf(`{"id":"op-%d","time":%d,"amount":-100,"currencyCode":"UAH"}`, ts, ts))
+		}
+		_, _ = w.Write([]byte("[" + strings.Join(items, ",") + "]"))
+	})
+
+	var got []string
+	for op, err := range c.StatementAll(context.Background(), "acc-1", from, to, 0) {
+		require.NoError(t, err)
+		got = append(got, op.ID)
+	}
+	require.Len(t, got, 6)
+	assert.Equal(t, "op-1700008000", got[0])
+	assert.Equal(t, "op-1700003000", got[5])
+}
+
+// Регресія L8: порожня сторінка зупиняє ітерацію.
+func TestStatementAll_stopsOnEmptyPage(t *testing.T) {
+	from := time.Unix(1_700_000_000, 0)
+	to := from.Add(time.Hour)
+	c, _ := newTestClient(t, func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`[]`))
+	})
+	var n int
+	for _, err := range c.StatementAll(context.Background(), "x", from, to, 0) {
+		require.NoError(t, err)
+		n++
+	}
+	assert.Equal(t, 0, n)
+}
+
+// Регресія L8: break зупиняє ітерацію без додаткових HTTP-викликів.
+func TestStatementAll_breakStops(t *testing.T) {
+	from := time.Unix(1_700_000_000, 0)
+	to := time.Unix(1_700_010_000, 0)
+	var calls atomic.Int32
+	c, _ := newTestClient(t, func(w http.ResponseWriter, _ *http.Request) {
+		calls.Add(1)
+		_, _ = w.Write([]byte(
+			`[{"id":"a","time":1700009000,"amount":-1,"currencyCode":"UAH"},` +
+				`{"id":"b","time":1700008000,"amount":-1,"currencyCode":"UAH"}]`))
+	})
+	var seen int
+	for _, err := range c.StatementAll(context.Background(), "x", from, to, 0) {
+		require.NoError(t, err)
+		seen++
+		if seen == 1 {
+			break
+		}
+	}
+	assert.Equal(t, 1, seen)
+	assert.Equal(t, int32(1), calls.Load(), "break — без додаткових сторінок")
+}
+
+func TestStatementAll_propagatesError(t *testing.T) {
+	c, _ := newTestClient(t, func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusServiceUnavailable)
+	})
+	from := time.Unix(1_700_000_000, 0)
+	to := from.Add(time.Hour)
+	var iters int
+	for _, err := range c.StatementAll(context.Background(), "x", from, to, 0) {
+		iters++
+		require.Error(t, err)
+	}
+	assert.Equal(t, 1, iters)
 }
 
 func TestSearchContactsAll_passesQuery(t *testing.T) {

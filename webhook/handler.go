@@ -154,15 +154,28 @@ func (h *Handler) refresh(ctx context.Context) error {
 // singleflight (один похід у /bank/sync на пак конкурентних запитів) і
 // дроссельуючи частоту до [minRefreshInterval] (захист від DoS-
 // амплифікації, коли атакуючий шле POST з випадковим X-Key-Id).
+//
+// Внутрішній double-check на lastRefreshAt захищає від рейсу: коли
+// singleflight завершує одну Do-функцію, а друга хвиля goroutine-ів
+// уже встигла пройти зовнішній throttle-check і потрапити у Do —
+// другий fn виявить, що lastRefreshAt свіжий, і одразу вийде без
+// нового виклику ServerKey().
 func (h *Handler) refreshCoalesced(ctx context.Context) error {
 	h.refreshMu.Lock()
 	if time.Since(h.lastRefreshAt) < minRefreshInterval {
 		h.refreshMu.Unlock()
-		return nil // throttled — використати кешований ключ
+		return nil
 	}
 	h.refreshMu.Unlock()
 
 	_, err, _ := h.refreshGroup.Do("refresh", func() (any, error) {
+		h.refreshMu.Lock()
+		if time.Since(h.lastRefreshAt) < minRefreshInterval {
+			h.refreshMu.Unlock()
+			return nil, nil
+		}
+		h.refreshMu.Unlock()
+
 		if e := h.refresh(ctx); e != nil {
 			return nil, e
 		}

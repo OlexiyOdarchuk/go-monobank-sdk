@@ -78,6 +78,31 @@ func TestParsePubKey_notPEM(t *testing.T) {
 	assert.ErrorIs(t, err, acquiring.ErrInvalidPubKey)
 }
 
+// Регресія L4: ParsePubKey має відхиляти ECDSA-ключі на інших кривих
+// крім P-256. Mono завжди підписує P-256; інша крива — або bug,
+// або MITM, або hostile proxy.
+func TestParsePubKey_rejectsNonP256(t *testing.T) {
+	curves := map[string]elliptic.Curve{
+		"P-384": elliptic.P384(),
+		"P-521": elliptic.P521(),
+	}
+	for name, curve := range curves {
+		t.Run(name, func(t *testing.T) {
+			priv, err := ecdsa.GenerateKey(curve, rand.Reader)
+			require.NoError(t, err)
+			derPub, err := x509.MarshalPKIXPublicKey(&priv.PublicKey)
+			require.NoError(t, err)
+			pemPub := pem.EncodeToMemory(&pem.Block{Type: "PUBLIC KEY", Bytes: derPub})
+			keyField := []byte(base64.StdEncoding.EncodeToString(pemPub))
+
+			_, err = acquiring.ParsePubKey(keyField)
+			assert.ErrorIs(t, err, acquiring.ErrInvalidPubKey)
+			assert.Contains(t, err.Error(), "P-256",
+				"error must mention P-256 expectation, got %q", err.Error())
+		})
+	}
+}
+
 func TestParsePubKey_wrongAlgorithm(t *testing.T) {
 	// PEM з RSA-ключем — не ECDSA, має падати.
 	rsaPriv, err := rsa.GenerateKey(rand.Reader, 2048)

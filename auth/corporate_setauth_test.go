@@ -54,6 +54,25 @@ func TestCorp_SetAuth_withPermissions(t *testing.T) {
 	assert.Empty(t, r.Header.Get("X-Request-Id"))
 }
 
+// Регресія L6b: Permission — typed string, тож константи мають правильний
+// тип, конкатенація летерів зберігається, custom Permission приймається.
+func TestPermission_typedStringSemantics(t *testing.T) {
+	// Compile-time: PermSt має тип Permission, не плоский string.
+	var p Permission = PermSt
+	assert.Equal(t, "s", string(p))
+
+	// Custom Permission приймається (якщо Mono додасть нову букву —
+	// користувач не чекає release-у SDK).
+	m, err := NewCorpAuthMaker(secKey)
+	require.NoError(t, err)
+	a := m.NewPermissions(Permission("x")).(Corp)
+
+	r, err := http.NewRequest(http.MethodPost, "https://api.monobank.ua/personal/auth/request", http.NoBody)
+	require.NoError(t, err)
+	require.NoError(t, a.SetAuth(r))
+	assert.Equal(t, "x", r.Header.Get("X-Permissions"))
+}
+
 // TestCorp_SetAuth_noActor — when both requestID and permissions are empty
 // (e.g. /personal/corp/settings), only the timestamp + URL go into the sign.
 func TestCorp_SetAuth_noActor(t *testing.T) {

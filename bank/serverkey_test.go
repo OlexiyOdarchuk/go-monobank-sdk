@@ -2,6 +2,8 @@ package bank
 
 import (
 	"context"
+	"encoding/base64"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -51,4 +53,64 @@ func TestServerKey_badBase64(t *testing.T) {
 	_, err := c.ServerKey(context.Background())
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "decode serverPubKey")
+}
+
+// Регресія M2: MITM-стиль атаки — підмінити /bank/sync на uncompressed
+// точку (X, Y), яка проходить базовий length/prefix-чек, але НЕ лежить
+// на кривій secp256k1. До фіксу asServerKey приймала такі ключі, і всі
+// наступні webhook-верифікації провалювалися 401-ми, що тригерило
+// нескінченний refresh-storm на /bank/sync.
+func TestServerKey_rejectsOffCurvePoint(t *testing.T) {
+	// 1+32+32 = 65 byte uncompressed point with prefix 0x04, але координати
+	// фіктивні (X=Y=1) — точно не на secp256k1.
+	point := make([]byte, 65)
+	point[0] = 0x04
+	point[32] = 1 // X low byte
+	point[64] = 1 // Y low byte
+	body := fmt.Sprintf(`{"serverKeyId":"k","serverPubKey":%q,"serverTimeMsec":0}`,
+		base64.StdEncoding.EncodeToString(point))
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(body))
+	}))
+	defer srv.Close()
+
+	c := New(monobank.WithBaseURL(srv.URL), monobank.WithHTTPClient(srv.Client()))
+	_, err := c.ServerKey(context.Background())
+	require.Error(t, err)
+	assert.ErrorIs(t, err, ErrInvalidPubKey, "off-curve point must be rejected")
+}
+
+func TestServerKey_rejectsWrongLength(t *testing.T) {
+	short := make([]byte, 32) // не 65 байтів
+	body := fmt.Sprintf(`{"serverKeyId":"k","serverPubKey":%q,"serverTimeMsec":0}`,
+		base64.StdEncoding.EncodeToString(short))
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(body))
+	}))
+	defer srv.Close()
+
+	c := New(monobank.WithBaseURL(srv.URL), monobank.WithHTTPClient(srv.Client()))
+	_, err := c.ServerKey(context.Background())
+	require.Error(t, err)
+	assert.ErrorIs(t, err, ErrInvalidPubKey)
+}
+
+func TestServerKey_rejectsWrongPrefix(t *testing.T) {
+	// Compressed point (0x02 or 0x03) — секцію не приймаємо, бо очікуємо 0x04.
+	point := make([]byte, 65)
+	point[0] = 0x02
+	body := fmt.Sprintf(`{"serverKeyId":"k","serverPubKey":%q,"serverTimeMsec":0}`,
+		base64.StdEncoding.EncodeToString(point))
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(body))
+	}))
+	defer srv.Close()
+
+	c := New(monobank.WithBaseURL(srv.URL), monobank.WithHTTPClient(srv.Client()))
+	_, err := c.ServerKey(context.Background())
+	require.Error(t, err)
+	assert.ErrorIs(t, err, ErrInvalidPubKey)
 }

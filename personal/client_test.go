@@ -80,6 +80,26 @@ func TestTransactionsRange_zeroOrNegative(t *testing.T) {
 	assert.Nil(t, out)
 }
 
+// Регресія M7: accountID мусить бути url.PathEscape-нутим у path-сегменті
+// /personal/statement/{accountID}/{from}/{to}. Без цього зловмисний
+// accountID типу "../foo" зміг би пробити SDK на інший endpoint, а
+// account-IDs зі слешем / спецсимволом ламали би 31-day pagination.
+func TestTransactions_accountIDIsPathEscaped(t *testing.T) {
+	var seenPath string
+	c := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		seenPath = r.URL.EscapedPath()
+		_, _ = w.Write([]byte(`[]`))
+	})
+
+	weird := "acc/../foo bar"
+	from := time.Unix(1_700_000_000, 0)
+	_, err := c.Transactions(context.Background(), weird, from, from.Add(time.Hour))
+	require.NoError(t, err)
+	// url.PathEscape: "acc/../foo bar" → "acc%2F..%2Ffoo%20bar"
+	assert.Contains(t, seenPath, "acc%2F..%2Ffoo%20bar")
+	assert.NotContains(t, seenPath, "acc/../foo")
+}
+
 func TestSetWebHook(t *testing.T) {
 	c := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, http.MethodPost, r.Method)

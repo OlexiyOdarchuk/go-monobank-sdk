@@ -81,10 +81,42 @@ func TestMajor(t *testing.T) {
 	assert.InDelta(t, 0.0, Money{}.Major(), 1e-9)
 }
 
+// Регресія M8: Major має поважати кількість знаків після коми за валютою.
+// До фіксу UAH/USD ділилися на 100, але JPY/KRW (0 знаків) теж — отже
+// 1250 єн відображалися як 12.50, що неправильно.
+func TestMajor_currencyAwareDecimals(t *testing.T) {
+	cases := []struct {
+		name  string
+		minor int64
+		code  currency.Code
+		want  float64
+	}{
+		{"UAH 2 decimals", 4250, currency.UAH, 42.50},
+		{"USD 2 decimals", 100, currency.USD, 1.00},
+		{"JPY 0 decimals", 1250, currency.JPY, 1250.0}, // не ділиться на 100
+		{"unknown code defaults to 2 decimals", 4250, currency.Code(7777), 42.50},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := New(tc.minor, tc.code).Major()
+			assert.InDelta(t, tc.want, got, 1e-9)
+		})
+	}
+}
+
 func TestString(t *testing.T) {
 	assert.Equal(t, "42.50 UAH", New(4250, currency.UAH).String())
 	assert.Equal(t, "-10.00 USD", New(-1000, currency.USD).String())
 	assert.Equal(t, "0.00 7777", New(0, currency.Code(7777)).String(), "невідома валюта — числовий код")
+}
+
+// Регресія M8: String використовує currency-aware decimals — JPY без
+// знаків після коми ("1250 JPY", не "12.50 JPY").
+func TestString_currencyAwareDecimals(t *testing.T) {
+	assert.Equal(t, "1250 JPY", New(1250, currency.JPY).String(),
+		"JPY має 0 знаків після коми")
+	assert.Equal(t, "42.50 UAH", New(4250, currency.UAH).String(),
+		"UAH має 2 знаки після коми")
 }
 
 func TestMarshalJSON(t *testing.T) {
