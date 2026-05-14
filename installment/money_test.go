@@ -80,6 +80,37 @@ func TestMoney_WireFormat(t *testing.T) {
 	assert.Contains(t, got, `"sum":2499.99`)
 }
 
+// Fuzz: UnmarshalJSON must never panic on adversarial input. It can
+// legitimately return ErrInvalidMoney; what it cannot do is corrupt
+// memory or hang.
+func FuzzMoney_UnmarshalJSON(f *testing.F) {
+	seeds := []string{
+		"0", "1", "1.5", "-1", "2499.99", `"2499.99"`,
+		"", "null", ".5", "00.05", "1.500", "1e10",
+		"99999999999999999999", "-0.00",
+	}
+	for _, s := range seeds {
+		f.Add([]byte(s))
+	}
+	f.Fuzz(func(_ *testing.T, b []byte) {
+		var m installment.Money
+		_ = m.UnmarshalJSON(b)
+		// Whether parse succeeded or not, calling MarshalJSON
+		// afterwards must always succeed and be valid JSON.
+		out, err := m.MarshalJSON()
+		if err != nil {
+			panic(err)
+		}
+		if len(out) == 0 {
+			panic("MarshalJSON returned empty bytes")
+		}
+		var roundTrip installment.Money
+		if err := roundTrip.UnmarshalJSON(out); err != nil {
+			panic("MarshalJSON output failed to UnmarshalJSON: " + err.Error())
+		}
+	})
+}
+
 // Regression: the wire format keeps full precision even for values
 // that float64 cannot represent exactly. 0.10 is one such value.
 func TestMoney_NoFloatPrecisionLoss(t *testing.T) {

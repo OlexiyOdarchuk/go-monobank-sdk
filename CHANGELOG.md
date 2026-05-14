@@ -7,6 +7,79 @@
 
 ## [Unreleased]
 
+Підготовка до v1.3.0 — повний прохід багфіксів за результатами code review, фокус на correctness/security/data-loss. Багато breaking changes у тому, як обробляються помилки конфігурації (раніше `panic` чи silent default, тепер `(*T, error)`).
+
+### Added
+
+- **`acquiring.VerifyWebhookFresh(pub, body, xSign, maxAge)`** — sign-then-freshness check. Парсить `modifiedDate` з payload і відкидає bodies старіші за `maxAge`. Sentinel-помилки: `ErrWebhookStale`, `ErrWebhookNoTimestamp`. Тримає замовчування поведінки `VerifyWebhook`; обирай Fresh-варіант, якщо хочеш bound-у на replay window.
+- **`installment.Money`** — типована UAH-сума (int64 kopecks, exact decimal MarshalJSON/UnmarshalJSON). Конструктори: `NewMoney(hr, kop)`, `MoneyFromKopecks`, `MoneyFromMajor`. Без float64 у hot path → жодних втрат точності.
+- **`installment.WithInsecureBaseURL(bool)`** — opt-out для нової перевірки https-only. Mirror того, що в monobank.
+- **`jar.WithInsecureBaseURL(bool)`** — те саме для jar.
+- **`corporate.Client.AllowInsecureCallback(bool)`** — opt-out для нової перевірки X-Callback https-only.
+- **`bank.ClientInfo.LogValue`/`bank.Account.LogValue`** — slog redaction (ПІБ → перша літера + ***, IBAN → country + last4, card masks → **** + last4).
+- **`installment.ClientInfo.LogValue`** — те саме для legacy /api/client/validate response (FirstName/LastName/MiddleName/INN).
+- **`monobank.Client.ChainRequestHook`/`ChainResponseHook`** — додають hook поверх існуючих (попередній викликається першим). Використано в otelmonobank для cooperative composition із додатковими application hooks.
+- **`acquiring.ErrEmptyID`** — sentinel для валідації path-параметрів у `InvoiceStatus/RemoveInvoice/Receipt/FiscalChecks/QRDetails/QRResetAmount/DeleteCard/SubscriptionRemove/SubscriptionStatus/MonoPayKeyDelete`.
+- **`installment.{ErrEmptyOrderID, ErrEmptyDate, ErrEmptyPhone, ErrInvalidPhone, ErrEmptyStoreID, ErrEmptySecret, ErrInsecureBaseURL, ErrCallbackBadLength}`** — sentinel-помилки.
+- **`business.{ErrIdempotencyKeyRequired, ErrInvalidTimeRange}`** — sentinels.
+- **`corporate.{ErrInsecureCallback, ErrInvalidCallback, ErrLogoTooLarge, SignatureRequestTTL, MaxRegistrationLogoBytes}`** — sentinels + конст.
+- **`auth.ErrEmptyToken`** — повертається з `Personal.SetAuth` при порожньому токені.
+- **`currency.Code.MinorPerMajor()`** — `10^Decimals`. Додано alpha-3 для BHD/JOD/KWD/OMR/TND (3 decimals), KRW (0 decimals).
+- **`monobanktest.ErrorWithCode(status, code, msg)`** — error-Responder, що шле і `errCode`, і `errorDescription`.
+- Regression-тести для всіх CRITICAL/HIGH фіксів + новий fuzz `FuzzMoney_UnmarshalJSON` для installment.Money.
+
+### Changed (breaking)
+
+- **`installment.New(storeID, secret, ...)`** тепер повертає `(*Client, error)`. Помилки: `ErrEmptyStoreID`, `ErrEmptySecret`, `ErrInsecureBaseURL` (для http:// non-loopback baseURL без opt-out).
+- **`jar.New(...)`** тепер повертає `(*Client, error)`. Відхиляє `http://` non-loopback baseURL з `ErrInsecureBaseURL`; opt-out — `jar.WithInsecureBaseURL(true)`.
+- **`business.NewIdempotencyKey()`** тепер повертає `(string, error)`. Раніше `panic` при `crypto/rand` failure — найгірший варіант для banking SDK.
+- **`money.Money.Mul(n)`** тепер повертає `(Money, error)` з `ErrOverflow`. Silent wrap на `MaxInt64 * 2` був data-corruption surface.
+- **`money.Money.Add/Sub`** перевіряють signed overflow і повертають `ErrOverflow` при перетині границі int64. Виходи з `bits.Add64`/`Sub64`.
+- **`installment.{TotalSum, Sum, Returns.Amount, Bank.CreditAmount, Reverse.Sum, ...}`**: всі float64-money поля переведено на `installment.Money`. Це масштабна зміна signature — для callers потрібно конвертувати числа через `installment.NewMoney(hr, kop)` або `MoneyFromMajor()`.
+- **`acquiring.TipsInfo.Amount`** змінено з `int` на `int64` (32-bit overflow guard).
+- **`installment.VerifyCallback`** тепер повертає `ErrCallbackBadLength` для wrong-length header (раніше — той самий `ErrCallbackSignatureMismatch`). Дозволяє telemetry розрізняти malformed-request від forgery.
+- **`monobank.WithBaseURL`** loopback-перевірка тепер через `net.IP.IsLoopback` (вся 127.0.0.0/8, не лише 127.0.0.1).
+- **`monobank.WithRateLimiter` semantics**: limiter.Wait тепер на КОЖНУ attempt (включно з retry), а не один раз на logical Do(). Раніше burst retry після 5xx пробивав limiter.
+- **`monobank.Client.Close`** має pointer receiver (consistency з SetBaseURL, ChainRequestHook).
+- **`webhook/signature.go`** — verification path єдиний через `ecdsa.VerifyASN1`; trailing-bytes after DER signature тепер відхиляються (ECDSA malleability fix).
+
+### Fixed
+
+- **CRITICAL `webhook/signature.go`** — ECDSA signature malleability через trailing bytes у ASN.1 DER signature.
+- **CRITICAL `personal/corporate` pagination** — boundary-second duplicate (`cursor = end` без +1s) у TransactionsRange + streaming iterator.
+- **CRITICAL `business.Client.StatementAll`** — silent data loss коли всі items на одній секунді і page заповнений; new seen-IDs dedup із loop-guard.
+- **CRITICAL `business.Client.Statement`** — `from.IsZero()` тепер відхиляється з `ErrInvalidTimeRange` (раніше URL містив Unix=-6795364578, year -290308).
+- **CRITICAL installment validators** — empty `orderID`/`date`/`phone`/`storeID`/`secret` тепер ловляться локально замість того, щоб HMAC-підписувати поганий запит і шукати opaque-400 від bank.
+- **HIGH-SECURITY `corporate/auth.Client.Auth`** — `X-Callback` тепер валідується (http://+non-loopback відхиляється з `ErrInsecureCallback`).
+- **HIGH-SECURITY `auth/corporate.go`** — `ecdsa.SignASN1` замість deprecated `ecdsa.Sign + asn1.Marshal`. Godoc-блок про clock-skew.
+- **HIGH-SECURITY `auth/personal.go`** — порожній token тепер `ErrEmptyToken` (fail-fast на першому Do замість generic 403 від bank).
+- **HIGH-SECURITY `monobank.Client.Do`** — JSON-decode тепер drain-ить решту тіла через `io.Copy(io.Discard, resp.Body)` для keepalive-reuse.
+- **HIGH-SECURITY option-order independence** — `WithInsecureBaseURL` працює незалежно від позиції в opts (two-pass apply).
+- **HIGH-SECURITY installment per-endpoint limits** — `MaxJSONResponseBytes = 1 MiB`, `MaxPDFResponseBytes = 50 MiB` замість єдиного 50 MiB cap.
+- **HIGH-DATA `retry.backoff`** — equal jitter (d/2 + rand(d/2)) із 50ms absolute floor. Раніше full-jitter дозволяв `delay = 0` після 5xx, що еквівалентно tight retry loop.
+- **HIGH-DATA `retry.parseRetryAfter`** — clamp до 24h. Adversarial proxy не може wedge-нути connection pool на дні.
+- **HIGH-DATA `business.Account.BalanceMoney`/`BalancePoint.Money`** — currency-aware decimals (JPY=0, BHD/JOD/KWD/OMR/TND=3) замість hardcoded *100.
+- **HIGH-DATA `mcc.Code.Category`** — `3000-3499` Transport (airlines + car rental), `3500-3999` Hotels (лоджинг). `5912/5122/8011/8021/...` через `healthMCC` override → Health (раніше Retail/Professional).
+- **HIGH-DATA `bank.Transaction.{MCCCode, OriginalMCCCode}`** — MCC outside 1..9999 повертає `Code(0)` (→ CategoryUnknown).
+- **HIGH-DATA `corporate.{SignatureStatus, SignatureCancel}`** — URI build через `url.URL{Path, RawQuery: url.Values.Encode()}` (robust до baseURL із query).
+- **HIGH-DATA `monobank.Client.SetBaseURL`** — parse error тепер записується в `optErr` (surface на першому Do), а не silently keeps old value.
+- **MEDIUM business idempotency** — `PreparePayment`/`CreateSalaryRegistry` відхиляють empty `Idempotency-Key` з `ErrIdempotencyKeyRequired`.
+- **MEDIUM webhook empty-ID dedup** — Transaction.ID == "" тепер reports error + acks 200 (раніше OnEvent на кожен retry).
+- **MEDIUM monobanktest** — `HandlePrefix` longest-match-wins; idempotent `Close()` через `sync.Once`; in-flight requests після Close ігноруються (race-free cleanup).
+- **MEDIUM otelmonobank** — span store не тече при `resp == nil` або retry; `http.status_code` тепер `attribute.Int`; `http.url` redacts query; hooks chain.
+- **MEDIUM jar/jar.go** — `SendInfo.UnmarshalJSON` через single decode pass; error detection вимагає `errCode`+`errText` обидва (раніше match на будь-який JSON з `errCode`).
+- **MEDIUM acquiring** — `subscription` date params normalised to UTC; `TokenAuth` sets `Accept`; `WalletPaymentRequest.InitiationKind` `omitempty`.
+
+### Removed
+
+- Hardcoded sandbox credentials у `examples/installment/main.go` (`test_store_with_confirm`/`secret_98765432--123-123`). Тепер `log.Fatal` із інструкцією, якщо env пусті.
+
+### Known limitations
+
+- `acquiring.types.go` `InvoiceStatusResponse.UnmarshalJSON` перезаписує `Code` на `Fee/AgentFee`. Для cross-border транзакцій валюта Fee теоретично може відрізнятись від основної; задокументовано як deferred — потрібен real-world reproducer від Mono.
+- `business.Operation(id, externalReference)` приймає два `string` — компілятор не страхує від плутанини. Типовані aliases `OperationID`/`ExternalRef` залишені до major release.
+- `acquiring.Tax []int` — типована обгортка `TaxRate int` зі константами потребує довідника валідних значень від Mono support; відкладено.
+
 ## [1.2.0] — 2026-05-14
 
 DX і security-quality life. Перші додатки, які не закривають баг із
