@@ -32,6 +32,9 @@ func (c *Client) CreateOrder(ctx context.Context, in *CreateOrderRequest) (*Crea
 //
 // POST /api/order/state  (200 → OrderStateInfo)
 func (c *Client) OrderState(ctx context.Context, orderID string) (*OrderStateInfo, error) {
+	if orderID == "" {
+		return nil, ErrEmptyOrderID
+	}
 	var out OrderStateInfo
 	if err := c.doJSON(ctx, "/api/order/state",
 		RequestWithOrderIdentifier{OrderID: orderID}, &out, http.StatusOK); err != nil {
@@ -46,6 +49,9 @@ func (c *Client) OrderState(ctx context.Context, orderID string) (*OrderStateInf
 //
 // POST /api/order/confirm  (200 → OrderStateInfo)
 func (c *Client) ConfirmOrder(ctx context.Context, orderID string) (*OrderStateInfo, error) {
+	if orderID == "" {
+		return nil, ErrEmptyOrderID
+	}
 	var out OrderStateInfo
 	if err := c.doJSON(ctx, "/api/order/confirm",
 		RequestWithOrderIdentifier{OrderID: orderID}, &out, http.StatusOK); err != nil {
@@ -60,6 +66,9 @@ func (c *Client) ConfirmOrder(ctx context.Context, orderID string) (*OrderStateI
 //
 // POST /api/order/reject  (200 → OrderStateInfo)
 func (c *Client) RejectOrder(ctx context.Context, orderID string) (*OrderStateInfo, error) {
+	if orderID == "" {
+		return nil, ErrEmptyOrderID
+	}
 	var out OrderStateInfo
 	if err := c.doJSON(ctx, "/api/order/reject",
 		RequestWithOrderIdentifier{OrderID: orderID}, &out, http.StatusOK); err != nil {
@@ -91,6 +100,9 @@ func (c *Client) ReturnOrder(ctx context.Context, in *ReturnRequest) (*ReturnRes
 //
 // Deprecated: use [Client.OrderData].
 func (c *Client) OrderInfo(ctx context.Context, orderID string) (*OrderShortInfo, error) {
+	if orderID == "" {
+		return nil, ErrEmptyOrderID
+	}
 	var out OrderShortInfo
 	if err := c.doJSON(ctx, "/api/order/info",
 		RequestWithOrderIdentifier{OrderID: orderID}, &out, http.StatusOK); err != nil {
@@ -104,6 +116,9 @@ func (c *Client) OrderInfo(ctx context.Context, orderID string) (*OrderShortInfo
 //
 // POST /api/order/data  (200 → OrderShortInfo)
 func (c *Client) OrderData(ctx context.Context, orderID string) (*OrderShortInfo, error) {
+	if orderID == "" {
+		return nil, ErrEmptyOrderID
+	}
 	var out OrderShortInfo
 	if err := c.doJSON(ctx, "/api/order/data",
 		RequestWithOrderIdentifier{OrderID: orderID}, &out, http.StatusOK); err != nil {
@@ -117,6 +132,9 @@ func (c *Client) OrderData(ctx context.Context, orderID string) (*OrderShortInfo
 //
 // POST /api/order/check/paid  (200 → CheckInstallmentsResponse)
 func (c *Client) CheckPaid(ctx context.Context, orderID string) (*CheckInstallmentsResponse, error) {
+	if orderID == "" {
+		return nil, ErrEmptyOrderID
+	}
 	var out CheckInstallmentsResponse
 	if err := c.doJSON(ctx, "/api/order/check/paid",
 		RequestWithOrderIdentifier{OrderID: orderID}, &out, http.StatusOK); err != nil {

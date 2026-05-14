@@ -1,21 +1,25 @@
-// Command installment демонструє API «Покупка частинами» monobank у
-// тестовому середовищі (sandbox): валідація клієнта → створення заявки
-// → поллінг статусу → підтвердження видачі товару → стан після confirm.
+// Command installment demonstrates monobank's «Pay-in-Parts»
+// installment API against the sandbox: client validation → order
+// creation → state polling → confirm-on-handover → final state.
 //
-// За дефолтом використовуються sandbox-креденшіали з офіційної доки
-// (test_store_with_confirm / secret_98765432--123-123) — заявки в
-// пісочниці не списують грошей. Закінчення телефону керує сценарієм:
-//   - ...1 → успіх через ~5 секунд
-//   - ...2 → постійне очікування клієнта (без callback)
-//   - ...3 → fail (недостатній ліміт)
-//   - ...4 → успіх, очікування підтвердження магазину
+// Credentials are REQUIRED via env (no hardcoded defaults — leaking
+// example credentials into a real repo is a recurring source of
+// abuse reports against the bank's sandbox):
+//
+//	CHAST_STORE_ID  — sandbox storeID (request from monobank)
+//	CHAST_SECRET    — sandbox secret
+//	CHAST_BASE_URL  — optional, defaults to installment.BaseURLSandbox
+//	CHAST_PHONE     — optional, defaults to +380501234564
+//
+// The phone-suffix dictates the sandbox scenario:
+//   - ...1 → success in ~5s
+//   - ...2 → permanent client-wait (no callback)
+//   - ...3 → fail (insufficient limit)
+//   - ...4 → success, awaits store confirmation (the default here)
 //
 // Usage:
 //
-//	go run ./examples/installment
-//	# або з власними креденшіалами:
-//	CHAST_STORE_ID=xxx CHAST_SECRET=yyy CHAST_BASE_URL=https://u2-ext.mono.st4g3.com \
-//	    go run ./examples/installment
+//	CHAST_STORE_ID=xxx CHAST_SECRET=yyy go run ./examples/installment
 package main
 
 import (
@@ -30,8 +34,13 @@ import (
 )
 
 func main() {
-	storeID := envOr("CHAST_STORE_ID", "test_store_with_confirm")
-	secret := envOr("CHAST_SECRET", "secret_98765432--123-123")
+	storeID := os.Getenv("CHAST_STORE_ID")
+	secret := os.Getenv("CHAST_SECRET")
+	if storeID == "" || secret == "" {
+		log.Fatal("CHAST_STORE_ID and CHAST_SECRET must be set — request " +
+			"sandbox credentials from monobank support (api@monobank.ua) " +
+			"and export them in your shell before running this example.")
+	}
 	baseURL := envOr("CHAST_BASE_URL", installment.BaseURLSandbox)
 	phone := envOr("CHAST_PHONE", "+380501234564") // ...4 = WAITING_FOR_STORE_CONFIRM
 	storeOrderID := fmt.Sprintf("demo-%d", time.Now().Unix())
@@ -39,7 +48,10 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 
-	cli := installment.New(storeID, secret, installment.WithBaseURL(baseURL))
+	cli, err := installment.New(storeID, secret, installment.WithBaseURL(baseURL))
+	if err != nil {
+		log.Fatalf("installment.New: %v", err)
+	}
 
 	// 1. Швидка перевірка, що клієнт є у monobank.
 	found, err := cli.ValidateClient(ctx, phone)

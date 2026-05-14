@@ -40,7 +40,8 @@ func TestOrderData(t *testing.T) {
 
 func TestWithHTTPClient_overridesDefault(t *testing.T) {
 	custom := &http.Client{Timeout: 1 * time.Second}
-	cli := installment.New(testStoreID, testSecret, installment.WithHTTPClient(custom))
+	cli, err := installment.New(testStoreID, testSecret, installment.WithHTTPClient(custom))
+	require.NoError(t, err)
 	require.NotNil(t, cli)
 	assert.NotEmpty(t, cli.Sign([]byte(`{}`)))
 }
@@ -62,7 +63,8 @@ func TestReturnOrder_serverError(t *testing.T) {
 }
 
 func TestReturnOrder_nilRequest(t *testing.T) {
-	cli := installment.New(testStoreID, testSecret)
+	cli, errNew := installment.New(testStoreID, testSecret)
+	require.NoError(t, errNew)
 	_, err := cli.ReturnOrder(context.Background(), nil)
 	assert.ErrorIs(t, err, installment.ErrNilRequest)
 }
@@ -82,19 +84,22 @@ func TestGuaranteeLetterPDF_serverError(t *testing.T) {
 }
 
 func TestGuaranteeLetterPDF_nil(t *testing.T) {
-	cli := installment.New(testStoreID, testSecret)
+	cli, errNew := installment.New(testStoreID, testSecret)
+	require.NoError(t, errNew)
 	_, err := cli.GuaranteeLetterPDF(context.Background(), nil)
 	assert.ErrorIs(t, err, installment.ErrNilRequest)
 }
 
 func TestGuaranteeLetterData_nil(t *testing.T) {
-	cli := installment.New(testStoreID, testSecret)
+	cli, errNew := installment.New(testStoreID, testSecret)
+	require.NoError(t, errNew)
 	_, err := cli.GuaranteeLetterData(context.Background(), nil)
 	assert.ErrorIs(t, err, installment.ErrNilRequest)
 }
 
 func TestGuaranteeLetterDataV2_nil(t *testing.T) {
-	cli := installment.New(testStoreID, testSecret)
+	cli, errNew := installment.New(testStoreID, testSecret)
+	require.NoError(t, errNew)
 	_, err := cli.GuaranteeLetterDataV2(context.Background(), nil)
 	assert.ErrorIs(t, err, installment.ErrNilRequest)
 }

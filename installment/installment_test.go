@@ -34,18 +34,21 @@ func newClient(t *testing.T, handler http.HandlerFunc) (*installment.Client, *ht
 	t.Helper()
 	srv := httptest.NewServer(handler)
 	t.Cleanup(srv.Close)
-	c := installment.New(testStoreID, testSecret, installment.WithBaseURL(srv.URL))
+	c, err := installment.New(testStoreID, testSecret, installment.WithBaseURL(srv.URL))
+	require.NoError(t, err)
 	return c, srv
 }
 
 func TestSign_isHMACSHA256Base64(t *testing.T) {
-	c := installment.New(testStoreID, testSecret)
+	c, errNew := installment.New(testStoreID, testSecret)
+	require.NoError(t, errNew)
 	got := c.Sign([]byte(`{"a":1}`))
 	assert.Equal(t, expectedSign(t, []byte(`{"a":1}`)), got)
 }
 
 func TestVerifyCallback(t *testing.T) {
-	c := installment.New(testStoreID, testSecret)
+	c, errNew := installment.New(testStoreID, testSecret)
+	require.NoError(t, errNew)
 	body := []byte(`{"order_id":"o","state":"IN_PROCESS","order_sub_state":"WAITING_FOR_STORE_CONFIRM"}`)
 	require.NoError(t, c.VerifyCallback(body, c.Sign(body)))
 	require.Error(t, c.VerifyCallback(body, "tampered"))
@@ -58,29 +61,40 @@ func TestVerifyCallback(t *testing.T) {
 // бо хронометраж — крихкий у CI; саме виявлення короткого підпису
 // раніше за HMAC задокументовано в коді.
 func TestVerifyCallback_lengthFastPath(t *testing.T) {
-	c := installment.New(testStoreID, testSecret)
+	c, errNew := installment.New(testStoreID, testSecret)
+	require.NoError(t, errNew)
 	body := []byte(`{"order_id":"o","state":"IN_PROCESS"}`)
 
-	cases := map[string]string{
-		"empty":           "",
-		"short":           "AAAA",
-		"43-chars":        "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",   // 43, want 44
-		"45-chars":        "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA", // 45
-		"correct-len-bad": expectedSign(t, []byte("different body")),       // 44 chars, wrong MAC
+	// Wrong-length cases bail out before HMAC and surface the
+	// ErrCallbackBadLength sentinel, so security telemetry can tell
+	// "malformed header" apart from "forgery".
+	badLen := map[string]string{
+		"empty":    "",
+		"short":    "AAAA",
+		"43-chars": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",   // 43, want 44
+		"45-chars": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA", // 45
 	}
-	for name, sig := range cases {
+	for name, sig := range badLen {
 		t.Run(name, func(t *testing.T) {
 			err := c.VerifyCallback(body, sig)
-			assert.ErrorIs(t, err, installment.ErrCallbackSignatureMismatch)
+			assert.ErrorIs(t, err, installment.ErrCallbackBadLength)
 		})
 	}
+
+	// Correct-length-but-wrong-MAC goes through HMAC and returns the
+	// mismatch sentinel.
+	t.Run("correct-len-bad", func(t *testing.T) {
+		err := c.VerifyCallback(body, expectedSign(t, []byte("different body")))
+		assert.ErrorIs(t, err, installment.ErrCallbackSignatureMismatch)
+	})
 }
 
 func TestVerifyCallback_sentinelComparable(t *testing.T) {
-	c := installment.New(testStoreID, testSecret)
+	c, errNew := installment.New(testStoreID, testSecret)
+	require.NoError(t, errNew)
 	err := c.VerifyCallback([]byte(`{}`), "")
-	assert.ErrorIs(t, err, installment.ErrCallbackSignatureMismatch,
-		"errors.Is must work against the package sentinel")
+	assert.ErrorIs(t, err, installment.ErrCallbackBadLength,
+		"errors.Is must work against ErrCallbackBadLength for wrong-length headers")
 }
 
 func TestCreateOrder_success(t *testing.T) {
@@ -123,7 +137,8 @@ func TestCreateOrder_success(t *testing.T) {
 }
 
 func TestCreateOrder_nilRequest(t *testing.T) {
-	cli := installment.New(testStoreID, testSecret)
+	cli, errNew := installment.New(testStoreID, testSecret)
+	require.NoError(t, errNew)
 	_, err := cli.CreateOrder(context.Background(), nil)
 	assert.ErrorIs(t, err, installment.ErrNilRequest)
 }
@@ -254,13 +269,109 @@ func TestGuaranteeLetterData_v1AndV2(t *testing.T) {
 	assert.Equal(t, "/api/v2/order/data/for/guarantee/letter", path)
 }
 
+// Regression: every order-ID-taking endpoint must refuse an empty
+// orderID locally instead of letting the HMAC-signed request go to
+// Mono and getting back an opaque 400. Saves a round-trip AND avoids
+// leaking the merchant secret in case the upstream URL is logged.
+func TestOrderID_emptyRejectedLocally(t *testing.T) {
+	cli, errNew := installment.New(testStoreID, testSecret)
+	require.NoError(t, errNew)
+	ctx := context.Background()
+
+	type call struct {
+		name string
+		fn   func() error
+	}
+	calls := []call{
+		{"OrderState", func() error { _, e := cli.OrderState(ctx, ""); return e }},
+		{"ConfirmOrder", func() error { _, e := cli.ConfirmOrder(ctx, ""); return e }},
+		{"RejectOrder", func() error { _, e := cli.RejectOrder(ctx, ""); return e }},
+		{"OrderInfo", func() error { _, e := cli.OrderInfo(ctx, ""); return e }},
+		{"OrderData", func() error { _, e := cli.OrderData(ctx, ""); return e }},
+		{"CheckPaid", func() error { _, e := cli.CheckPaid(ctx, ""); return e }},
+	}
+	for _, c := range calls {
+		t.Run(c.name, func(t *testing.T) {
+			assert.ErrorIs(t, c.fn(), installment.ErrEmptyOrderID)
+		})
+	}
+}
+
+func TestValidatePhone_rejectsMalformed(t *testing.T) {
+	cli, errNew := installment.New(testStoreID, testSecret)
+	require.NoError(t, errNew)
+	ctx := context.Background()
+
+	cases := map[string]error{
+		"":              installment.ErrEmptyPhone,
+		"380501234561":  installment.ErrInvalidPhone, // no leading +
+		"+380abc1234":   installment.ErrInvalidPhone, // letters
+		"+":             installment.ErrInvalidPhone, // just +
+		"+380 50 12345": installment.ErrInvalidPhone, // spaces
+	}
+	for phone, want := range cases {
+		t.Run(phone, func(t *testing.T) {
+			_, err := cli.ValidateClient(ctx, phone)
+			assert.ErrorIs(t, err, want)
+		})
+	}
+}
+
+func TestDailyReport_emptyDateRejected(t *testing.T) {
+	cli, errNew := installment.New(testStoreID, testSecret)
+	require.NoError(t, errNew)
+	_, err := cli.DailyReport(context.Background(), "")
+	assert.ErrorIs(t, err, installment.ErrEmptyDate)
+}
+
+func TestNew_rejectsEmptyCredentials(t *testing.T) {
+	_, err := installment.New("", "secret")
+	assert.ErrorIs(t, err, installment.ErrEmptyStoreID)
+
+	_, err = installment.New("store", "")
+	assert.ErrorIs(t, err, installment.ErrEmptySecret)
+}
+
+func TestNew_rejectsInsecureBaseURL(t *testing.T) {
+	_, err := installment.New("store", "secret",
+		installment.WithBaseURL("http://evil.example.com"))
+	assert.ErrorIs(t, err, installment.ErrInsecureBaseURL)
+}
+
+func TestNew_allowsLoopbackHTTP(t *testing.T) {
+	for _, u := range []string{
+		"http://localhost:8080",
+		"http://127.0.0.1:9000",
+		"http://[::1]:8080",
+	} {
+		t.Run(u, func(t *testing.T) {
+			_, err := installment.New("store", "secret", installment.WithBaseURL(u))
+			assert.NoError(t, err, "loopback http must be accepted")
+		})
+	}
+}
+
+func TestNew_insecureOptOut(t *testing.T) {
+	// Order does not matter — final validation runs after every option.
+	for _, opts := range [][]installment.Option{
+		{installment.WithInsecureBaseURL(true), installment.WithBaseURL("http://staging.internal")},
+		{installment.WithBaseURL("http://staging.internal"), installment.WithInsecureBaseURL(true)},
+	} {
+		_, err := installment.New("store", "secret", opts...)
+		assert.NoError(t, err, "WithInsecureBaseURL must work regardless of option order")
+	}
+}
+
 func TestAPIError_decode(t *testing.T) {
 	cli, _ := newClient(t, func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Trace-Id", "abc-123")
 		w.WriteHeader(http.StatusBadRequest)
 		_, _ = w.Write([]byte(`{"message":"bad phone"}`))
 	})
-	_, err := cli.ValidateClient(context.Background(), "x")
+	// A well-formed but unknown number passes the client-side phone
+	// validator and reaches the (mock) server, which then returns
+	// the APIError shape we want to assert on.
+	_, err := cli.ValidateClient(context.Background(), "+380000000000")
 	var apiErr *installment.APIError
 	require.ErrorAs(t, err, &apiErr)
 	assert.Equal(t, http.StatusBadRequest, apiErr.StatusCode)
@@ -273,7 +384,8 @@ func TestAPIError_decode(t *testing.T) {
 func TestClient_LogValueRedactsSecret(t *testing.T) {
 	var buf strings.Builder
 	logger := slog.New(slog.NewTextHandler(&buf, nil))
-	cli := installment.New("STORE-1", "my-very-secret-key")
+	cli, errNew := installment.New("STORE-1", "my-very-secret-key")
+	require.NoError(t, errNew)
 	logger.Info("cli", "v", cli)
 	out := buf.String()
 	assert.NotContains(t, out, "my-very-secret-key", "store-secret НЕ повинен потрапити в логи")

@@ -45,29 +45,29 @@
   - Виправити: повертати `ErrInvalidTimeRange` (нова sentinel-помилка), якщо `from.IsZero() || to.IsZero() || !to.After(from)`.
   - Resolution: новий sentinel `business.ErrInvalidTimeRange`; `Statement` відхиляє `from.IsZero() || from.Unix() < 0` і `!to.IsZero() && !to.After(from)`.
 
-- [ ] **installment/orders.go:33-66, 90-123** — `OrderState/Confirm/Reject/OrderInfo/OrderData/CheckPaid` не валідують порожній `orderID`.
+- [x] **installment/orders.go:33-66, 90-123** — `OrderState/Confirm/Reject/OrderInfo/OrderData/CheckPaid` не валідують порожній `orderID`.
   - Виправити: на початку кожної функції `if orderID == "" { return nil, ErrEmptyOrderID }`.
-  - Resolution:
+  - Resolution: новий sentinel `ErrEmptyOrderID`, валідація у кожній з 6 функцій. Regression `TestOrderID_emptyRejectedLocally` (table-test з усіма ендпоінтами).
 
-- [ ] **installment/report.go:12-19** — `DailyReport` без валідації порожнього `date`.
+- [x] **installment/report.go:12-19** — `DailyReport` без валідації порожнього `date`.
   - Виправити: повернути `ErrInvalidDate` (новий sentinel), якщо date.IsZero() / format empty.
-  - Resolution:
+  - Resolution: новий sentinel `ErrEmptyDate`; валідація додана. Regression `TestDailyReport_emptyDateRejected`.
 
-- [ ] **installment/validate.go:15-35** — `ValidateClient`/`ValidateClientLegacy` без перевірки phone.
+- [x] **installment/validate.go:15-35** — `ValidateClient`/`ValidateClientLegacy` без перевірки phone.
   - Виправити: `if phone == "" { return ... ErrEmptyPhone }`; додати простий шаблон-чек (починається з `+`, лише цифри).
-  - Resolution:
+  - Resolution: новий `validatePhone()` хелпер — `ErrEmptyPhone` / `ErrInvalidPhone`; перевіряє `phone[0]=='+'` + лише цифри. Regression `TestValidatePhone_rejectsMalformed`.
 
-- [ ] **installment/client.go:97-108** — `New("", "", ...)` мовчки приймає порожні `storeID`/`secret`.
+- [x] **installment/client.go:97-108** — `New("", "", ...)` мовчки приймає порожні `storeID`/`secret`.
   - Виправити: повернути `(*Client, error)`; помилка при порожніх обов'язкових параметрах.
-  - Resolution:
+  - Resolution: BREAKING — `installment.New` тепер `(*Client, error)`; sentinel `ErrEmptyStoreID`, `ErrEmptySecret`; також відхиляє `http://` для non-loopback (`ErrInsecureBaseURL`) з opt-out через `WithInsecureBaseURL`. Regression: `TestNew_rejectsEmptyCredentials`, `TestNew_rejectsInsecureBaseURL`, `TestNew_allowsLoopbackHTTP`, `TestNew_insecureOptOut`.
 
 - [ ] **acquiring/webhook.go:89-102** — `VerifyWebhook` не має replay-захисту.
   - Виправити: явно задокументувати, що caller ОБОВ'ЯЗКОВО має робити persistent dedup за `(invoiceId, modifiedDate)`. Додати опціональний helper `VerifyWebhookFresh(pub, body, xSign, maxAge time.Duration)`, який парсить `modifiedDate` із payload і відкидає старіші за `maxAge`.
   - Resolution:
 
-- [ ] **examples/installment/main.go:33-34** — hardcoded дефолтні sandbox-credentials (`test_store_with_confirm`, `secret_98765432...`).
+- [x] **examples/installment/main.go:33-34** — hardcoded дефолтні sandbox-credentials (`test_store_with_confirm`, `secret_98765432...`).
   - Виправити: прибрати fallback; якщо env пустий — `log.Fatal` з інструкцією, як отримати ключі.
-  - Resolution:
+  - Resolution: видалено fallback; `log.Fatal` з інструкцією звертатися до api@monobank.ua за credentials, якщо `CHAST_STORE_ID`/`CHAST_SECRET` порожні.
 
 ---
 
@@ -85,9 +85,9 @@
   - Виправити: ту саму insecure-baseURL логіку, що в `monobank.WithBaseURL`.
   - Resolution:
 
-- [ ] **installment/client.go:42** — `MaxResponseBytes = 50<<20` для всіх відповідей; скомпрометований proxy може дути 50 MiB у JSON.
+- [x] **installment/client.go:42** — `MaxResponseBytes = 50<<20` для всіх відповідей; скомпрометований proxy може дути 50 MiB у JSON.
   - Виправити: окремий ліміт для JSON (1 MiB) і PDF (50 MiB); вибирати за endpoint-ом.
-  - Resolution:
+  - Resolution: нові константи `MaxJSONResponseBytes = 1 MiB`, `MaxPDFResponseBytes = 50 MiB`; `doJSON` обмежений JSON-cap-ом, `doPDF` — PDF-cap-ом. `MaxResponseBytes` залишений як deprecated alias на 50 MiB.
 
 - [ ] **corporate/auth.go:33** — `X-Callback` ставиться сирим, без валідації scheme.
   - Виправити: парсити `url.Parse`, відхиляти не-https (з опт-аутом, як у `WithInsecureBaseURL`).
@@ -242,9 +242,9 @@
   - Виправити: явний godoc «передай порожній рядок, щоб скасувати підписку».
   - Resolution:
 
-- [ ] **installment/client.go:69-71** — `WithBaseURL` мовчки приймає http://.
+- [x] **installment/client.go:69-71** — `WithBaseURL` мовчки приймає http://.
   - Виправити: повертати помилку для http://, окрім loopback (та сама логіка, що `monobank.WithBaseURL`).
-  - Resolution:
+  - Resolution: `installment.New` тепер відхиляє `http://` для non-loopback з `ErrInsecureBaseURL`; opt-out через `WithInsecureBaseURL(true)`; loopback (`localhost`, `127.0.0.1`, `::1`) дозволений для httptest.
 
 - [ ] **installment/client.go:124-128, 143-153** — `Sign` рахує HMAC лише за body; `VerifyCallback` повертає той самий sentinel для невалідної довжини й невалідного HMAC.
   - Виправити: задокументувати у godoc `Sign`; у `VerifyCallback` різні sentinel-и (`ErrCallbackBadLength`, `ErrCallbackBadSignature`).
