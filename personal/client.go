@@ -1,17 +1,19 @@
-// Package personal — клієнт Personal Open API monobank: окрема людина,
-// авторизується одним X-Token, що видається на https://api.monobank.ua/.
+// Package personal is the client for monobank's Personal Open API:
+// a single individual, authorized by one X-Token issued at
+// https://api.monobank.ua/.
 //
-// Усі типи відповідей беруться з підпакета [bank] (ClientInfo, Account,
-// Jar, Transaction…) — вони спільні з corporate-клієнтом, бо банк
-// повертає однакові форми незалежно від способу авторизації.
+// Every response type comes from the [bank] sub-package (ClientInfo,
+// Account, Jar, Transaction…) — they are shared with the corporate
+// client, because the bank returns the same shapes regardless of the
+// authorization scheme.
 //
-// Rate limits: Mono обмежує /personal/client-info — один виклик на
-// 60 с; /personal/statement — один виклик на акаунт на 60 с. Інші
-// endpoint-и теж лімітуються — обробляй 429 з backoff-ом
-// ([monobank.WithRetry] робить це автоматично через Retry-After).
+// Rate limits: Mono throttles /personal/client-info to one call per
+// 60 s; /personal/statement to one call per account per 60 s. Other
+// endpoints are throttled too — handle 429 with backoff
+// ([monobank.WithRetry] does this automatically via Retry-After).
 //
-// Вікно виписки — максимум 31 доба за один виклик. Для ширших
-// діапазонів є [Client.TransactionsRange] — він прозоро пагінується.
+// The statement window is at most 31 days per call. For wider ranges
+// use [Client.TransactionsRange] — it paginates transparently.
 package personal
 
 import (
@@ -29,14 +31,14 @@ import (
 	"github.com/OlexiyOdarchuk/go-monobank-sdk/bank"
 )
 
-// Client — Open API клієнт із персональним токеном.
+// Client is the Open API client with a personal token.
 type Client struct {
 	c monobank.Client
 }
 
-// New повертає [Client] із вказаним персональним токеном. Додаткові
-// опції (HTTP-клієнт, retry-політика, base URL для тестів) пробрасуються
-// у базовий [monobank.New].
+// New returns a [Client] with the given personal token. Extra options
+// (HTTP client, retry policy, base URL for tests) are forwarded to
+// the base [monobank.New].
 //
 //	cli := personal.New(os.Getenv("MONO_TOKEN"))
 //	info, err := cli.ClientInfo(ctx)
@@ -45,12 +47,12 @@ func New(token string, opts ...monobank.Option) *Client {
 	return &Client{c: monobank.New(append(base, opts...)...)}
 }
 
-// Close звільняє фонові ресурси клієнта (див. [monobank.Client.Close]).
-// Безпечно викликати в defer одразу після [New].
+// Close releases the client's background resources (see
+// [monobank.Client.Close]). Safe to defer right after [New].
 func (c *Client) Close() error { return c.c.Close() }
 
-// ClientInfo повертає те, що банк знає про авторизованого користувача
-// (ім'я, рахунки, банки). Rate limit: 1 виклик на 60 с.
+// ClientInfo returns what the bank knows about the authorized user
+// (name, accounts, jars). Rate limit: 1 call per 60 s.
 // https://api.monobank.ua/docs/#tag/Klientski-personalni-dani/paths/~1personal~1client-info/get
 func (c *Client) ClientInfo(ctx context.Context) (*bank.ClientInfo, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "/personal/client-info", http.NoBody)
@@ -64,10 +66,10 @@ func (c *Client) ClientInfo(ctx context.Context) (*bank.ClientInfo, error) {
 	return &out, nil
 }
 
-// Transactions повертає записи виписки по рахунку accountID за період
-// [from, to] (включно). Mono приймає максимум 31 добу за один виклик;
-// для ширших діапазонів використовуй [Client.TransactionsRange].
-// Rate limit: 1 виклик на рахунок на 60 с.
+// Transactions returns statement entries for account accountID
+// within [from, to] (inclusive). Mono accepts at most 31 days per
+// call; for wider ranges use [Client.TransactionsRange]. Rate limit:
+// 1 call per account per 60 s.
 // https://api.monobank.ua/docs/#tag/Klientski-personalni-dani/paths/~1personal~1statement~1{account}~1{from}~1{to}/get
 func (c *Client) Transactions(ctx context.Context, accountID string, from, to time.Time) (bank.Transactions, error) {
 	uri := "/personal/statement/" + url.PathEscape(accountID) +
@@ -85,13 +87,13 @@ func (c *Client) Transactions(ctx context.Context, accountID string, from, to ti
 	return out, nil
 }
 
-// TransactionsRange повертає виписку за довільний діапазон, нарізаючи
-// його на послідовні 31-денні вікна (ліміт Mono на один виклик) і
-// зчіплюючи результати у хронологічному порядку.
+// TransactionsRange returns the statement for an arbitrary range,
+// slicing it into consecutive 31-day windows (Mono's per-call limit)
+// and concatenating the results in chronological order.
 //
-// Якщо to нульовий або раніше за from — повертає nil, nil (без помилки).
-// Зважай на rate limit: 1 виклик на рахунок на 60 с — для тижневих
-// діапазонів це 1 запит, для квартальних може бути 3-4.
+// If to is zero or earlier than from, returns nil, nil (no error).
+// Mind the rate limit: 1 call per account per 60 s — for weekly
+// ranges that is 1 request, for quarterly it can be 3-4.
 func (c *Client) TransactionsRange(ctx context.Context, accountID string, from, to time.Time) (bank.Transactions, error) {
 	if to.IsZero() || !to.After(from) {
 		return nil, nil
@@ -113,15 +115,14 @@ func (c *Client) TransactionsRange(ctx context.Context, accountID string, from, 
 	return all, nil
 }
 
-// webhookRequest — body POST /personal/webhook.
+// webhookRequest is the body of POST /personal/webhook.
 type webhookRequest struct {
 	WebHookURL string `json:"webHookUrl"`
 }
 
-// SetWebHook підписує вказаний URI на отримання подій типу
-// StatementItem. Mono пінгне URI через GET одразу після підписки, щоб
-// перевірити, що він живий (відповідай 200). Передай порожній рядок,
-// щоб скасувати підписку.
+// SetWebHook subscribes the given URI to StatementItem events. Mono
+// pings the URI with a GET right after subscription to check that it
+// is alive (respond with 200). Pass an empty string to unsubscribe.
 // https://api.monobank.ua/docs/#tag/Klientski-personalni-dani/paths/~1personal~1webhook/post
 func (c *Client) SetWebHook(ctx context.Context, uri string) error {
 	body, err := json.Marshal(webhookRequest{WebHookURL: uri})

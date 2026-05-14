@@ -8,11 +8,11 @@ import (
 	"net/http"
 )
 
-// Settings — payload /personal/corp/settings: профіль компанії,
-// зареєстрованої в Mono. Permission — рядок із літер дозволів, які
-// можна запитувати в [Client.Auth] (наприклад "spf" означає Statements,
-// PersonalInfo і ФОП). Webhook — поточний підписаний URL (nil, якщо не
-// налаштовано).
+// Settings is the payload of /personal/corp/settings: the profile of
+// the company registered with Mono. Permission is a string of
+// permission letters that may be requested in [Client.Auth] (for
+// example "spf" means Statements, PersonalInfo, and FOP). Webhook is
+// the currently configured URL (nil when none is set).
 type Settings struct {
 	Pubkey     string  `json:"pubkey"`
 	Name       string  `json:"name"`
@@ -21,9 +21,9 @@ type Settings struct {
 	Webhook    *string `json:"webhook"`
 }
 
-// GetSettings повертає профіль компанії, зареєстрованої в банку.
-// Корисно для діагностики (бачити, які permissions схвалені, і чи
-// налаштований webhook).
+// GetSettings returns the profile of the company registered with the
+// bank. Useful for diagnostics (which permissions are approved, and
+// whether the webhook is configured).
 // https://api.monobank.ua/docs/corporate.html#tag/Avtoryzaciya-ta-nalashtuvannya-kompaniyi/paths/~1personal~1corp~1settings/get
 func (c *Client) GetSettings(ctx context.Context) (*Settings, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "/personal/corp/settings", http.NoBody)
@@ -37,15 +37,15 @@ func (c *Client) GetSettings(ctx context.Context) (*Settings, error) {
 	return &out, nil
 }
 
-// webhookRequest — body POST /personal/corp/webhook.
+// webhookRequest is the body of POST /personal/corp/webhook.
 type webhookRequest struct {
 	WebHookURL string `json:"webHookUrl"`
 }
 
-// SetWebHook підписує вказаний URI на отримання подій StatementItem для
-// КОЖНОГО клієнта, доступ до якого має цей сервіс. На відміну від
-// personal-webhook (один на користувача), corporate-webhook — один на
-// сервіс. Подія несе AccountID, щоб ти зміг звести її назад до клієнта.
+// SetWebHook subscribes the given URI to StatementItem events for
+// EVERY client this service has access to. Unlike a personal webhook
+// (one per user), a corporate webhook is one per service. The event
+// carries an AccountID so you can map it back to the client.
 // https://api.monobank.ua/docs/corporate.html#tag/Avtoryzaciya-ta-nalashtuvannya-kompaniyi/paths/~1personal~1corp~1webhook/post
 func (c *Client) SetWebHook(ctx context.Context, uri string) error {
 	body, err := json.Marshal(webhookRequest{WebHookURL: uri})

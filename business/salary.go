@@ -9,9 +9,10 @@ import (
 	"net/url"
 )
 
-// CreateSalaryRegistry створює нову зарплатну відомість. idempotencyKey —
-// UUID v4 (рекомендовано), що дозволяє безпечно повторювати виклик при
-// помилках мережі: запит з однаковим ключем не створить дублікат.
+// CreateSalaryRegistry creates a new salary registry. idempotencyKey
+// is a UUID v4 (recommended) that lets you safely retry the call on
+// network failures: a repeat with the same key will not create a
+// duplicate.
 // https://corp-api.monobank.ua/docs/#operation/create-salary-registries
 func (c *Client) CreateSalaryRegistry(ctx context.Context, idempotencyKey string,
 	in *CreateSalaryRegistryRequest) (*SalaryRegistryCreated, error) {
@@ -37,9 +38,10 @@ func (c *Client) CreateSalaryRegistry(ctx context.Context, idempotencyKey string
 	return &out, nil
 }
 
-// SalaryRegistryTypes повертає список доступних типів зарплатних
-// відомостей (наприклад SALARY_ADVANCE — «аванс по зарплаті»). Один із
-// цих alias-ів треба передати у CreateSalaryRegistryRequest.SalaryRegistryType.
+// SalaryRegistryTypes returns the list of available salary-registry
+// types (for example, SALARY_ADVANCE — "salary advance"). One of
+// these aliases must be passed in
+// CreateSalaryRegistryRequest.SalaryRegistryType.
 // https://corp-api.monobank.ua/docs/#operation/get-salary-registries-types
 func (c *Client) SalaryRegistryTypes(ctx context.Context) ([]SalaryRegistryType, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet,
@@ -54,9 +56,9 @@ func (c *Client) SalaryRegistryTypes(ctx context.Context) ([]SalaryRegistryType,
 	return out, nil
 }
 
-// SalaryRegistryStatus повертає поточний стан зарплатної відомості за
-// її ID. Для термінальних статусів (FAIL / PAYMENTS_DONE) DeclineReason
-// розкаже, що пішло не так (якщо FAIL).
+// SalaryRegistryStatus returns the current state of a salary
+// registry by its ID. For terminal statuses (FAIL / PAYMENTS_DONE)
+// DeclineReason explains what went wrong (when FAIL).
 // https://corp-api.monobank.ua/docs/#operation/get-salary-registries-status
 func (c *Client) SalaryRegistryStatus(ctx context.Context, id string) (*SalaryRegistryStatus, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet,

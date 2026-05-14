@@ -6,23 +6,23 @@ import (
 	"sync/atomic"
 )
 
-// Responder — щось, що знає, як відповісти на HTTP-запит. Інтерфейс
-// той самий, що в [http.Handler], — будь-який існуючий handler можна
-// використати як Responder.
+// Responder is anything that knows how to answer an HTTP request.
+// The interface mirrors [http.Handler], so any existing handler can
+// be used as a Responder.
 type Responder interface {
 	RespondHTTP(w http.ResponseWriter, r *http.Request)
 }
 
-// ResponderFunc дозволяє звичайній функції бути [Responder].
+// ResponderFunc lets a plain function act as a [Responder].
 type ResponderFunc func(http.ResponseWriter, *http.Request)
 
-// RespondHTTP — задовольняє [Responder].
+// RespondHTTP satisfies [Responder].
 func (f ResponderFunc) RespondHTTP(w http.ResponseWriter, r *http.Request) { f(w, r) }
 
-// JSON повертає Responder, що серіалізує body у JSON і відповідає
-// HTTP 200 (або статусом, переданим у [WithStatus]). Якщо body — це
-// рядок чи []byte, він пишеться як є (для випадків, коли треба точний
-// контроль над форматом).
+// JSON returns a Responder that serializes body as JSON and replies
+// with HTTP 200 (or the status passed via [WithStatus]). When body
+// is a string or []byte, it is written as-is (for cases that need
+// precise format control).
 func JSON(body any) Responder {
 	return ResponderFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -30,8 +30,8 @@ func JSON(body any) Responder {
 	})
 }
 
-// Error повертає Responder, що відповідає вказаним статусом і JSON
-// `{"errorDescription": msg}` у тілі (формат помилки Mono).
+// Error returns a Responder that replies with the given status and
+// a JSON body `{"errorDescription": msg}` (Mono's error format).
 func Error(status int, msg string) Responder {
 	return ResponderFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -40,25 +40,25 @@ func Error(status int, msg string) Responder {
 	})
 }
 
-// Status повертає Responder, що віддає тільки статус без тіла (зручно
-// для 204, 401 тощо).
+// Status returns a Responder that writes only the status with no
+// body (handy for 204, 401, etc.).
 func Status(status int) Responder {
 	return ResponderFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(status)
 	})
 }
 
-// Sequence повертає Responder, що при i-му виклику віддає i-ий
-// Responder зі списку. Корисно для тестів ретраїв: перший виклик
-// повертає 503, другий — 200.
+// Sequence returns a Responder that, on the i-th call, dispatches
+// the i-th Responder from the list. Useful for retry tests: the
+// first call returns 503, the second returns 200.
 //
 //	srv.Handle("GET", "/x", monobanktest.Sequence(
 //	    monobanktest.Status(503),
 //	    monobanktest.JSON(`{"ok":true}`),
 //	))
 //
-// Після вичерпання списку — кожен наступний виклик отримує останній
-// елемент (щоб тест не падав на додатковому ретраї).
+// Once the list is exhausted, every subsequent call gets the last
+// element (so the test does not fail on an extra retry).
 func Sequence(responders ...Responder) Responder {
 	if len(responders) == 0 {
 		return Status(http.StatusInternalServerError)
@@ -73,7 +73,8 @@ func Sequence(responders ...Responder) Responder {
 	})
 }
 
-// writeBody обробляє body одним із форматів: []byte, string, або JSON.
+// writeBody handles body in one of three forms: []byte, string, or
+// JSON.
 func writeBody(w http.ResponseWriter, body any) {
 	switch v := body.(type) {
 	case nil:

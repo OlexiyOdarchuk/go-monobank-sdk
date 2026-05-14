@@ -8,9 +8,9 @@ import (
 	"net/http"
 )
 
-// MonoPayKey — публічний ключ торговця для підпису запитів до віджета
-// monopay (це інший потік, ніж /api/merchant/pubkey, який віддає ключ
-// банку для верифікації вебхуків).
+// MonoPayKey is the merchant's public key used to sign requests to
+// the monopay widget (a different flow from /api/merchant/pubkey,
+// which returns the bank's key for verifying webhooks).
 type MonoPayKey struct {
 	KeyID     string `json:"keyId"`
 	KeyValue  string `json:"keyValue,omitempty"`
@@ -18,34 +18,37 @@ type MonoPayKey struct {
 	ExpiresAt string `json:"expiresAt,omitempty"`
 }
 
-// MonoPayKeyImportRequest — тіло POST /api/merchant/monopay/pubkey-import.
-// KeyValue — base64-кодований PEM з публічним ключем у форматі x.509
-// SubjectPublicKeyInfo.
+// MonoPayKeyImportRequest is the body of
+// POST /api/merchant/monopay/pubkey-import. KeyValue is a
+// base64-encoded PEM containing a public key in the x.509
+// SubjectPublicKeyInfo format.
 type MonoPayKeyImportRequest struct {
 	KeyValue  string `json:"keyValue"`
 	KeyName   string `json:"keyName,omitempty"`
 	ExpiresAt string `json:"expiresAt,omitempty"`
 }
 
-// MonoPayKeyImportResponse — обгортка над результатом імпорту.
+// MonoPayKeyImportResponse wraps the import result.
 type MonoPayKeyImportResponse struct {
 	Result struct {
 		KeyID string `json:"keyId"`
 	} `json:"result"`
 }
 
-// MonoPayKeyDeleteRequest — тіло POST /api/merchant/monopay/pubkey-delete.
+// MonoPayKeyDeleteRequest is the body of
+// POST /api/merchant/monopay/pubkey-delete.
 type MonoPayKeyDeleteRequest struct {
 	KeyID string `json:"keyId"`
 }
 
-// MonoPayKeyListResponse — відповідь GET /api/merchant/monopay/pubkey-list.
+// MonoPayKeyListResponse is the response of
+// GET /api/merchant/monopay/pubkey-list.
 type MonoPayKeyListResponse struct {
 	Result []MonoPayKey `json:"result"`
 }
 
-// MonoPayKeyImport імпортує публічний ключ торговця для підпису запитів
-// до віджета monopay.
+// MonoPayKeyImport imports the merchant's public key used to sign
+// requests to the monopay widget.
 func (c *Client) MonoPayKeyImport(ctx context.Context, in *MonoPayKeyImportRequest) (string, error) {
 	if in == nil {
 		return "", ErrNilRequest
@@ -66,7 +69,7 @@ func (c *Client) MonoPayKeyImport(ctx context.Context, in *MonoPayKeyImportReque
 	return out.Result.KeyID, nil
 }
 
-// MonoPayKeyDelete видаляє раніше імпортований ключ за його keyId.
+// MonoPayKeyDelete removes a previously imported key by its keyId.
 func (c *Client) MonoPayKeyDelete(ctx context.Context, keyID string) error {
 	body, err := json.Marshal(MonoPayKeyDeleteRequest{KeyID: keyID})
 	if err != nil {
@@ -80,7 +83,7 @@ func (c *Client) MonoPayKeyDelete(ctx context.Context, keyID string) error {
 	return c.c.Do(req, nil, http.StatusOK)
 }
 
-// MonoPayKeyList повертає всі імпортовані ключі торговця.
+// MonoPayKeyList returns every imported merchant key.
 func (c *Client) MonoPayKeyList(ctx context.Context) ([]MonoPayKey, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet,
 		"/api/merchant/monopay/pubkey-list", http.NoBody)

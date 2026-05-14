@@ -5,12 +5,12 @@ import (
 	"time"
 )
 
-// API — інтерфейс еквайрингового клієнта. Існує окремо від *[Client],
-// щоб користувачі могли мокувати його через mockgen/testify-mock у
-// власних тестах. Сам [Client] цей інтерфейс реалізує (перевіряється
-// compile-time assert-ом нижче).
+// API is the interface of the acquiring client. It exists separately
+// from *[Client] so callers can mock it via mockgen/testify-mock in
+// their own tests. [Client] implements this interface (verified by
+// the compile-time assert below).
 //
-// Згруповано за топіками для зручності.
+// Grouped by topic for convenience.
 type API interface {
 	// Merchant.
 	MerchantDetails(ctx context.Context) (*MerchantDetails, error)
@@ -19,7 +19,7 @@ type API interface {
 	Submerchants(ctx context.Context) ([]Submerchant, error)
 	Statement(ctx context.Context, from, to time.Time, code string) ([]StatementInvoice, error)
 
-	// Інвойси.
+	// Invoices.
 	CreateInvoice(ctx context.Context, in *CreateInvoiceRequest) (*CreateInvoiceResponse, error)
 	InvoiceStatus(ctx context.Context, invoiceID string) (*InvoiceStatusResponse, error)
 	CancelInvoice(ctx context.Context, in *CancelRequest) (*CancelResponse, error)
@@ -30,17 +30,17 @@ type API interface {
 	PaymentDirect(ctx context.Context, in *PaymentDirectRequest) (*PaymentDirectResponse, error)
 	SyncPayment(ctx context.Context, in *SyncPaymentRequest) (*SyncPaymentResponse, error)
 
-	// QR-каси.
+	// QR cash desks.
 	QRList(ctx context.Context) ([]QR, error)
 	QRDetails(ctx context.Context, qrID string) (*QRDetails, error)
 	QRResetAmount(ctx context.Context, qrID string) error
 
-	// Wallet (токенізовані картки).
+	// Wallet (tokenized cards).
 	Wallet(ctx context.Context, walletID string) ([]WalletCard, error)
 	DeleteCard(ctx context.Context, cardToken string) error
 	WalletPayment(ctx context.Context, in *WalletPaymentRequest) (*WalletPaymentResponse, error)
 
-	// Subscriptions (регулярні платежі).
+	// Subscriptions (recurring payments).
 	SubscriptionCreate(ctx context.Context, in *SubscriptionCreateRequest) (*SubscriptionCreateResponse, error)
 	SubscriptionEdit(ctx context.Context, in *SubscriptionEditRequest) error
 	SubscriptionRemove(ctx context.Context, subscriptionID string) error
@@ -48,15 +48,15 @@ type API interface {
 	SubscriptionList(ctx context.Context, opts SubscriptionListOptions) (*SubscriptionsListResponse, error)
 	SubscriptionPayments(ctx context.Context, opts SubscriptionPaymentsOptions) (*SubscriptionPaymentsResponse, error)
 
-	// monopay-ключі (підпис запитів до віджета monopay).
+	// monopay keys (signing requests to the monopay widget).
 	MonoPayKeyImport(ctx context.Context, in *MonoPayKeyImportRequest) (string, error)
 	MonoPayKeyDelete(ctx context.Context, keyID string) error
 	MonoPayKeyList(ctx context.Context) ([]MonoPayKey, error)
 
-	// Split-receivers (розщеплення платежів) та T2P-термінали.
+	// Split receivers (payment splitting) and T2P terminals.
 	SplitReceivers(ctx context.Context) ([]SplitReceiver, error)
 	Terminals(ctx context.Context) ([]Terminal, error)
 }
 
-// Compile-time assert: *Client задовольняє [API].
+// Compile-time assert: *Client satisfies [API].
 var _ API = (*Client)(nil)

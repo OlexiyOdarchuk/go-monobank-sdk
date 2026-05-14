@@ -21,63 +21,71 @@ import (
 	secp256k1 "github.com/decred/dcrd/dcrec/secp256k1/v4"
 )
 
-// Permission — дозволи (permissions) для корпоративної авторизації.
-// Передаються у заголовку X-Permissions при /personal/auth/request і
-// визначають, які дані буде видно після підтвердження клієнтом.
+// Permission represents the permissions for corporate authorization.
+// They are sent in the X-Permissions header on /personal/auth/request
+// and define which data becomes visible after the client confirms.
 //
-// Типізація захищає від випадкових опечаток: компілятор не дасть
-// передати "x" туди, де очікується [Permission]. Якщо потрібно
-// проставити перелік як рядок (наприклад, для логів) — конвертуй
-// явно: string(p).
+// The typed string protects against accidental typos: the compiler
+// will not let you pass "x" where a [Permission] is expected. When
+// you need the value as a plain string (for example, for logs),
+// convert explicitly: string(p).
 type Permission string
 
-// Стандартні дозволи. Список — повний на момент написання SDK; якщо
-// Mono додасть нові — використовуй Permission("...") напряму.
+// Standard permissions. The list is complete at the time of writing;
+// if Mono adds new ones, use Permission("...") directly.
 const (
-	// PermSt — виписки (транзакції) і clientInfo фізичної особи.
+	// PermSt — statements (transactions) and clientInfo of an
+	// individual.
 	PermSt Permission = "s"
-	// PermPI — персональні дані (ім'я та прізвище).
+	// PermPI — personal data (first name and last name).
 	PermPI Permission = "p"
-	// PermFOP — виписки і clientInfo для рахунків ФОП.
+	// PermFOP — statements and clientInfo for sole-proprietor (FOP)
+	// accounts.
 	PermFOP Permission = "f"
 )
 
-// Помилки, які можуть повернутись із хелперів корпоративної авторизації.
+// Errors that may surface from the corporate-authorization helpers.
 var (
-	// ErrDecodePrivateKey — не вдалося декодувати PEM-блок приватного ключа.
+	// ErrDecodePrivateKey indicates that the PEM block of the private
+	// key could not be decoded.
 	ErrDecodePrivateKey = errors.New("failed to decode private key")
-	// ErrEncodePublicKey — не вдалося згенерувати SHA-1 публічного ключа
-	// (потрібен як X-Key-Id).
+	// ErrEncodePublicKey indicates that the SHA-1 of the public key
+	// (needed as X-Key-Id) could not be produced.
 	ErrEncodePublicKey = errors.New("failed to encode public key with sha1")
-	// ErrNoPrivateKey — у вхідних байтах немає PEM-блоку типу "EC PRIVATE KEY".
+	// ErrNoPrivateKey indicates that the input bytes contain no PEM
+	// block of type "EC PRIVATE KEY".
 	ErrNoPrivateKey = errors.New("failed to find private key block")
-	// ErrInvalidEC — значення приватного ключа не лежить на кривій secp256k1.
+	// ErrInvalidEC indicates that the private-key value does not lie on
+	// the secp256k1 curve.
 	ErrInvalidEC = errors.New("invalid elliptic curve private key value")
-	// ErrInvalidPrivateKey — некоректна довжина приватного ключа після
-	// стрипу провідних нулів (має бути ≤ 32 байти).
+	// ErrInvalidPrivateKey indicates an invalid private-key length
+	// after stripping leading zeros (must be ≤ 32 bytes).
 	ErrInvalidPrivateKey = errors.New("invalid private key length")
 )
 
-// CorpAuthMakerAPI — фабрика per-call корпоративних авторизаторів.
-// Корпоративний клієнт використовує її, щоб для кожного запиту обрати
-// потрібний scope: або request-id (для запитів про дані вже схваленого
-// клієнта), або permissions (для початкового /personal/auth/request).
+// CorpAuthMakerAPI is the factory of per-call corporate authorizers.
+// The corporate client uses it to pick the right scope for each
+// request: either a request-id (for requests about data of an
+// already-approved client) or permissions (for the initial
+// /personal/auth/request).
 type CorpAuthMakerAPI interface {
-	// New повертає Authorizer для endpoint-ів із request-id у X-Request-Id.
+	// New returns an Authorizer for endpoints that pass the request-id
+	// in X-Request-Id.
 	New(requestID string) Authorizer
 
-	// NewPermissions повертає Authorizer для /personal/auth/request,
-	// передаючи permissions у X-Permissions. Порожній список означає
-	// «усі дозволи».
+	// NewPermissions returns an Authorizer for /personal/auth/request,
+	// passing permissions in X-Permissions. An empty list means
+	// "all permissions".
 	NewPermissions(permissions ...Permission) Authorizer
 }
 
-// CorpAuthMaker зберігає приватний ECDSA-ключ (secp256k1) і обчислений
-// з нього X-Key-Id (SHA-1 від uncompressed public point). Породжує
-// per-request Authorizer-и, що підписують кожен запит так, як очікує Mono.
+// CorpAuthMaker holds the private ECDSA key (secp256k1) and the
+// X-Key-Id derived from it (SHA-1 of the uncompressed public point).
+// It produces per-request Authorizers that sign each request the way
+// Mono expects.
 type CorpAuthMaker struct {
 	privateKey *ecdsa.PrivateKey
-	// KeyID — X-Key-Id сервісу: hex(sha1(uncompressed-pubkey)).
+	// KeyID is the service's X-Key-Id: hex(sha1(uncompressed-pubkey)).
 	KeyID string
 }
 
@@ -93,22 +101,24 @@ const (
 	ecPrivateKeyVersion   = 1
 )
 
-// NewCorpAuthMaker будує [CorpAuthMaker] з PEM-кодованого приватного
-// ключа у форматі SEC1 ("EC PRIVATE KEY") на кривій secp256k1. Якщо у
-// вхідних байтах є кілька PEM-блоків (наприклад, заголовок параметрів +
-// власне ключ), декодер пропустить нерелевантні і знайде потрібний.
+// NewCorpAuthMaker builds a [CorpAuthMaker] from a PEM-encoded
+// private key in the SEC1 ("EC PRIVATE KEY") format on the secp256k1
+// curve. If the input contains several PEM blocks (for example,
+// a parameters header plus the key itself), the decoder skips the
+// irrelevant ones and finds the right block.
 func NewCorpAuthMaker(secKey []byte) (*CorpAuthMaker, error) {
 	privateKey, err := decodePrivateKey(secKey)
 	if err != nil {
 		return nil, ErrDecodePrivateKey
 	}
 
-	// X-Key-Id = hex(sha1(uncompressed-pubkey)). SHA-1 — формат банку
-	// (не криптовразливість тут: це лише ідентифікатор, не підпис).
-	// Серіалізація точки — через secp256k1.SerializeUncompressed
-	// (deprecated elliptic.Marshal заміщений нативним методом).
+	// X-Key-Id = hex(sha1(uncompressed-pubkey)). SHA-1 here is the
+	// bank's chosen format (not a crypto weakness: it is only an
+	// identifier, not a signature). The point is serialized via
+	// secp256k1.SerializeUncompressed (the deprecated elliptic.Marshal
+	// is replaced by the native method).
 	pkBytes := serializeECDSAPubKeyUncompressed(&privateKey.PublicKey)
-	hash := sha1.New() //nolint:gosec // SHA-1 — формат X-Key-Id Mono, не для підпису
+	hash := sha1.New() //nolint:gosec // SHA-1 is Mono's X-Key-Id format, not used for signing
 	if _, err := hash.Write(pkBytes); err != nil {
 		return nil, ErrEncodePublicKey
 	}
@@ -120,9 +130,9 @@ func NewCorpAuthMaker(secKey []byte) (*CorpAuthMaker, error) {
 	}, nil
 }
 
-// LogValue — slog-серіалізатор, що приховує приватний ECDSA-ключ.
-// Без нього `slog.Info("maker", "v", maker)` вивів би сирі координати
-// ключа.
+// LogValue is the slog serializer that hides the private ECDSA key.
+// Without it, `slog.Info("maker", "v", maker)` would dump the raw key
+// coordinates.
 func (c *CorpAuthMaker) LogValue() slog.Value {
 	return slog.GroupValue(
 		slog.String("KeyID", c.KeyID),
@@ -130,17 +140,17 @@ func (c *CorpAuthMaker) LogValue() slog.Value {
 	)
 }
 
-// New повертає [Corp]-авторизатор, прив'язаний до конкретного
-// requestID. Порожній requestID валідний для endpoint-ів, які не
-// потребують ані request-id, ані permissions (наприклад
-// /personal/corp/settings, /personal/auth/registration).
+// New returns a [Corp] authorizer bound to the given requestID. An
+// empty requestID is valid for endpoints that require neither a
+// request-id nor permissions (for example /personal/corp/settings,
+// /personal/auth/registration).
 func (c *CorpAuthMaker) New(requestID string) Authorizer {
 	return Corp{maker: c, requestID: requestID}
 }
 
-// NewPermissions повертає [Corp]-авторизатор, прив'язаний до набору
-// permissions (передаються у X-Permissions). Використовується тільки для
-// /personal/auth/request — для решти endpoint-ів вживай [CorpAuthMaker.New].
+// NewPermissions returns a [Corp] authorizer bound to a set of
+// permissions (sent in X-Permissions). Used only for
+// /personal/auth/request — for other endpoints use [CorpAuthMaker.New].
 func (c *CorpAuthMaker) NewPermissions(permissions ...Permission) Authorizer {
 	parts := make([]string, len(permissions))
 	for i, p := range permissions {
@@ -149,8 +159,8 @@ func (c *CorpAuthMaker) NewPermissions(permissions ...Permission) Authorizer {
 	return Corp{maker: c, permissions: strings.Join(parts, "")}
 }
 
-// Corp — корпоративний Authorizer для одного запиту. Напряму не
-// конструюй; отримуй через [CorpAuthMaker.New] або
+// Corp is the corporate Authorizer for a single request. Do not
+// construct it directly; obtain one via [CorpAuthMaker.New] or
 // [CorpAuthMaker.NewPermissions].
 type Corp struct {
 	maker       *CorpAuthMaker
@@ -158,10 +168,11 @@ type Corp struct {
 	permissions string
 }
 
-// SetAuth підписує вихідний запит і виставляє заголовки X-Key-Id,
-// X-Time, X-Sign плюс або X-Request-Id, або X-Permissions залежно від
-// того, як було сконструйовано цей Corp. nil-request — no-op; запит без
-// URL поверне помилку (підпис не побудувати без шляху).
+// SetAuth signs the outgoing request and sets the X-Key-Id, X-Time,
+// X-Sign headers plus either X-Request-Id or X-Permissions depending
+// on how this Corp was constructed. A nil request is a no-op; a
+// request without a URL returns an error (the signature requires the
+// path).
 func (a Corp) SetAuth(r *http.Request) error {
 	if r == nil {
 		return nil
@@ -194,9 +205,9 @@ func (a Corp) SetAuth(r *http.Request) error {
 	return nil
 }
 
-// sign обчислює Sign = base64(ECDSA(SHA-256(X-Time | actor | URL.Path))),
-// де actor — це X-Request-Id або X-Permissions (порожній для endpoint-ів,
-// що не мають ані того, ані того). Конкатенація без роздільників.
+// sign computes Sign = base64(ECDSA(SHA-256(X-Time | actor | URL.Path))),
+// where actor is the X-Request-Id or X-Permissions value (empty for
+// endpoints that have neither). Concatenation uses no separators.
 func (a Corp) sign(timestamp, actor, urlPath string) (string, error) {
 	return a.signString(timestamp + actor + urlPath)
 }
@@ -218,10 +229,10 @@ func (a Corp) signString(str string) (string, error) {
 	return base64.StdEncoding.EncodeToString(bb), nil
 }
 
-// serializeECDSAPubKeyUncompressed повертає uncompressed-кодування
-// (SEC1 §2.3.3) точки secp256k1: 1 префіксний байт 0x04 + X (32 байти,
-// left-padded) + Y (32 байти, left-padded). Замінює deprecated
-// elliptic.Marshal.
+// serializeECDSAPubKeyUncompressed returns the uncompressed encoding
+// (SEC1 §2.3.3) of a secp256k1 point: one prefix byte 0x04 + X
+// (32 bytes, left-padded) + Y (32 bytes, left-padded). It replaces
+// the deprecated elliptic.Marshal.
 func serializeECDSAPubKeyUncompressed(pub *ecdsa.PublicKey) []byte {
 	const coordSize = 32
 	out := make([]byte, 1+2*coordSize)

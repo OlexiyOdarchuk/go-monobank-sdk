@@ -15,65 +15,67 @@ import (
 	"github.com/OlexiyOdarchuk/go-monobank-sdk/auth"
 )
 
-// Помилки рівня клієнта.
+// Client-level errors.
 var (
-	// ErrEmptyRequest — у [Client.Do] передано nil-request.
+	// ErrEmptyRequest indicates that [Client.Do] received a nil request.
 	ErrEmptyRequest = errors.New("empty request")
-	// ErrInvalidURL — baseURL клієнта не валідний (зазвичай не настає,
-	// бо [New] завжди ставить дефолт; може виникнути після
-	// [Client.SetBaseURL] з невалідним рядком).
+	// ErrInvalidURL indicates that the client's baseURL is not valid
+	// (usually never happens because [New] always sets a default; it
+	// can occur after [Client.SetBaseURL] with an invalid string).
 	ErrInvalidURL = errors.New("invalid URL")
-	// ErrInsecureBaseURL — [WithBaseURL] отримав не-https URL для
-	// зовнішнього хоста. Захист від випадкового передавання токенів
-	// у відкритому вигляді. Для тестів через httptest або власний
-	// localhost-proxy використовуй loopback-хост або
-	// [WithInsecureBaseURL] (свідомо).
+	// ErrInsecureBaseURL indicates that [WithBaseURL] received a
+	// non-https URL for a non-loopback host. This guards against
+	// accidentally sending tokens in cleartext. For tests via httptest
+	// or a custom localhost proxy, use a loopback host or opt in via
+	// [WithInsecureBaseURL].
 	ErrInsecureBaseURL = errors.New("base URL must be https for non-loopback hosts")
 )
 
-// Sentinel-помилки за типовими HTTP-статусами. [APIError.Is] реалізує
-// errors.Is проти них, тож зручне розпізнавання:
+// Sentinel errors for the common HTTP statuses. [APIError.Is]
+// implements errors.Is against them, giving convenient detection:
 //
-//	if errors.Is(err, monobank.ErrUnauthorized) { /* токен прострочено */ }
-//	if errors.Is(err, monobank.ErrTooManyRequests) { /* зачекати */ }
+//	if errors.Is(err, monobank.ErrUnauthorized) { /* token expired */ }
+//	if errors.Is(err, monobank.ErrTooManyRequests) { /* back off */ }
 //
-// Поверх sentinel-ів усе ще доступний повний [APIError] через errors.As
-// (статус-код, ErrorDescription, raw body).
+// On top of the sentinels, the full [APIError] is still reachable via
+// errors.As (status code, ErrorDescription, raw body).
 var (
-	// ErrUnauthorized — HTTP 401: токен невалідний/прострочений.
+	// ErrUnauthorized is HTTP 401: the token is invalid or expired.
 	ErrUnauthorized = errors.New("monobank: unauthorized (401)")
-	// ErrForbidden — HTTP 403: токен не має прав на endpoint.
+	// ErrForbidden is HTTP 403: the token lacks rights for the endpoint.
 	ErrForbidden = errors.New("monobank: forbidden (403)")
-	// ErrNotFound — HTTP 404: endpoint або сутність не існує.
+	// ErrNotFound is HTTP 404: endpoint or entity does not exist.
 	ErrNotFound = errors.New("monobank: not found (404)")
-	// ErrTooManyRequests — HTTP 429: rate limit перевищено.
+	// ErrTooManyRequests is HTTP 429: rate limit exceeded.
 	ErrTooManyRequests = errors.New("monobank: too many requests (429)")
 )
 
-// HTTPDoer — мінімальна підмножина *http.Client, від якої залежить
-// [Client]. Будь-який транспорт, що реалізує цей інтерфейс (стандартний
-// клієнт, кастомний round-tripper, тестовий фейк), підключається через
+// HTTPDoer is the minimal subset of *http.Client that [Client]
+// depends on. Any transport that implements this interface (the
+// standard client, a custom round-tripper, a test fake) plugs in via
 // [WithHTTPDoer].
 type HTTPDoer interface {
 	Do(req *http.Request) (*http.Response, error)
 }
 
-// APIError повертається, коли HTTP-відповідь monobank не збіглася з
-// жодним зі статусів, які очікував викликач. Зберігає метод, повний
-// URL, отриманий і очікуваний статус-коди, плюс перші 256 символів body
-// для діагностики.
+// APIError is returned when a monobank HTTP response does not match
+// any of the statuses the caller expected. It captures the method,
+// full URL, received and expected status codes, plus the first 256
+// characters of the body for diagnostics.
 //
-// Якщо тіло відповіді — це JSON виду {"errorDescription": "..."} (стандартний
-// формат помилок Mono для personal/corporate/business/acquiring API), то
-// поле [APIError.ErrorDescription] містить розпарсене повідомлення; у інших
-// випадках воно порожнє, а оригінальні байти залишаються в [APIError.Body].
+// If the response body is JSON of the shape {"errorDescription": "..."}
+// (the standard Mono error format for the personal/corporate/business/
+// acquiring APIs), the [APIError.ErrorDescription] field holds the
+// parsed message; otherwise it is empty and the original bytes remain
+// in [APIError.Body].
 type APIError struct {
 	Method              string
 	URL                 string
 	StatusCode          int
 	ExpectedStatusCodes []int
-	// ErrorDescription — значення поля errorDescription з JSON-тіла
-	// відповіді Mono, якщо тіло вдалося розпарсити; інакше порожнє.
+	// ErrorDescription is the value of the errorDescription field from
+	// the JSON body of the Mono response, when the body could be
+	// parsed; otherwise empty.
 	ErrorDescription string
 	Body             []byte
 }
@@ -87,9 +89,9 @@ func (e *APIError) Error() string {
 		e.Method, e.URL, e.StatusCode, e.ExpectedStatusCodes, detail)
 }
 
-// Is дозволяє errors.Is(apiErr, monobank.ErrUnauthorized) тощо для
-// типових HTTP-статусів. Інші статус-коди мапляться лише на сам
-// [APIError] — використовуй errors.As для повного доступу.
+// Is enables errors.Is(apiErr, monobank.ErrUnauthorized) and similar
+// checks for the common HTTP statuses. Other status codes map only
+// to [APIError] itself — use errors.As for full access.
 func (e *APIError) Is(target error) bool {
 	switch target {
 	case ErrUnauthorized:
@@ -104,15 +106,16 @@ func (e *APIError) Is(target error) bool {
 	return false
 }
 
-// errorBody — JSON-форма помилки, яку повертають personal/corporate/
-// business/acquiring API Mono. Інші підпакети (наприклад, installment)
-// мають власні формати й використовують власні типи помилок.
+// errorBody is the JSON shape of the error that Mono returns from the
+// personal/corporate/business/acquiring APIs. Other sub-packages (for
+// example, installment) have their own formats and use their own
+// error types.
 type errorBody struct {
 	ErrorDescription string `json:"errorDescription"`
 }
 
-// parseErrorDescription витягує errorDescription з JSON-тіла. Повертає
-// "" якщо тіло не JSON або поле відсутнє/порожнє.
+// parseErrorDescription extracts errorDescription from a JSON body.
+// Returns "" if the body is not JSON or the field is missing or empty.
 func parseErrorDescription(body []byte) string {
 	if len(body) == 0 {
 		return ""
@@ -131,12 +134,12 @@ func truncate(b []byte, n int) string {
 	return string(b[:n]) + "…"
 }
 
-// Client — базовий HTTP-транспорт для всіх поверхонь monobank. Кожен
-// підпакет (bank, personal, corporate, business, acquiring) композує
-// [Client] із [auth.Authorizer] із пакета auth та власним base URL
-// під свій API. Прямо з рутинного коду цей тип зазвичай не
-// конструюється — використовуй фабрики підпакетів ([personal.New],
-// [bank.New] тощо).
+// Client is the base HTTP transport for every monobank surface. Each
+// sub-package (bank, personal, corporate, business, acquiring)
+// composes [Client] with an [auth.Authorizer] from the auth package
+// and the base URL tailored to its API. Routine code does not usually
+// construct this type directly — use the sub-package factories
+// ([personal.New], [bank.New] etc.).
 type Client struct {
 	http      HTTPDoer
 	auth      auth.Authorizer
@@ -145,20 +148,21 @@ type Client struct {
 	limiter   RateLimiter
 	userAgent string
 
-	// unsafeRetries дозволяє ретраїти POST/PATCH без Idempotency-Key.
-	// За замовчуванням false: непідтверджувано-ідемпотентні методи
-	// ретраяться лише за наявності заголовка Idempotency-Key (інакше
-	// retry-цикл після 502/504 може створити дублікат операції).
+	// unsafeRetries allows retrying POST/PATCH without an
+	// Idempotency-Key. Default is false: methods that are not provably
+	// idempotent are retried only when the Idempotency-Key header is
+	// set (otherwise a retry loop after 502/504 can create a duplicate
+	// operation).
 	unsafeRetries bool
 
-	// allowInsecureBaseURL — bypass для [WithInsecureBaseURL]. За
-	// замовчуванням http://-URL на не-loopback-хост відхиляється з
-	// [ErrInsecureBaseURL] на першому Do.
+	// allowInsecureBaseURL is the bypass for [WithInsecureBaseURL]. By
+	// default, an http:// URL pointing at a non-loopback host is
+	// rejected with [ErrInsecureBaseURL] on the first Do.
 	allowInsecureBaseURL bool
 
-	// optErr — помилка, що сталася під час застосування Option-у
-	// (наприклад, insecure base URL). Повертається з першого ж Do,
-	// щоб помилка не «потерялась» між конструктором і викликом.
+	// optErr holds the error produced while applying an Option (for
+	// example, insecure base URL). It is returned from the first Do
+	// so the error does not get lost between constructor and call.
 	optErr error
 
 	logger *slog.Logger
@@ -166,10 +170,11 @@ type Client struct {
 	onResp func(*http.Response, error)
 }
 
-// SetBaseURL перевизначає base URL уже сконструйованого клієнта.
-// Якщо uri не парситься як URL — лишає попереднє значення. Рутинно
-// використовуй [WithBaseURL] під час конструювання через [New]; цей
-// метод потрібен підпакетам, що збирають [Client] інкрементально.
+// SetBaseURL overrides the base URL of an already-constructed client.
+// If uri does not parse as a URL, the previous value is kept. For
+// routine code use [WithBaseURL] when constructing through [New];
+// this method exists for sub-packages that assemble [Client]
+// incrementally.
 func (c *Client) SetBaseURL(uri string) {
 	u, err := url.Parse(uri)
 	if err != nil || u == nil {
@@ -178,19 +183,19 @@ func (c *Client) SetBaseURL(uri string) {
 	c.baseURL = u
 }
 
-// Close зупиняє фонові ресурси, прикріплені до клієнта (наразі —
-// sweeper-горутину [KeyedLimiter], якщо такий лімітер було передано
-// у [WithRateLimiter]). Безпечно викликати на клієнті, який Close
-// не потребує (повертає nil).
+// Close stops the background resources attached to the client
+// (currently the sweeper goroutine of [KeyedLimiter], when such a
+// limiter was passed via [WithRateLimiter]). Safe to call on a client
+// that does not need Close (returns nil).
 //
-// Реалізує [io.Closer], тож типовий defer-патерн просто працює:
+// Implements [io.Closer], so the standard defer pattern just works:
 //
 //	cli := personal.New(token, monobank.WithRateLimiter(klim))
 //	defer cli.Close()
 //
-// Без виклику Close — горутина sweeper-а [KeyedLimiter] лишається
-// активною до завершення процесу (це leak у тестах, але норма у
-// довготривалих сервісах із одним глобальним клієнтом).
+// Without Close, the sweeper goroutine of [KeyedLimiter] stays alive
+// until the process exits (a leak in tests, but normal in long-running
+// services with a single global client).
 func (c Client) Close() error {
 	if closer, ok := c.limiter.(interface{ Stop() }); ok {
 		closer.Stop()
@@ -198,24 +203,25 @@ func (c Client) Close() error {
 	return nil
 }
 
-// Do виконує req проти c.baseURL і декодує відповідь у v. Кількість
-// очікуваних статус-кодів довільна; за замовчуванням — http.StatusOK.
-// Якщо відповідь має інший код — повертає [*APIError].
+// Do executes req against c.baseURL and decodes the response into v.
+// The number of expected status codes is arbitrary; the default is
+// http.StatusOK. If the response has a different code, returns
+// [*APIError].
 //
-// Тип v впливає на режим декодування:
-//   - nil — body просто читається й викидається;
-//   - *[]byte — у v записуються сирі байти body;
-//   - io.Writer — body копіюється у Writer;
-//   - інакше — декодується як JSON у v.
+// The type of v selects the decoding mode:
+//   - nil — the body is simply read and discarded;
+//   - *[]byte — the raw body bytes are written into v;
+//   - io.Writer — the body is copied to the Writer;
+//   - otherwise — decoded as JSON into v.
 //
-// Транзитивні відмови (5xx, 429) ретраяться згідно з [WithRetry]
-// (з повагою до Retry-After). Скасування контексту — миттєвий вихід.
+// Transient failures (5xx, 429) are retried per [WithRetry]
+// (honoring Retry-After). Context cancellation exits immediately.
 //
-// Метод експортовано, щоб підпакети (bank, personal, corporate,
-// business, acquiring) використовували один HTTP-плюмбінг (retry,
-// base-URL resolution, маппінг помилок), не реалізуючи його повторно.
-// Передавай *http.Request з path-only URL — він resolve-иться проти
-// налаштованого base URL.
+// The method is exported so sub-packages (bank, personal, corporate,
+// business, acquiring) share one HTTP plumbing (retry, base-URL
+// resolution, error mapping) instead of reimplementing it. Pass an
+// *http.Request with a path-only URL — it is resolved against the
+// configured base URL.
 func (c Client) Do(req *http.Request, v any, expectedStatusCodes ...int) error {
 	if c.optErr != nil {
 		return c.optErr
@@ -252,10 +258,10 @@ func (c Client) Do(req *http.Request, v any, expectedStatusCodes ...int) error {
 		}
 	}
 
-	// Зчитати тіло один раз і виставити GetBody, щоб ретраї могли
-	// перечитати його. http.NewRequest сам ставить GetBody для
-	// *bytes.Reader/*bytes.Buffer/*strings.Reader; тут страхуємо
-	// випадок із довільним io.Reader.
+	// Read the body once and set GetBody so retries can re-read it.
+	// http.NewRequest sets GetBody itself for
+	// *bytes.Reader/*bytes.Buffer/*strings.Reader; here we cover the
+	// case of an arbitrary io.Reader.
 	if req.Body != nil && req.Body != http.NoBody && req.GetBody == nil {
 		buf, err := io.ReadAll(req.Body)
 		_ = req.Body.Close()
@@ -286,10 +292,11 @@ func (c Client) Do(req *http.Request, v any, expectedStatusCodes ...int) error {
 	return c.retry.run(req.Context(), attemptFn)
 }
 
-// shouldRetry визначає, чи можна автоматично повторювати req на
-// transient-помилку. GET/HEAD/PUT/DELETE/OPTIONS — завжди (ідемпотентні
-// за HTTP-семантикою). POST/PATCH — тільки коли користувач явно проставив
-// Idempotency-Key (банк де-дуплікує) або через [WithUnsafeRetries].
+// shouldRetry reports whether req may be automatically retried on a
+// transient failure. GET/HEAD/PUT/DELETE/OPTIONS are always retried
+// (idempotent per HTTP semantics). POST/PATCH only when the caller
+// explicitly set Idempotency-Key (the bank deduplicates) or via
+// [WithUnsafeRetries].
 func (c Client) shouldRetry(req *http.Request) bool {
 	switch req.Method {
 	case http.MethodGet, http.MethodHead, http.MethodPut, http.MethodDelete, http.MethodOptions:
@@ -302,8 +309,8 @@ func (c Client) shouldRetry(req *http.Request) bool {
 }
 
 func (c Client) attempt(req *http.Request, v any, expectedStatusCodes []int) error {
-	// Перед кожною спробою скидаємо тіло — http.Transport повністю
-	// споживає Body на попередньому Do.
+	// Reset the body before each attempt — http.Transport fully
+	// consumes Body during the previous Do.
 	if req.GetBody != nil {
 		body, err := req.GetBody()
 		if err != nil {
@@ -369,9 +376,10 @@ func (c Client) attempt(req *http.Request, v any, expectedStatusCodes []int) err
 		return apiErr
 	}
 
-	// Порожнє тіло (204 No Content або Content-Length: 0) — не намагаємося
-	// JSON-decode, бо json.Decoder.Decode на порожньому стрімі повертає
-	// io.EOF. Для DELETE-методів це валідна успішна відповідь.
+	// Empty body (204 No Content or Content-Length: 0) — do not try to
+	// JSON-decode, because json.Decoder.Decode on an empty stream
+	// returns io.EOF. For DELETE methods this is a valid success
+	// response.
 	if resp.StatusCode == http.StatusNoContent || resp.ContentLength == 0 {
 		_, _ = io.Copy(io.Discard, resp.Body)
 		return nil

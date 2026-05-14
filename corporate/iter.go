@@ -8,16 +8,17 @@ import (
 	"github.com/OlexiyOdarchuk/go-monobank-sdk/bank"
 )
 
-// TransactionsRangeIter — streaming-варіант [Client.TransactionsRange].
-// Аналогічно personal-клієнту, але потребує requestID (схвалення доступу
-// клієнтом, див. [Client.Auth]).
+// TransactionsRangeIter is the streaming variant of
+// [Client.TransactionsRange]. Same shape as the personal client, but
+// requires requestID (the client must have approved access, see
+// [Client.Auth]).
 //
 //	for tx, err := range cli.TransactionsRangeIter(ctx, reqID, accID, from, to) {
 //	    if err != nil { return err }
 //	    process(tx)
 //	}
 //
-// Якщо to нульовий або раніше за from — нуль yields без помилки.
+// If to is zero or earlier than from, yields nothing without an error.
 func (c *Client) TransactionsRangeIter(ctx context.Context, requestID, accountID string,
 	from, to time.Time) iter.Seq2[bank.Transaction, error] {
 

@@ -11,10 +11,11 @@ import (
 	"github.com/OlexiyOdarchuk/go-monobank-sdk/bank"
 )
 
-// ClientInfo повертає дані клієнта, доступ до якого було надано за
-// requestID. Які саме поля заповнено — залежить від permissions, які
-// запитував [Client.Auth]: PermPI наповнить Name; PermSt — Accounts і
-// дозволить читати виписки; PermFOP — рахунки ФОП.
+// ClientInfo returns the data of the client whose access was granted
+// via requestID. Which fields are populated depends on the
+// permissions [Client.Auth] requested: PermPI fills Name; PermSt
+// fills Accounts and unlocks statement reads; PermFOP exposes FOP
+// (sole-proprietor) accounts.
 // https://api.monobank.ua/docs/corporate.html#tag/Klyentski-personalni-dani/paths/~1personal~1client-info/get
 func (c *Client) ClientInfo(ctx context.Context, requestID string) (*bank.ClientInfo, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "/personal/client-info", http.NoBody)
@@ -28,9 +29,9 @@ func (c *Client) ClientInfo(ctx context.Context, requestID string) (*bank.Client
 	return &out, nil
 }
 
-// Transactions повертає виписку по одному з рахунків, доступ до яких
-// видано через requestID. Той самий ліміт 31-денного вікна, що й у
-// [personal.Client.Transactions] — для ширших діапазонів є
+// Transactions returns the statement for one of the accounts whose
+// access was granted via requestID. Same 31-day window limit as
+// [personal.Client.Transactions] — for wider ranges use
 // [Client.TransactionsRange].
 // https://api.monobank.ua/docs/corporate.html#tag/Klyentski-personalni-dani/paths/~1personal~1statement~1{account}~1{from}~1{to}/get
 func (c *Client) Transactions(ctx context.Context, requestID, accountID string, from, to time.Time) (bank.Transactions, error) {
@@ -49,9 +50,10 @@ func (c *Client) Transactions(ctx context.Context, requestID, accountID string, 
 	return out, nil
 }
 
-// TransactionsRange пагінує [Client.Transactions] на довільному
-// діапазоні, нарізаючи його на послідовні 31-денні вікна і зчіплюючи
-// результати. Якщо to нульовий або раніше за from — повертає nil, nil.
+// TransactionsRange paginates [Client.Transactions] over an
+// arbitrary range, slicing it into consecutive 31-day windows and
+// concatenating the results. If to is zero or earlier than from,
+// it returns nil, nil.
 func (c *Client) TransactionsRange(ctx context.Context, requestID, accountID string, from, to time.Time) (bank.Transactions, error) {
 	if to.IsZero() || !to.After(from) {
 		return nil, nil

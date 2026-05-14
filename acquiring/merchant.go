@@ -9,8 +9,9 @@ import (
 	"time"
 )
 
-// MerchantDetails повертає профіль мерчанта: id, назву, ЄДРПОУ.
-// Зручно для smoke-test токена.
+// MerchantDetails returns the merchant profile: id, name, EDRPOU
+// (Ukrainian business registration code). Handy for smoke-testing
+// the token.
 // https://api.monobank.ua/docs/acquiring.html#tag/Vyklyki-dlya-mercha/paths/~1api~1merchant~1details/get
 func (c *Client) MerchantDetails(ctx context.Context) (*MerchantDetails, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "/api/merchant/details", http.NoBody)
@@ -24,8 +25,8 @@ func (c *Client) MerchantDetails(ctx context.Context) (*MerchantDetails, error) 
 	return &out, nil
 }
 
-// Employees перелічує активних співробітників мерчанта (наприклад,
-// одержувачів чайових). ID із цього списку передається у
+// Employees lists the merchant's active employees (for example,
+// tip recipients). IDs from this list go into
 // CreateInvoiceRequest.TipsEmployeeID.
 // https://api.monobank.ua/docs/acquiring.html#tag/Vyklyki-dlya-mercha/paths/~1api~1merchant~1employee~1list/get
 func (c *Client) Employees(ctx context.Context) ([]Employee, error) {
@@ -40,11 +41,12 @@ func (c *Client) Employees(ctx context.Context) ([]Employee, error) {
 	return out.List, nil
 }
 
-// PubKey повертає публічний ключ мерчанта (base64-кодований PEM x.509
-// ECDSA, NIST P-256), яким верифікуються підписи вебхуків еквайрингу.
-// Розбери поле Key через [ServerKey.Public] чи [ParsePubKey] і кешуй —
-// банк ротейтить ключ рідко, але потенційно міняє. На відміну від
-// /bank/sync — це окремий ключ для еквайрингових webhook-ів.
+// PubKey returns the merchant public key (a base64-encoded PEM x.509
+// ECDSA key on NIST P-256) used to verify acquiring webhook
+// signatures. Parse the Key field via [ServerKey.Public] or
+// [ParsePubKey] and cache it — the bank rotates the key rarely, but
+// it can change. Unlike /bank/sync, this is a separate key for the
+// acquiring webhooks.
 // https://api.monobank.ua/docs/acquiring.html#tag/Vyklyki-dlya-mercha/paths/~1api~1merchant~1pubkey/get
 func (c *Client) PubKey(ctx context.Context) (*ServerKey, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "/api/merchant/pubkey", http.NoBody)
@@ -58,8 +60,9 @@ func (c *Client) PubKey(ctx context.Context) (*ServerKey, error) {
 	return &out, nil
 }
 
-// Submerchants перелічує субмерчантів, налаштованих під цим мерчантом.
-// Subm-Code використовується у Statement-фільтрі та CreateInvoice.Code.
+// Submerchants lists the submerchants configured under this
+// merchant. Subm-Code is used in the Statement filter and in
+// CreateInvoice.Code.
 // https://api.monobank.ua/docs/acquiring.html#tag/Vyklyki-dlya-mercha/paths/~1api~1merchant~1submerchant~1list/get
 func (c *Client) Submerchants(ctx context.Context) ([]Submerchant, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "/api/merchant/submerchant/list", http.NoBody)
@@ -73,10 +76,10 @@ func (c *Client) Submerchants(ctx context.Context) ([]Submerchant, error) {
 	return out.List, nil
 }
 
-// Statement повертає виписку за період для цього мерчанта. to-нульовий
-// означає «до теперішнього часу». code (опційно) фільтрує по
-// субмерчанту. Кожен рядок несе CancelList — історію повернень для
-// конкретного інвойсу.
+// Statement returns the statement for the period for this merchant.
+// A zero to means "up to now". code (optional) filters by submerchant.
+// Each row carries CancelList — the refund history for a specific
+// invoice.
 // https://api.monobank.ua/docs/acquiring.html#tag/Vyplaty-ta-zvirky/paths/~1api~1merchant~1statement/get
 func (c *Client) Statement(ctx context.Context, from, to time.Time, code string) ([]StatementInvoice, error) {
 	q := url.Values{}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -212,4 +213,14 @@ func TestSalaryRegistryTypes(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, out, 1)
 	assert.Equal(t, "SALARY_ADVANCE", out[0].Alias)
+}
+
+// TokenAuth.LogValue приховує токен у slog-виводі.
+func TestTokenAuth_LogValueRedactsToken(t *testing.T) {
+	var buf strings.Builder
+	logger := slog.New(slog.NewTextHandler(&buf, nil))
+	logger.Info("auth", "creds", TokenAuth{Token: "super-secret"})
+	out := buf.String()
+	assert.NotContains(t, out, "super-secret")
+	assert.Contains(t, out, "***")
 }

@@ -24,16 +24,16 @@ const (
 // ISO-4217 numeric code (980 = UAH, 840 = USD, 978 = EUR). Balance is in
 // units of that currency (not coins) — corp-api represents money as a
 // decimal number, so this is float64. Use [Account.BalanceMoney] for a
-// typed [money.Money] (round-tripped через множення на 100).
+// typed [money.Money] (round-tripped by multiplying by 100).
 type Account struct {
 	IBAN     string  `json:"iban"`
 	Currency int     `json:"currency"`
 	Balance  float64 `json:"balance"`
 }
 
-// BalanceMoney повертає Balance як типізовану [money.Money] (мінорні
-// одиниці, з прив'язкою валюти). Округлення — до найближчої копійки
-// (припускає 2 десяткових місця, що валідно для UAH/USD/EUR).
+// BalanceMoney returns Balance as a typed [money.Money] (minor
+// units, currency attached). Rounded to the nearest kopeck (assumes
+// 2 decimal places, which is valid for UAH/USD/EUR).
 func (a Account) BalanceMoney() money.Money {
 	return money.New(int64(math.Round(a.Balance*100)), currency.Code(a.Currency))
 }
@@ -45,9 +45,9 @@ type BalancePoint struct {
 	IsFinal bool    `json:"isFinal"`
 }
 
-// Money повертає Balance як [money.Money]. currencyCode цього BalancePoint
-// успадковується від батьківського запиту [Client.AccountBalances] —
-// передай його окремо (з Account.Currency).
+// Money returns Balance as a [money.Money]. The currencyCode of this
+// BalancePoint is inherited from the parent [Client.AccountBalances]
+// call — pass it explicitly (from Account.Currency).
 func (b BalancePoint) Money(code currency.Code) money.Money {
 	return money.New(int64(math.Round(b.Balance*100)), code)
 }
@@ -158,12 +158,13 @@ type StatementItem struct {
 	CompletedTime     epoch.Seconds `json:"completedTime,omitempty"`
 	Description       string        `json:"description"`
 	Amount            money.Money   `json:"amount"`
-	// CurrencyAlpha3 — валюта операції у форматі ISO-4217 alpha-3
-	// (наприклад, "UAH"). На відміну від [bank.Account.Currency] чи
-	// [acquiring.InvoiceStatusResponse.Currency], тут wire-формат
-	// рядковий — corp-api саме так шле currencyCode у виписці. Для
-	// типізованого порівняння конвертуй через [currency.FromAlpha3]
-	// (UnmarshalJSON робить це автоматично для Amount.Code).
+	// CurrencyAlpha3 is the operation's currency in ISO-4217 alpha-3
+	// form (for example, "UAH"). Unlike [bank.Account.Currency] or
+	// [acquiring.InvoiceStatusResponse.Currency], the wire format
+	// here is a string — that is how corp-api ships currencyCode in
+	// statements. For typed comparison, convert via
+	// [currency.FromAlpha3] (UnmarshalJSON does this automatically
+	// for Amount.Code).
 	CurrencyAlpha3 string          `json:"currencyCode"`
 	ReceiptID      string          `json:"receiptId,omitempty"`
 	CounterEdrpou  string          `json:"counterEdrpou,omitempty"`
@@ -173,9 +174,10 @@ type StatementItem struct {
 	Status         OperationStatus `json:"status"`
 }
 
-// UnmarshalJSON прив'язує currency.Code до Amount, конвертуючи з
-// alpha-3 рядка (`"UAH"`) у числовий код. Для невідомих валют Code
-// лишається нульовим (Amount.Minor усе одно коректно прочитується).
+// UnmarshalJSON attaches a currency.Code to Amount by converting
+// the alpha-3 string (`"UAH"`) to the numeric code. For unknown
+// currencies Code stays zero (Amount.Minor is still parsed
+// correctly).
 func (s *StatementItem) UnmarshalJSON(data []byte) error {
 	type raw StatementItem
 	var r raw

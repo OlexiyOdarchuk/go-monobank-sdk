@@ -1,18 +1,19 @@
-// Package bank — типи даних, які повертає Open API (спільні для personal
-// та corporate клієнтів), плюс два неавторизовані публічні endpoint-и:
-// курси валют (/bank/currency) та серверний ключ (/bank/sync).
+// Package bank exposes the data types returned by the Open API
+// (shared by the personal and corporate clients), plus the two
+// unauthorized public endpoints: currency rates (/bank/currency) and
+// the server key (/bank/sync).
 //
-// [Client] задовольняє інтерфейс webhook.KeyProvider, тож той самий
-// інстанс можна використати і для рутинного отримання курсів, і як
-// джерело ключів для webhook-handler-а:
+// [Client] satisfies the webhook.KeyProvider interface, so the same
+// instance can be used both for routine rate fetching and as a key
+// source for the webhook handler:
 //
 //	keys := bank.New()
 //	rates, _ := keys.Rates(ctx)
 //	h, _    := webhook.NewHandler(ctx, webhook.Options{Keys: keys, ...})
 //
-// [ClientInfo], [Account], [Jar] і [Transaction] використовуються
-// personal і corporate клієнтами однаково (кожен лише додає власний
-// тип авторизації — форми відповідей ідентичні).
+// [ClientInfo], [Account], [Jar] and [Transaction] are used
+// identically by the personal and corporate clients (each one only
+// adds its own authorization — the response shapes are identical).
 package bank
 
 import (
@@ -25,14 +26,15 @@ import (
 	"github.com/vtopc/epoch"
 )
 
-// MaxStatementWindow — найбільший інтервал, який /personal/statement
-// приймає за один виклик (31 доба). Для ширших діапазонів є
-// TransactionsRange на personal/corporate клієнтах — він автоматично
-// нарізає на 31-денні вікна.
+// MaxStatementWindow is the largest interval /personal/statement
+// accepts per call (31 days). For wider ranges, use TransactionsRange
+// on the personal/corporate clients — it automatically slices into
+// 31-day windows.
 const MaxStatementWindow = 31 * 24 * time.Hour
 
-// ClientInfo — відповідь /personal/client-info: що банк знає про
-// поточного клієнта (ім'я, рахунки, банки, поточна підписка на webhook).
+// ClientInfo is the response of /personal/client-info: what the bank
+// knows about the current client (name, accounts, jars, current
+// webhook subscription).
 type ClientInfo struct {
 	ID         string   `json:"clientId"`
 	Name       string   `json:"name"`
@@ -41,10 +43,11 @@ type ClientInfo struct {
 	Jars       Jars     `json:"jars"`
 }
 
-// Account — один банківський рахунок клієнта. Balance і CreditLimit —
-// типізовані [money.Money]; на wire-рівні Mono шле їх як голі int64
-// мінорних одиниць, а валюту — окремим полем currencyCode. Custom
-// UnmarshalJSON прозоро прив'язує [currency.Code] до сум.
+// Account is a single client bank account. Balance and CreditLimit
+// are typed [money.Money]; on the wire Mono sends them as bare int64
+// minor units with the currency in a separate currencyCode field.
+// A custom UnmarshalJSON transparently attaches the [currency.Code]
+// to the amounts.
 type Account struct {
 	AccountID    string        `json:"id"`
 	SendID       string        `json:"sendId"`
@@ -52,13 +55,13 @@ type Account struct {
 	CreditLimit  money.Money   `json:"creditLimit"`
 	Currency     currency.Code `json:"currencyCode"`
 	CashbackType string        `json:"cashbackType"` // enum: None, UAH, Miles
-	CardMasks    []string      `json:"maskedPan"`    // маски номерів карток
+	CardMasks    []string      `json:"maskedPan"`    // masked card numbers
 	Type         CardType      `json:"type"`
 	IBAN         string        `json:"iban"`
 }
 
-// UnmarshalJSON декодує Account і додатково проставляє Code у
-// money-полях зі сусіднього Currency.
+// UnmarshalJSON decodes Account and additionally sets Code on the
+// money-typed fields from the adjacent Currency.
 func (a *Account) UnmarshalJSON(data []byte) error {
 	type raw Account
 	var r raw
@@ -71,8 +74,8 @@ func (a *Account) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-// Jar — рахунок-«банка» (накопичення з ціллю). Balance і Goal — у
-// типізованих [money.Money] (див. примітку про wire-формат у [Account]).
+// Jar is a "jar" account (a savings goal). Balance and Goal use the
+// typed [money.Money] (see the wire-format note on [Account]).
 type Jar struct {
 	ID          string        `json:"id"`
 	SendID      string        `json:"sendId"`
@@ -83,8 +86,8 @@ type Jar struct {
 	Goal        money.Money   `json:"goal"`
 }
 
-// UnmarshalJSON декодує Jar і додатково проставляє Code у money-полях
-// зі сусіднього Currency.
+// UnmarshalJSON decodes Jar and additionally sets Code on the
+// money-typed fields from the adjacent Currency.
 func (j *Jar) UnmarshalJSON(data []byte) error {
 	type raw Jar
 	var r raw
@@ -97,33 +100,34 @@ func (j *Jar) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-// CardType — візуальний/продуктовий тип картки, прив'язаної до рахунку.
+// CardType is the visual / product type of a card tied to an account.
 type CardType string
 
-// Можливі значення CardType. Це продуктові лінійки Mono.
+// Possible values of CardType. These are Mono product lines.
 const (
 	Black    CardType = "black"
 	White    CardType = "white"
 	Platinum CardType = "platinum"
 	Iron     CardType = "iron"
-	FOP      CardType = "fop" // ФОП (картка для фізичних осіб-підприємців)
+	FOP      CardType = "fop" // FOP (card for sole proprietors)
 	Yellow   CardType = "yellow"
 	EAid     CardType = "eAid" // єПідтримка
 	Diia     CardType = "diia" // Дія.Картка
 )
 
-// Accounts — slice типу [Account].
+// Accounts is a slice of [Account].
 type Accounts []Account
 
-// Jars — slice типу [Jar].
+// Jars is a slice of [Jar].
 type Jars []Jar
 
-// Transaction — один запис виписки. Грошові поля — типізовані
-// [money.Money]. Currency — це валюта операції (для OperationAmount).
-// Amount описаний як «у валюті рахунку», але Mono не повертає account
-// currency у тілі транзакції — Code у всіх money-полях проставляється з
-// Currency. Для крос-валютних операцій (Amount у валюті, відмінній від
-// Currency) це треба тримати на увазі.
+// Transaction is one statement entry. The monetary fields are typed
+// [money.Money]. Currency is the operation's currency (for
+// OperationAmount). Amount is described as "in the account currency",
+// but Mono does not return the account currency in the transaction
+// body — Code on every money field is set from Currency. Keep this in
+// mind for cross-currency operations (Amount in a currency different
+// from Currency).
 type Transaction struct {
 	ID          string        `json:"id"`
 	Time        epoch.Seconds `json:"time"`
@@ -131,29 +135,30 @@ type Transaction struct {
 	MCC         int32         `json:"mcc"`
 	OriginalMCC int32         `json:"originalMcc"`
 	Hold        bool          `json:"hold"`
-	// Amount — сума у валюті рахунку.
+	// Amount is the value in the account currency.
 	Amount money.Money `json:"amount"`
-	// OperationAmount — сума у валюті транзакції (Currency) або
-	// після подвійної конверсії.
+	// OperationAmount is the value in the transaction currency
+	// (Currency) or after double conversion.
 	OperationAmount money.Money `json:"operationAmount"`
-	// Currency — ISO 4217 числовий код валюти транзакції.
+	// Currency is the ISO 4217 numeric code of the transaction
+	// currency.
 	Currency       currency.Code `json:"currencyCode"`
 	CommissionRate money.Money   `json:"commissionRate"`
 	CashbackAmount money.Money   `json:"cashbackAmount"`
 	Balance        money.Money   `json:"balance"`
 	Comment        string        `json:"comment"`
-	// Тільки для зняття готівки.
+	// Cash withdrawals only.
 	ReceiptID string `json:"receiptId"`
-	// Тільки для рахунків ФОП.
+	// FOP accounts only.
 	InvoiceID string `json:"invoiceId"`
-	// Тільки для рахунків ФОП.
+	// FOP accounts only.
 	EDRPOU string `json:"counterEdrpou"`
-	// Тільки для рахунків ФОП.
+	// FOP accounts only.
 	IBAN string `json:"counterIban"`
 }
 
-// UnmarshalJSON декодує Transaction і прив'язує Currency до всіх
-// money-полів.
+// UnmarshalJSON decodes Transaction and attaches Currency to every
+// money field.
 func (t *Transaction) UnmarshalJSON(data []byte) error {
 	type raw Transaction
 	var r raw
@@ -170,14 +175,14 @@ func (t *Transaction) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-// Transactions — slice типу [Transaction].
+// Transactions is a slice of [Transaction].
 type Transactions []Transaction
 
-// MCCCode повертає типізований MCC транзакції — зручно одразу викликати
-// .Category() для групування витрат.
+// MCCCode returns the typed MCC of the transaction — handy for
+// chaining .Category() to group spending.
 func (t Transaction) MCCCode() mcc.Code { return mcc.Code(t.MCC) }
 
-// OriginalMCCCode — MCC до того, як Mono перемапила його (наприклад, для
-// логіки cashback). Якщо MCC і OriginalMCC різні — є сенс зважити на
-// «оригінал» при категоризації витрат.
+// OriginalMCCCode returns the MCC before Mono remapped it (for
+// example, for cashback logic). When MCC and OriginalMCC differ, it
+// is worth considering the original when categorizing spending.
 func (t Transaction) OriginalMCCCode() mcc.Code { return mcc.Code(t.OriginalMCC) }

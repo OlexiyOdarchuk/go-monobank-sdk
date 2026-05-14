@@ -6,19 +6,19 @@ import (
 	"time"
 )
 
-// API — інтерфейс corp-api клієнта (юр. особи). Існує окремо від
-// *[Client], щоб користувачі могли мокувати його через
-// mockgen/testify-mock у власних тестах. Сам [Client] цей інтерфейс
-// реалізує (перевіряється compile-time assert-ом нижче).
+// API is the interface of the corp-api client (legal entities). It
+// exists separately from *[Client] so callers can mock it via
+// mockgen/testify-mock in their own tests. [Client] implements this
+// interface (verified by the compile-time assert below).
 //
-// Згруповано за топіками для зручності.
+// Grouped by topic for convenience.
 type API interface {
-	// Рахунки.
+	// Accounts.
 	Accounts(ctx context.Context) ([]Account, error)
 	Account(ctx context.Context, iban string) (*Account, error)
 	AccountBalances(ctx context.Context, iban, dateFrom, dateTo string) ([]BalancePoint, error)
 
-	// Зарплатні контакти.
+	// Payroll contacts.
 	Contacts(ctx context.Context, limit, offset int) (*ContactsPage, error)
 	ContactsAll(ctx context.Context, pageSize int) iter.Seq2[Contact, error]
 	SearchContacts(ctx context.Context, query string, limit, offset int) (*ContactsPage, error)
@@ -28,24 +28,24 @@ type API interface {
 	DeleteContact(ctx context.Context, id string) error
 	DeleteContactsBatch(ctx context.Context, ids []string) error
 
-	// Виписка та операції.
+	// Statement and operations.
 	Statement(ctx context.Context, account string, from, to time.Time,
 		direction StatementDirection, limit int) ([]StatementItem, error)
 	Operation(ctx context.Context, id, externalReference string) (*StatementItem, error)
 
-	// Платежі.
+	// Payments.
 	PreparePayment(ctx context.Context, idempotencyKey string,
 		in *PaymentRequest) (*PaymentPrepared, error)
 	PaymentState(ctx context.Context, id string) (*PaymentState, error)
 	PaymentStateByReference(ctx context.Context, externalReference string) (*PaymentState, error)
 
-	// Зарплатні відомості.
+	// Salary registries.
 	CreateSalaryRegistry(ctx context.Context, idempotencyKey string,
 		in *CreateSalaryRegistryRequest) (*SalaryRegistryCreated, error)
 	SalaryRegistryTypes(ctx context.Context) ([]SalaryRegistryType, error)
 	SalaryRegistryStatus(ctx context.Context, id string) (*SalaryRegistryStatus, error)
 
-	// Розрахункові листи (payslips).
+	// Payslips.
 	UploadPayslips(ctx context.Context, in *BatchPayslipRequest) (*BatchPayslipResponse, error)
 	DeletePayslips(ctx context.Context, in *DeletePayslipsRequest) error
 	ImportStatus(ctx context.Context, period string) (*ImportStatusResponse, error)
@@ -54,5 +54,5 @@ type API interface {
 	PayslipPDF(ctx context.Context, identification, period string) ([]byte, error)
 }
 
-// Compile-time assert: *Client задовольняє [API].
+// Compile-time assert: *Client satisfies [API].
 var _ API = (*Client)(nil)

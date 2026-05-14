@@ -7,13 +7,14 @@ import (
 	"sync"
 )
 
-// sdkVersion — sentinel, який вертається коли debug.ReadBuildInfo не
-// може дістати реальну версію (наприклад, тести або replaced module).
+// sdkVersion is the sentinel returned when debug.ReadBuildInfo cannot
+// resolve the real version (for example, tests or a replaced module).
 const sdkVersion = "(devel)"
 
-// userAgentPrefix — частина User-Agent до користувацького префіксу.
-// Формат: "go-monobank-sdk/vX.Y.Z (linux; go1.26.2)". Лазимо за версією
-// раз і кешуємо — debug.ReadBuildInfo робить linker-обхід, не безкоштовно.
+// userAgentPrefix is the User-Agent part before any user-supplied
+// prefix. Format: "go-monobank-sdk/vX.Y.Z (linux; go1.26.2)". We look
+// up the version once and cache it — debug.ReadBuildInfo walks the
+// linker tables and is not free.
 var userAgentPrefix = sync.OnceValue(func() string {
 	v := sdkVersion
 	if info, ok := debug.ReadBuildInfo(); ok {
@@ -27,9 +28,9 @@ var userAgentPrefix = sync.OnceValue(func() string {
 	return fmt.Sprintf("go-monobank-sdk/%s (%s; %s)", v, runtime.GOOS, runtime.Version())
 })
 
-// UserAgent повертає User-Agent, який SDK ставить за замовчуванням.
-// Експортовано на випадок, якщо ти хочеш скласти власне значення для
-// [WithUserAgent], не втрачаючи SDK-частини:
+// UserAgent returns the User-Agent the SDK uses by default. Exported
+// so you can compose your own value for [WithUserAgent] without
+// losing the SDK portion:
 //
 //	cli := personal.New(token,
 //	    monobank.WithUserAgent("myapp/1.2.3 "+monobank.UserAgent()),

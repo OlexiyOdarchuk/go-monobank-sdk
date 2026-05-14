@@ -1,21 +1,23 @@
-// Package monobanktest надає helper-и для тестування коду, що
-// використовує monobank-sdk: фейковий HTTP-сервер із роутингом і
-// готовими білдерами під типові сценарії, плюс контракти-інтерфейси
-// для кожного клієнта (див. документацію відповідних підпакетів).
+// Package monobanktest provides helpers for testing code that uses
+// monobank-sdk: a fake HTTP server with routing and ready builders
+// for common scenarios, plus contract interfaces for each client
+// (see the matching sub-package docs).
 //
-// Інтенція — щоб користувач SDK не писав власний `httptest.NewServer`
-// з ручним розгалуженням по `r.URL.Path` у кожному тесті.
+// The intent is that an SDK user does not have to write their own
+// `httptest.NewServer` with manual branching on `r.URL.Path` in
+// every test.
 //
 //	srv := monobanktest.NewServer(t)
 //	srv.WithClientInfo(&bank.ClientInfo{ID: "c1", Name: "Test"})
 //	cli := personal.New("token", srv.Option())
-//	info, _ := cli.ClientInfo(ctx)  // повертає те, що зашили вище
+//	info, _ := cli.ClientInfo(ctx)  // returns what was stubbed above
 //
-// Покриття білдерами: наразі готові [Server.WithClientInfo],
-// [Server.WithRates], [Server.WithServerKey], [Server.WithStatement],
-// [Server.WithWebHookSubscription] — це переважно personal/corporate
-// + bank. Для acquiring/business/installment/jar використовуй
-// [Server.Handle] напряму, щоб додати матчинг на потрібний шлях.
+// Builder coverage: [Server.WithClientInfo], [Server.WithRates],
+// [Server.WithServerKey], [Server.WithStatement],
+// [Server.WithWebHookSubscription] are available — primarily
+// personal/corporate + bank. For acquiring/business/installment/jar
+// use [Server.Handle] directly to add matching for the relevant
+// path.
 package monobanktest
 
 import (
@@ -28,9 +30,9 @@ import (
 	monobank "github.com/OlexiyOdarchuk/go-monobank-sdk"
 )
 
-// Server — фейковий monobank HTTP-сервер. Обгортка над
-// [httptest.Server] з матчингом по (method, path). Безпечний для
-// конкурентного використання — gorout-friendly.
+// Server is a fake monobank HTTP server. It wraps [httptest.Server]
+// with (method, path) matching. Safe for concurrent use —
+// goroutine-friendly.
 type Server struct {
 	t   testing.TB
 	srv *httptest.Server
@@ -45,18 +47,19 @@ type routeKey struct {
 	path   string
 }
 
-// prefixRoute — маршрут, що матчиться по префіксу шляху замість точного
-// збігу. Потрібен для endpoint-ів типу /personal/statement/{...}/{...},
-// у яких частина шляху — параметри.
+// prefixRoute is a route that matches by path prefix instead of an
+// exact equality. Needed for endpoints like
+// /personal/statement/{...}/{...} where part of the path is
+// parameters.
 type prefixRoute struct {
 	method string
 	prefix string
 	resp   Responder
 }
 
-// NewServer стартує фейковий сервер. t.Cleanup закриє його по
-// завершенню тесту. Маршрути додаються через [Server.Handle] або
-// білдери (WithClientInfo, WithRates, WithStatement тощо).
+// NewServer starts the fake server. t.Cleanup closes it when the
+// test finishes. Routes are added via [Server.Handle] or builders
+// (WithClientInfo, WithRates, WithStatement etc.).
 func NewServer(t testing.TB) *Server {
 	t.Helper()
 	s := &Server{
@@ -68,16 +71,16 @@ func NewServer(t testing.TB) *Server {
 	return s
 }
 
-// URL повертає base URL цього сервера.
+// URL returns this server's base URL.
 func (s *Server) URL() string { return s.srv.URL }
 
-// Close зупиняє сервер. Викликається автоматично через t.Cleanup —
-// потрібен тільки якщо хочеш закрити раніше.
+// Close stops the server. It is called automatically via t.Cleanup —
+// only needed if you want to close it earlier.
 func (s *Server) Close() { s.srv.Close() }
 
-// Option повертає [monobank.Option], який направляє клієнта на цей
-// сервер (WithBaseURL + WithHTTPClient). Передавай у фабрику будь-якого
-// підпакета:
+// Option returns a [monobank.Option] that points the client at this
+// server (WithBaseURL + WithHTTPClient). Pass it into any
+// sub-package factory:
 //
 //	cli := personal.New(token, srv.Option())
 //	cli := business.New(token, srv.Option())
@@ -89,7 +92,8 @@ func (s *Server) Option() monobank.Option {
 	}.apply
 }
 
-// optionGroup — composit [monobank.Option] із кількох.
+// optionGroup is a composite [monobank.Option] built from several
+// options.
 type optionGroup []monobank.Option
 
 func (g optionGroup) apply(c *monobank.Client) {
@@ -98,9 +102,9 @@ func (g optionGroup) apply(c *monobank.Client) {
 	}
 }
 
-// Handle реєструє відповідник [Responder] на пару (method, path).
-// Якщо для цієї пари вже зареєстрований відповідник — він буде замінений
-// (зручно, коли тест перевизначає білдер).
+// Handle registers a [Responder] for a (method, path) pair. If a
+// Responder is already registered for that pair, it is replaced
+// (handy when the test overrides a builder).
 //
 //	srv.Handle(http.MethodGet, "/bank/currency", monobanktest.JSON(rates))
 func (s *Server) Handle(method, path string, r Responder) {
@@ -109,11 +113,11 @@ func (s *Server) Handle(method, path string, r Responder) {
 	s.routes[routeKey{method, path}] = r
 }
 
-// HandlePrefix реєструє Responder, який спрацьовує для будь-якого
-// шляху, що починається з prefix і відповідає method. Корисно для
-// endpoint-ів із параметрами у шляху (наприклад
-// /personal/statement/{account}/{from}/{to}). Точні матчі через
-// [Server.Handle] мають вищий пріоритет.
+// HandlePrefix registers a Responder that triggers for any path
+// starting with prefix and matching method. Useful for endpoints
+// with parameters in the path (for example,
+// /personal/statement/{account}/{from}/{to}). Exact matches via
+// [Server.Handle] have higher priority.
 func (s *Server) HandlePrefix(method, prefix string, r Responder) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -124,8 +128,9 @@ func (s *Server) HandlePrefix(method, prefix string, r Responder) {
 	})
 }
 
-// handle — root-handler сервера; шукає Responder за (method, path),
-// спочатку точний матч, потім префіксний.
+// handle is the server's root handler; it looks up a Responder by
+// (method, path), trying an exact match first and then a prefix
+// match.
 func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 	s.mu.Lock()
 	resp, ok := s.routes[routeKey{r.Method, r.URL.Path}]

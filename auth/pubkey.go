@@ -6,7 +6,8 @@ import (
 	"fmt"
 )
 
-// ASN.1 OID-и для маршалінгу публічного ключа secp256k1 в SPKI-формат.
+// ASN.1 OIDs used to marshal a secp256k1 public key into the SPKI
+// format.
 //
 //	id-ecPublicKey = 1.2.840.10045.2.1
 //	secp256k1      = 1.3.132.0.10
@@ -15,9 +16,9 @@ var (
 	oidSecp256k1      = asn1.ObjectIdentifier{1, 3, 132, 0, 10}
 )
 
-// pkixPublicKey — мінімальна ASN.1-структура для X.509
-// SubjectPublicKeyInfo, ручкою сконструйована для secp256k1 (бо
-// стандартна x509.MarshalPKIXPublicKey не підтримує цю криву).
+// pkixPublicKey is the minimal ASN.1 structure for the X.509
+// SubjectPublicKeyInfo, hand-built for secp256k1 (because the
+// standard x509.MarshalPKIXPublicKey does not support this curve).
 type pkixPublicKey struct {
 	Algorithm pkixAlgorithm
 	PublicKey asn1.BitString
@@ -31,13 +32,13 @@ type pkixAlgorithm struct {
 // secp256k1 uncompressed point: 0x04 || X (32 bytes) || Y (32 bytes).
 const pointCoordinateBytes = 32
 
-// PublicKeyPEM повертає публічний ключ цього CorpAuthMaker у форматі,
-// якого очікують [corporate.Client.Register] і
-// [corporate.Client.RegistrationStatus]: PEM-блок типу "PUBLIC KEY",
-// який містить SubjectPublicKeyInfo з кривою secp256k1 і uncompressed
-// точкою (0x04 || X || Y).
+// PublicKeyPEM returns this CorpAuthMaker's public key in the format
+// [corporate.Client.Register] and [corporate.Client.RegistrationStatus]
+// expect: a PEM block of type "PUBLIC KEY" that contains a
+// SubjectPublicKeyInfo with the secp256k1 curve and an uncompressed
+// point (0x04 || X || Y).
 //
-// Зручно для першої подачі заявки:
+// Handy for the initial registration:
 //
 //	maker, _ := auth.NewCorpAuthMaker(privPEM)
 //	pubPEM, _ := maker.PublicKeyPEM()
@@ -47,8 +48,9 @@ const pointCoordinateBytes = 32
 //	    ...
 //	})
 //
-// Реалізовано вручну, бо x509.MarshalPKIXPublicKey зі стандартної
-// бібліотеки не підтримує secp256k1 (тільки P-224/P-256/P-384/P-521).
+// Implemented by hand because the standard library's
+// x509.MarshalPKIXPublicKey does not support secp256k1 (only
+// P-224/P-256/P-384/P-521).
 func (c *CorpAuthMaker) PublicKeyPEM() ([]byte, error) {
 	if c.privateKey.X.BitLen() > 8*pointCoordinateBytes ||
 		c.privateKey.Y.BitLen() > 8*pointCoordinateBytes {

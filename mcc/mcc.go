@@ -1,19 +1,19 @@
-// Package mcc — типізовані хелпери для ISO 18245 Merchant Category Code,
-// що приходять у payload-ах виписки. Mono віддає просто int; [Code.Category]
-// групує його у бакет, який реально хочеться бачити у звітах (Groceries
-// проти Restaurants, Fuel проти Transport тощо).
+// Package mcc provides typed helpers for ISO 18245 Merchant Category
+// Codes that arrive in statement payloads. Mono ships a bare int;
+// [Code.Category] groups it into a bucket you actually want to see
+// in reports (Groceries vs Restaurants, Fuel vs Transport, etc.).
 package mcc
 
-// Code — ISO 18245 Merchant Category Code. Транзакції в виписці несуть
-// його у полях Transaction.MCC і Transaction.OriginalMCC.
+// Code is an ISO 18245 Merchant Category Code. Statement transactions
+// carry it in the Transaction.MCC and Transaction.OriginalMCC fields.
 type Code int
 
-// Category — група верхнього рівня, до якої належить MCC. Підбір
-// гранулярності — практичний для PFM-звітів: окремо Groceries / Fuel /
-// Restaurants замість одного загального «Retail».
+// Category is the top-level group an MCC belongs to. The granularity
+// is chosen pragmatically for PFM reports: separate Groceries / Fuel
+// / Restaurants instead of a single generic "Retail".
 type Category string
 
-// Відомі категорії. Список не вичерпний — додавай за потребою.
+// Known categories. The list is non-exhaustive — extend as needed.
 const (
 	CategoryUnknown      Category = "Unknown"
 	CategoryAgriculture  Category = "Agriculture"
@@ -37,12 +37,12 @@ const (
 	CategoryCharity      Category = "Charity"
 )
 
-// Category повертає високорівневий бакет для MCC згідно з таблицями
-// діапазонів ISO 18245. Невідомі коди повертають [CategoryUnknown].
+// Category returns the high-level bucket for an MCC per the ISO 18245
+// range tables. Unknown codes return [CategoryUnknown].
 //
-// Конкретні коди (наприклад 5411 — продуктові магазини) матчаться раніше
-// за діапазон, що їх містить (first-match wins) — так grocery не
-// перетворюється на загальний Retail.
+// Specific codes (for example 5411 — grocery stores) are matched
+// before the range that contains them (first-match wins), so
+// grocery does not get bucketed as generic Retail.
 func (c Code) Category() Category {
 	switch {
 	// --- specific codes that override their containing range ---

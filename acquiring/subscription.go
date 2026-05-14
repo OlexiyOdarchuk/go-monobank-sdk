@@ -14,7 +14,7 @@ import (
 	"github.com/OlexiyOdarchuk/go-monobank-sdk/currency"
 )
 
-// SubscriptionStatus — стан регулярного платежу.
+// SubscriptionStatus is the state of a recurring payment.
 type SubscriptionStatus string
 
 // Possible SubscriptionStatus values.
@@ -23,8 +23,8 @@ const (
 	SubscriptionCancelled SubscriptionStatus = "cancelled"
 )
 
-// SubscriptionAction — операція над регулярним платежем.
-// На момент написання API підтримує лише "cancel".
+// SubscriptionAction is an operation on a recurring payment. At the
+// time of writing, the API supports only "cancel".
 type SubscriptionAction string
 
 // Possible SubscriptionAction values.
@@ -32,7 +32,8 @@ const (
 	SubscriptionCancel SubscriptionAction = "cancel"
 )
 
-// SubscriptionPaymentStatus — статус одного списання за підпискою.
+// SubscriptionPaymentStatus is the status of a single subscription
+// charge.
 type SubscriptionPaymentStatus string
 
 // Possible SubscriptionPaymentStatus values.
@@ -42,17 +43,20 @@ const (
 	SubscriptionPaymentFailed  SubscriptionPaymentStatus = "failed"
 )
 
-// SubscriptionWebHookURLs — пара колбеків для подій підписки.
+// SubscriptionWebHookURLs is a pair of callbacks for subscription
+// events.
 //
-//	ChargeUrl — на нього шлється стан кожного списання (success/failure).
-//	StatusUrl — на нього шлеться зміна стану самої підписки (active/cancelled).
+//	ChargeUrl receives the state of each charge (success/failure).
+//	StatusUrl receives state changes of the subscription itself
+//	(active/cancelled).
 type SubscriptionWebHookURLs struct {
 	ChargeURL string `json:"chargeUrl,omitempty"`
 	StatusURL string `json:"statusUrl,omitempty"`
 }
 
-// SubscriptionCreateRequest — тіло POST /api/merchant/subscription/create.
-// Interval — рядок виду "{N}{одиниця}": "1d", "2w", "1m", "1y".
+// SubscriptionCreateRequest is the body of
+// POST /api/merchant/subscription/create. Interval is a string of
+// the form "{N}{unit}": "1d", "2w", "1m", "1y".
 type SubscriptionCreateRequest struct {
 	Amount      int64                    `json:"amount"`
 	Currency    currency.Code            `json:"ccy,omitempty"`
@@ -62,35 +66,37 @@ type SubscriptionCreateRequest struct {
 	Validity    int64                    `json:"validity,omitempty"`
 }
 
-// SubscriptionCreateResponse — відповідь /subscription/create.
+// SubscriptionCreateResponse is the response of /subscription/create.
 type SubscriptionCreateResponse struct {
 	SubscriptionID string `json:"subscriptionId"`
 	PageURL        string `json:"pageUrl"`
 }
 
-// SubscriptionEditRequest — тіло POST /api/merchant/subscription/edit.
-// RefundAmount передавай тільки якщо хочеш повернути кошти разом зі
-// скасуванням; інакше відбувається лише cancel.
+// SubscriptionEditRequest is the body of
+// POST /api/merchant/subscription/edit. Set RefundAmount only if you
+// want to refund along with cancellation; otherwise only a cancel
+// is performed.
 type SubscriptionEditRequest struct {
 	SubscriptionID string             `json:"subscriptionId"`
 	Action         SubscriptionAction `json:"action"`
 	RefundAmount   int64              `json:"refundAmount,omitempty"`
 }
 
-// SubscriptionRemoveRequest — тіло POST /api/merchant/subscription/remove.
+// SubscriptionRemoveRequest is the body of
+// POST /api/merchant/subscription/remove.
 type SubscriptionRemoveRequest struct {
 	SubscriptionID string `json:"subscriptionId"`
 }
 
-// SubscriptionSummary — лічильники успіхів/невдач за весь час життя
-// підписки.
+// SubscriptionSummary is the success/failure counter over the
+// lifetime of a subscription.
 type SubscriptionSummary struct {
 	TotalPaid   int `json:"totalPaid"`
 	TotalFailed int `json:"totalFailed"`
 }
 
-// SubscriptionWalletData — токенізована картка, на яку прив'язана
-// підписка.
+// SubscriptionWalletData is the tokenized card a subscription is
+// bound to.
 type SubscriptionWalletData struct {
 	CardToken          string       `json:"cardToken"`
 	WalletID           string       `json:"walletId"`
@@ -98,7 +104,8 @@ type SubscriptionWalletData struct {
 	FailureDescription string       `json:"failureDescription,omitempty"`
 }
 
-// SubscriptionStatusResponse — відповідь GET /api/merchant/subscription/status.
+// SubscriptionStatusResponse is the response of
+// GET /api/merchant/subscription/status.
 type SubscriptionStatusResponse struct {
 	SubscriptionID   string                 `json:"subscriptionId"`
 	Status           SubscriptionStatus     `json:"status"`
@@ -113,7 +120,8 @@ type SubscriptionStatusResponse struct {
 	WalletData       SubscriptionWalletData `json:"walletData"`
 }
 
-// Pagination — стандартна сторінка-обгортка у списках підписок та платежів.
+// Pagination is the standard page wrapper for subscription and
+// payment lists.
 type Pagination struct {
 	TotalItems   int `json:"totalItems"`
 	ItemsPerPage int `json:"itemsPerPage"`
@@ -121,7 +129,8 @@ type Pagination struct {
 	TotalPages   int `json:"totalPages"`
 }
 
-// SubscriptionPayment — одне списання за підпискою (елемент із /payments).
+// SubscriptionPayment is a single subscription charge (an element
+// of /payments).
 type SubscriptionPayment struct {
 	Amount    int64                     `json:"amount"`
 	Currency  currency.Code             `json:"ccy"`
@@ -129,13 +138,14 @@ type SubscriptionPayment struct {
 	ChargedAt string                    `json:"chargedAt"`
 }
 
-// SubscriptionPaymentsResponse — відповідь GET /api/merchant/subscription/payments.
+// SubscriptionPaymentsResponse is the response of
+// GET /api/merchant/subscription/payments.
 type SubscriptionPaymentsResponse struct {
 	Payments   []SubscriptionPayment `json:"payments"`
 	Pagination Pagination            `json:"pagination"`
 }
 
-// SubscriptionListItem — один запис у списку підписок.
+// SubscriptionListItem is a single entry in a subscription list.
 type SubscriptionListItem struct {
 	SubscriptionID string             `json:"subscriptionId"`
 	Amount         int64              `json:"amount"`
@@ -147,14 +157,16 @@ type SubscriptionListItem struct {
 	Status         SubscriptionStatus `json:"status"`
 }
 
-// SubscriptionsListResponse — відповідь GET /api/merchant/subscription/list.
+// SubscriptionsListResponse is the response of
+// GET /api/merchant/subscription/list.
 type SubscriptionsListResponse struct {
 	List       []SubscriptionListItem `json:"list,omitempty"`
 	Pagination Pagination             `json:"pagination"`
 }
 
-// SubscriptionListOptions — фільтри/сторінкування для [Client.SubscriptionList].
-// DateFrom обов'язковий (передавай ненульовий час, інакше API поверне 400).
+// SubscriptionListOptions holds filters / pagination for
+// [Client.SubscriptionList]. DateFrom is required (pass a non-zero
+// time, otherwise the API returns 400).
 type SubscriptionListOptions struct {
 	Status   SubscriptionStatus
 	Limit    int
@@ -163,8 +175,9 @@ type SubscriptionListOptions struct {
 	DateTo   time.Time
 }
 
-// SubscriptionPaymentsOptions — фільтри/сторінкування для [Client.SubscriptionPayments].
-// SubscriptionID та DateFrom обов'язкові.
+// SubscriptionPaymentsOptions holds filters / pagination for
+// [Client.SubscriptionPayments]. SubscriptionID and DateFrom are
+// required.
 type SubscriptionPaymentsOptions struct {
 	SubscriptionID string
 	Limit          int
@@ -173,10 +186,10 @@ type SubscriptionPaymentsOptions struct {
 	DateTo         time.Time
 }
 
-// SubscriptionCreate створює регулярний платіж. Користувач має оплатити
-// перший списанням на PageURL; далі Mono самостійно списує Amount кожен
-// Interval (наприклад "1m") за токенізованою карткою. Слухай вебхуки на
-// WebHookURLs.ChargeURL/StatusURL, щоб дізнаватись про події.
+// SubscriptionCreate creates a recurring payment. The user must pay
+// the first charge on PageURL; afterwards Mono charges Amount every
+// Interval (for example "1m") against the tokenized card on its own.
+// Listen on WebHookURLs.ChargeURL/StatusURL for events.
 func (c *Client) SubscriptionCreate(ctx context.Context, in *SubscriptionCreateRequest) (*SubscriptionCreateResponse, error) {
 	if in == nil {
 		return nil, ErrNilRequest
@@ -197,9 +210,10 @@ func (c *Client) SubscriptionCreate(ctx context.Context, in *SubscriptionCreateR
 	return &out, nil
 }
 
-// SubscriptionEdit керує існуючою підпискою. Поки що єдина дія —
-// [SubscriptionCancel]. Передай RefundAmount > 0, щоб одночасно скасувати
-// та повернути кошти за останнє списання.
+// SubscriptionEdit manages an existing subscription. The only
+// action currently supported is [SubscriptionCancel]. Pass
+// RefundAmount > 0 to cancel and refund the last charge at the same
+// time.
 func (c *Client) SubscriptionEdit(ctx context.Context, in *SubscriptionEditRequest) error {
 	if in == nil {
 		return ErrNilRequest
@@ -216,9 +230,9 @@ func (c *Client) SubscriptionEdit(ctx context.Context, in *SubscriptionEditReque
 	return c.c.Do(req, nil, http.StatusOK)
 }
 
-// SubscriptionRemove інвалідує підписку. Це жорсткий варіант відключення
-// (без refund). Для скасування з поверненням використовуй
-// [Client.SubscriptionEdit] з [SubscriptionCancel] + RefundAmount.
+// SubscriptionRemove invalidates a subscription. This is the hard
+// off-switch (no refund). To cancel with a refund use
+// [Client.SubscriptionEdit] with [SubscriptionCancel] + RefundAmount.
 func (c *Client) SubscriptionRemove(ctx context.Context, subscriptionID string) error {
 	body, err := json.Marshal(SubscriptionRemoveRequest{SubscriptionID: subscriptionID})
 	if err != nil {
@@ -232,8 +246,9 @@ func (c *Client) SubscriptionRemove(ctx context.Context, subscriptionID string) 
 	return c.c.Do(req, nil, http.StatusOK)
 }
 
-// SubscriptionStatus повертає поточний стан підписки: дати, лічильники
-// списань, прив'язану картку. Використовуй для звіряння з власною БД.
+// SubscriptionStatus returns the subscription's current state:
+// dates, charge counters, the bound card. Use for reconciliation
+// against your own DB.
 func (c *Client) SubscriptionStatus(ctx context.Context, subscriptionID string) (*SubscriptionStatusResponse, error) {
 	q := url.Values{}
 	q.Set("subscriptionId", subscriptionID)
@@ -249,9 +264,9 @@ func (c *Client) SubscriptionStatus(ctx context.Context, subscriptionID string) 
 	return &out, nil
 }
 
-// SubscriptionList повертає сторінку підписок мерчанта за вказаний період.
-// opts.DateFrom обов'язковий. Limit/Page керують сторінкуванням
-// (дефолти на стороні API: limit=20, page=1).
+// SubscriptionList returns a page of the merchant's subscriptions
+// for the given period. opts.DateFrom is required. Limit/Page drive
+// pagination (API defaults: limit=20, page=1).
 func (c *Client) SubscriptionList(ctx context.Context, opts SubscriptionListOptions) (*SubscriptionsListResponse, error) {
 	if opts.DateFrom.IsZero() {
 		return nil, fmt.Errorf("SubscriptionList: DateFrom is required")
@@ -282,8 +297,8 @@ func (c *Client) SubscriptionList(ctx context.Context, opts SubscriptionListOpti
 	return &out, nil
 }
 
-// SubscriptionPayments повертає сторінку списань за конкретною підпискою.
-// opts.SubscriptionID та opts.DateFrom обов'язкові.
+// SubscriptionPayments returns a page of charges for a specific
+// subscription. opts.SubscriptionID and opts.DateFrom are required.
 func (c *Client) SubscriptionPayments(ctx context.Context, opts SubscriptionPaymentsOptions) (*SubscriptionPaymentsResponse, error) {
 	if opts.SubscriptionID == "" {
 		return nil, fmt.Errorf("SubscriptionPayments: SubscriptionID is required")
@@ -315,8 +330,9 @@ func (c *Client) SubscriptionPayments(ctx context.Context, opts SubscriptionPaym
 	return &out, nil
 }
 
-// SubscriptionListAll лінько ітерує всі сторінки [Client.SubscriptionList].
-// Корисно, коли потрібен повний прохід без ручного керування Page.
+// SubscriptionListAll lazily iterates every page of
+// [Client.SubscriptionList]. Useful for a full pass without
+// managing Page by hand.
 //
 //	opts := acquiring.SubscriptionListOptions{DateFrom: from, Limit: 50}
 //	for s, err := range cli.SubscriptionListAll(ctx, opts) {
@@ -354,8 +370,8 @@ func (c *Client) SubscriptionListAll(ctx context.Context, opts SubscriptionListO
 	}
 }
 
-// SubscriptionPaymentsAll лінько ітерує всі сторінки
-// [Client.SubscriptionPayments] для конкретної підписки.
+// SubscriptionPaymentsAll lazily iterates every page of
+// [Client.SubscriptionPayments] for a specific subscription.
 func (c *Client) SubscriptionPaymentsAll(ctx context.Context, opts SubscriptionPaymentsOptions) iter.Seq2[SubscriptionPayment, error] {
 	return func(yield func(SubscriptionPayment, error) bool) {
 		page := opts.Page

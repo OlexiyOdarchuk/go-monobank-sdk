@@ -8,22 +8,23 @@ import (
 	"github.com/OlexiyOdarchuk/go-monobank-sdk/bank"
 )
 
-// TransactionsRangeIter — streaming-варіант [Client.TransactionsRange].
-// Замість того щоб накопичувати всі транзакції в memory і повернути
-// одним зрізом, ітератор віддає по одній транзакції за час, тягнучи
-// наступне 31-денне вікно лише коли поточне вичерпане.
+// TransactionsRangeIter is the streaming variant of
+// [Client.TransactionsRange]. Instead of accumulating every
+// transaction in memory and returning them as a single slice, the
+// iterator yields one transaction at a time and only pulls the next
+// 31-day window when the current one is exhausted.
 //
 //	for tx, err := range cli.TransactionsRangeIter(ctx, accID, from, to) {
 //	    if err != nil { return err }
 //	    process(tx)
 //	}
 //
-// Виграш — пам'ять на квартальних/річних діапазонах. Rate-limit той
-// самий (1 виклик на 60с на акаунт), просто не блокується на повному
-// завантаженні.
+// The win is memory on quarterly / annual ranges. The rate limit is
+// the same (1 call per 60 s per account), it just no longer blocks
+// on the full download.
 //
-// Якщо to нульовий або раніше за from — ітератор віддає нуль yields і
-// зупиняється без помилки.
+// If to is zero or earlier than from, the iterator yields nothing
+// and stops without an error.
 func (c *Client) TransactionsRangeIter(ctx context.Context, accountID string,
 	from, to time.Time) iter.Seq2[bank.Transaction, error] {
 

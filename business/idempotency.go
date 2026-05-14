@@ -5,32 +5,32 @@ import (
 	"encoding/hex"
 )
 
-// NewIdempotencyKey генерує свіжий UUID v4, придатний для заголовка
-// Idempotency-Key, якого очікують [Client.PreparePayment] та
-// [Client.CreateSalaryRegistry]. Ентропія беруться з crypto/rand —
-// зовнішніх залежностей нема.
+// NewIdempotencyKey produces a fresh UUID v4 suitable for the
+// Idempotency-Key header expected by [Client.PreparePayment] and
+// [Client.CreateSalaryRegistry]. Entropy comes from crypto/rand — no
+// external dependencies.
 //
-// Семантика: ключ — це ідентифікатор «спроби» операції. Якщо мережа
-// впала і ти ретраїш виклик із тим самим ключем, банк поверне ту саму
-// відповідь, не дублюючи операцію. Новий логічний платіж потребує
-// нового ключа.
+// Semantics: the key identifies an operation "attempt". If the
+// network fails and you retry the call with the same key, the bank
+// returns the same response without duplicating the operation. A new
+// logical payment requires a new key.
 //
 //	key := business.NewIdempotencyKey()
 //	out, err := cli.PreparePayment(ctx, key, &business.PaymentRequest{...})
 //
-// Панікує, якщо crypto/rand повертає помилку — це означає голод по
-// ентропії на рівні ОС і ні в чому невиправний стан.
+// Panics if crypto/rand returns an error — that means OS-level
+// entropy starvation, an unrecoverable state.
 func NewIdempotencyKey() string {
 	var b [16]byte
 	if _, err := rand.Read(b[:]); err != nil {
 		panic("business: crypto/rand failed: " + err.Error())
 	}
-	// Виставити версію (4) і variant (RFC 4122) біти за специфікацією
-	// UUID v4 (RFC 4122 §4.4).
+	// Set the version (4) and variant (RFC 4122) bits per the UUID v4
+	// spec (RFC 4122 §4.4).
 	b[6] = (b[6] & 0x0f) | 0x40
 	b[8] = (b[8] & 0x3f) | 0x80
 
-	// Формат 8-4-4-4-12 hex-цифр.
+	// 8-4-4-4-12 hex-digit format.
 	var dst [36]byte
 	hex.Encode(dst[0:8], b[0:4])
 	dst[8] = '-'

@@ -6,29 +6,29 @@ import (
 	"github.com/OlexiyOdarchuk/go-monobank-sdk/bank"
 )
 
-// Білдери — типові пресет-сценарії, щоб не писати .Handle вручну.
-// Кожен повертає сам *Server для чейнінгу.
+// Builders are preset scenarios so you do not have to write .Handle
+// by hand. Each one returns the *Server for chaining.
 
-// WithClientInfo прив'язує відповідь GET /personal/client-info до
-// вказаної ClientInfo. Stub-ить ОБИДВА Personal API і Corporate API
-// (вони мають однаковий шлях).
+// WithClientInfo binds the response of GET /personal/client-info to
+// the given ClientInfo. It stubs BOTH the Personal API and the
+// Corporate API (they share the same path).
 func (s *Server) WithClientInfo(info *bank.ClientInfo) *Server {
 	s.Handle(http.MethodGet, "/personal/client-info", JSON(info))
 	return s
 }
 
-// WithRates прив'язує відповідь GET /bank/currency до вказаного списку
-// курсів. Використовуй із bank.Client.Rates або як джерело для
-// [bank.Rates.Convert] у тестах.
+// WithRates binds the response of GET /bank/currency to the given
+// list of rates. Use with bank.Client.Rates or as a source for
+// [bank.Rates.Convert] in tests.
 func (s *Server) WithRates(rates bank.Rates) *Server {
 	s.Handle(http.MethodGet, "/bank/currency", JSON(rates))
 	return s
 }
 
-// WithServerKey прив'язує відповідь GET /bank/sync до сирого
-// raw-payload-у (на wire — поля serverKeyId, serverPubKey,
-// serverTimeMsec). Конструктор [bank.ServerKey] — приватний; тому
-// білдер приймає raw map, який ти точно знаєш форматом.
+// WithServerKey binds the response of GET /bank/sync to a raw
+// payload (on the wire: the fields serverKeyId, serverPubKey,
+// serverTimeMsec). The [bank.ServerKey] constructor is private, so
+// the builder takes a raw map you control the format of.
 //
 //	srv.WithServerKey(map[string]any{
 //	    "serverKeyId": "k1",
@@ -40,19 +40,20 @@ func (s *Server) WithServerKey(payload any) *Server {
 	return s
 }
 
-// WithStatement прив'язує всі виклики GET /personal/statement/{account}/*
-// до одного й того ж списку транзакцій. Інші акаунти повернуть 404 —
-// тест явно не очікує таких викликів.
+// WithStatement binds every GET /personal/statement/{account}/*
+// call to the same list of transactions. Other accounts return 404 —
+// the test explicitly does not expect those calls.
 //
-// Працює для Personal і Corporate Open API однаково (шлях ідентичний).
+// Works identically for the Personal and Corporate Open API (the
+// path is the same).
 func (s *Server) WithStatement(account string, txs bank.Transactions) *Server {
 	s.HandlePrefix(http.MethodGet, "/personal/statement/"+account+"/", JSON(txs))
 	return s
 }
 
-// WithWebHookSubscription прив'язує POST /personal/webhook (Personal API)
-// до 200 OK — достатньо для тестів, які перевіряють тільки факт виклику.
-// Для перевірки тіла запиту використовуй [Server.Handle] напряму.
+// WithWebHookSubscription binds POST /personal/webhook (Personal API)
+// to 200 OK — enough for tests that only check that the call was
+// made. To verify the request body, use [Server.Handle] directly.
 func (s *Server) WithWebHookSubscription() *Server {
 	s.Handle(http.MethodPost, "/personal/webhook", Status(http.StatusOK))
 	return s

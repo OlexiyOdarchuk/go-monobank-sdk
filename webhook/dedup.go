@@ -5,29 +5,31 @@ import (
 	"sync"
 )
 
-// Deduper — інтерфейс пам'яті ID-шників транзакцій, які handler уже
-// успішно обробив, щоб коротко відповісти на повторні доставки Mono.
+// Deduper is the memory of transaction IDs the handler has already
+// processed successfully, so duplicate deliveries from Mono can be
+// short-acknowledged.
 //
-// Mono ретраїть невдалі доставки через 60 і 600 секунд. Handler викликає
-// Has(id) перед запуском OnEvent і Add(id) — тільки після успішного
-// OnEvent. Це критично: якщо записати id до запуску OnEvent, тимчасовий
-// збій (HTTP 500) «отруїть» deduper і наступний ретрай від Mono буде
-// тихо ack-нутий без повторного запуску OnEvent.
+// Mono retries failed deliveries after 60 and 600 seconds. The
+// handler calls Has(id) before running OnEvent and Add(id) only
+// after a successful OnEvent. This is critical: if id is recorded
+// before OnEvent runs, a transient failure (HTTP 500) "poisons" the
+// deduper and the next retry from Mono is silently acked without
+// running OnEvent again.
 //
-// Реалізація за замовчуванням ([NewMemoryDeduper]) — in-memory LRU,
-// safe for concurrent use. Свою реалізацію (Redis, SQLite тощо) можна
-// підставити через цей інтерфейс — корисно, коли треба шерити стан між
-// репліками сервісу.
+// The default implementation ([NewMemoryDeduper]) is an in-memory
+// LRU and is safe for concurrent use. Plug in your own
+// implementation (Redis, SQLite etc.) through this interface — handy
+// when state must be shared across service replicas.
 type Deduper interface {
-	// Has повертає true, якщо id було збережено попереднім Add.
+	// Has reports whether id was recorded by a previous Add.
 	Has(id string) bool
-	// Add реєструє id як оброблений. Викликати Add для одного id кілька
-	// разів — безпечно (no-op для існуючого).
+	// Add records id as processed. Calling Add for the same id
+	// multiple times is safe (a no-op for an existing entry).
 	Add(id string)
 }
 
-// NewMemoryDeduper повертає in-memory LRU [Deduper] із заданою ємністю.
-// Ємність ≤ 0 фолбекає на 1024.
+// NewMemoryDeduper returns an in-memory LRU [Deduper] with the given
+// capacity. A capacity of ≤ 0 falls back to 1024.
 func NewMemoryDeduper(capacity int) *MemoryDeduper {
 	if capacity <= 0 {
 		capacity = 1024
@@ -39,7 +41,7 @@ func NewMemoryDeduper(capacity int) *MemoryDeduper {
 	}
 }
 
-// MemoryDeduper — LRU-множина рядків фіксованого розміру, safe for
+// MemoryDeduper is an LRU set of strings with a fixed size; safe for
 // concurrent use.
 type MemoryDeduper struct {
 	mu       sync.Mutex
@@ -48,8 +50,9 @@ type MemoryDeduper struct {
 	index    map[string]*list.Element
 }
 
-// Has повідомляє, чи id зараз у множині. Як побічний ефект освіжає його
-// recency (роблячи MRU), бо звернення = «використання».
+// Has reports whether id is currently in the set. As a side effect
+// it refreshes its recency (making it MRU), because a lookup counts
+// as "use".
 func (d *MemoryDeduper) Has(id string) bool {
 	if id == "" {
 		return false
@@ -63,8 +66,8 @@ func (d *MemoryDeduper) Has(id string) bool {
 	return ok
 }
 
-// Add реєструє id як побачений. No-op для порожнього id. При досягненні
-// capacity витісняє найдавніший елемент.
+// Add records id as seen. A no-op for an empty id. When capacity is
+// reached, evicts the oldest entry.
 func (d *MemoryDeduper) Add(id string) {
 	if id == "" {
 		return
@@ -85,8 +88,8 @@ func (d *MemoryDeduper) Add(id string) {
 	d.index[id] = d.order.PushFront(id)
 }
 
-// Len повертає кількість поточних id-шників. Корисно для діагностики
-// (метрики, дебаг).
+// Len returns the current number of ids. Useful for diagnostics
+// (metrics, debugging).
 func (d *MemoryDeduper) Len() int {
 	d.mu.Lock()
 	defer d.mu.Unlock()

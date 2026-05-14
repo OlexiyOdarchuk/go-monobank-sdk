@@ -6,18 +6,18 @@ import (
 	"time"
 )
 
-// ContactsAll повертає iter.Seq2-ітератор по всіх зарплатних контактах
-// компанії. Сторінки тягнуться лінько по черзі через [Client.Contacts]
-// з кроком pageSize (0 → дефолт API). Якщо ctx скасовується або один
-// з викликів повертає помилку — ітератор віддає (Contact{}, err) і
-// зупиняється.
+// ContactsAll returns an iter.Seq2 iterator over every payroll
+// contact in the company. Pages are pulled lazily one by one via
+// [Client.Contacts] with step pageSize (0 → API default). If ctx is
+// canceled or one of the calls returns an error, the iterator yields
+// (Contact{}, err) and stops.
 //
 //	for c, err := range cli.ContactsAll(ctx, 0) {
 //	    if err != nil { return err }
 //	    process(c)
 //	}
 //
-// Перервати раніше — звичайний break.
+// To stop early, use an ordinary break.
 func (c *Client) ContactsAll(ctx context.Context, pageSize int) iter.Seq2[Contact, error] {
 	return func(yield func(Contact, error) bool) {
 		offset := 0
@@ -44,11 +44,12 @@ func (c *Client) ContactsAll(ctx context.Context, pageSize int) iter.Seq2[Contac
 	}
 }
 
-// StatementAll лінько пагінує операції за період [from, to] на рахунку
-// account. На кожному кроці тягне сторінку через [Client.Statement] із
-// pageSize (0 → дефолт API), використовуючи `direction=DOWN` від `to`
-// у минуле; проміжний курсор зсуває верхню межу до моменту найстарішої
-// віддачі. Якщо to нульовий — ітерує від `now` назад.
+// StatementAll lazily paginates operations within [from, to] on
+// account. On each step it pulls a page via [Client.Statement] with
+// pageSize (0 → API default) using `direction=DOWN` from `to` back
+// in time; the internal cursor shifts the upper bound to the time
+// of the oldest item returned. If to is zero, it iterates from `now`
+// backwards.
 //
 //	for op, err := range cli.StatementAll(ctx, "acc-1", from, time.Time{}, 500) {
 //	    if err != nil { return err }
@@ -81,8 +82,8 @@ func (c *Client) StatementAll(ctx context.Context, account string, from, to time
 					return
 				}
 			}
-			// DOWN-direction: остання — найстаріша; зсуваємо верхню
-			// межу на 1 секунду раніше за неї, щоб уникнути дублів.
+			// DOWN direction: the last item is the oldest; shift the
+			// upper bound one second earlier to avoid duplicates.
 			oldest := page[len(page)-1].Time.Time
 			next := oldest.Add(-time.Second)
 			if !next.Before(cursorTo) {
@@ -93,9 +94,10 @@ func (c *Client) StatementAll(ctx context.Context, account string, from, to time
 	}
 }
 
-// SearchContactsAll — аналог [Client.ContactsAll] для повнотекстового
-// пошуку: лінько ітерує по всіх контактах, що матчать query (ІПН, IBAN,
-// номер документа, ПІБ, PAN), через [Client.SearchContacts].
+// SearchContactsAll is the [Client.ContactsAll] counterpart for
+// full-text search: it lazily iterates over every contact that
+// matches query (INN, IBAN, document number, full name, PAN) via
+// [Client.SearchContacts].
 func (c *Client) SearchContactsAll(ctx context.Context, query string, pageSize int) iter.Seq2[Contact, error] {
 	return func(yield func(Contact, error) bool) {
 		offset := 0

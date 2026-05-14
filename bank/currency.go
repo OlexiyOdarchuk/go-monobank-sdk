@@ -9,15 +9,17 @@ import (
 	"github.com/vtopc/epoch"
 )
 
-// Rate — один рядок із /bank/currency: курс обміну між двома валютами.
-// CurrencyCodeA та CurrencyCodeB — числові коди за ISO 4217.
+// Rate is one row from /bank/currency: an exchange rate between two
+// currencies. CurrencyCodeA and CurrencyCodeB are ISO 4217 numeric
+// codes.
 //
-// RateSell і RateBuy — курси продажу та купівлі (двосторонній обмін).
-// RateCross — кросс-курс (вживається, коли пряма котировка відсутня).
-// Якщо для пари є тільки RateCross — RateSell і RateBuy будуть 0.
+// RateSell and RateBuy are the sell and buy rates (two-way exchange).
+// RateCross is the cross rate (used when no direct quote is
+// available). When a pair only has RateCross, RateSell and RateBuy
+// are 0.
 //
-// Назву обрано Rate (а не Currency), щоб не плутати з [currency.Code]
-// (типізований ISO 4217 numeric).
+// The name Rate (rather than Currency) was chosen to avoid confusion
+// with [currency.Code] (the typed ISO 4217 numeric).
 type Rate struct {
 	CurrencyCodeA int           `json:"currencyCodeA"`
 	CurrencyCodeB int           `json:"currencyCodeB"`
@@ -27,33 +29,35 @@ type Rate struct {
 	RateCross     float64       `json:"rateCross"`
 }
 
-// Rates — slice типу [Rate].
+// Rates is a slice of [Rate].
 type Rates []Rate
 
-// ErrNoRate — у списку немає курсу між зазначеною парою валют (ні
-// прямого, ні зворотного).
+// ErrNoRate indicates that the list has no rate for the given pair
+// (neither direct nor reverse).
 var ErrNoRate = errors.New("bank: no rate for the requested currency pair")
 
-// Convert конвертує amount у валюту to за курсами з цієї виписки.
-// Якщо amount.Code == to — повертає amount без змін.
+// Convert converts amount into the to currency using the rates in
+// this snapshot. If amount.Code == to, returns amount unchanged.
 //
-// Правила підбору курсу:
+// Rate selection rules:
 //
-//   - Шукаємо рядок, що містить пару (amount.Code, to) у будь-якому
-//     напрямку.
-//   - Якщо amount.Code == CurrencyCodeA, а to == CurrencyCodeB:
-//     ти продаєш A за B → користуємо RateBuy (банк купує A); сума множиться.
-//   - Якщо amount.Code == CurrencyCodeB, а to == CurrencyCodeA:
-//     ти купуєш A за B → користуємо RateSell (банк продає A); сума ділиться.
-//   - Якщо RateBuy/RateSell нульовий (буває для менш активних пар) —
-//     fallback на RateCross.
+//   - Find a row that contains the pair (amount.Code, to) in either
+//     direction.
+//   - If amount.Code == CurrencyCodeA and to == CurrencyCodeB:
+//     you are selling A for B → use RateBuy (the bank buys A); the
+//     amount is multiplied.
+//   - If amount.Code == CurrencyCodeB and to == CurrencyCodeA:
+//     you are buying A for B → use RateSell (the bank sells A); the
+//     amount is divided.
+//   - If RateBuy/RateSell is zero (happens for less liquid pairs),
+//     fall back to RateCross.
 //
-// Округлення — до найближчої мінорної одиниці (через [money.Money.Scale]).
-// Якщо пари немає — повертає [ErrNoRate].
+// Rounded to the nearest minor unit (via [money.Money.Scale]). If the
+// pair is absent, returns [ErrNoRate].
 //
-// Обмеження: формула припускає однакову кількість десяткових місць у
-// обох валютах (2). Для пар із JPY/KRW (0 десяткових) результат буде
-// зі зсувом на множник 100 — обробляй вручну.
+// Limitation: the formula assumes the same number of decimal places
+// in both currencies (2). For pairs with JPY/KRW (0 decimals) the
+// result is off by a factor of 100 — handle that manually.
 func (rs Rates) Convert(amount money.Money, to currency.Code) (money.Money, error) {
 	if amount.Code == to {
 		return amount, nil
@@ -65,7 +69,7 @@ func (rs Rates) Convert(amount money.Money, to currency.Code) (money.Money, erro
 
 		switch {
 		case amount.Code == a && to == b:
-			// Конвертація A → B: множимо.
+			// Conversion A → B: multiply.
 			rate := r.RateBuy
 			if rate == 0 {
 				rate = r.RateCross
@@ -78,7 +82,7 @@ func (rs Rates) Convert(amount money.Money, to currency.Code) (money.Money, erro
 			return out, nil
 
 		case amount.Code == b && to == a:
-			// Конвертація B → A: ділимо.
+			// Conversion B → A: divide.
 			rate := r.RateSell
 			if rate == 0 {
 				rate = r.RateCross

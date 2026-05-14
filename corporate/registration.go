@@ -8,25 +8,29 @@ import (
 	"net/http"
 )
 
-// RegistrationState — стан запиту на реєстрацію корпоративного API.
+// RegistrationState is the state of a corporate-API registration
+// request.
 type RegistrationState string
 
-// Можливі значення RegistrationState.
+// Possible RegistrationState values.
 const (
-	// RegistrationNew — заявка створена, чекає ручного схвалення Mono.
+	// RegistrationNew — the application has been created and is
+	// awaiting Mono's manual approval.
 	RegistrationNew RegistrationState = "New"
-	// RegistrationDeclined — заявку відхилено.
+	// RegistrationDeclined — the application was declined.
 	RegistrationDeclined RegistrationState = "Declined"
-	// RegistrationApproved — заявку схвалено; KeyID готовий до використання.
+	// RegistrationApproved — the application is approved; KeyID is
+	// ready for use.
 	RegistrationApproved RegistrationState = "Approved"
 )
 
-// RegistrationRequest — body POST /personal/auth/registration: первинна
-// заявка на схвалення корпоративного API. Всі поля обов'язкові.
+// RegistrationRequest is the body of POST /personal/auth/registration:
+// the initial application for corporate-API approval. All fields are
+// required.
 //
-// Pubkey — PEM-кодований публічний ключ secp256k1 (encoding/json
-// автоматично base64-кодує []byte для wire-format). Logo — сирі байти
-// зображення PNG/JPEG, теж base64-кодується.
+// Pubkey is a PEM-encoded secp256k1 public key (encoding/json
+// automatically base64-encodes []byte for the wire format). Logo is
+// the raw bytes of a PNG/JPEG image, also base64-encoded.
 type RegistrationRequest struct {
 	Pubkey        []byte `json:"pubkey"`
 	Name          string `json:"name"`
@@ -37,31 +41,33 @@ type RegistrationRequest struct {
 	Logo          []byte `json:"logo"`
 }
 
-// RegistrationResponse — відповідь POST /personal/auth/registration:
-// підтверджує, що заявку прийнято (зазвичай Status == "New").
+// RegistrationResponse is the response of POST
+// /personal/auth/registration: it confirms the application was
+// accepted (typically Status == "New").
 type RegistrationResponse struct {
 	Status RegistrationState `json:"status"`
 }
 
-// RegistrationStatusRequest — body POST /personal/auth/registration/status:
-// той самий PEM-pubkey, який було подано при реєстрації — Mono використовує
-// його як ідентифікатор заявки.
+// RegistrationStatusRequest is the body of POST
+// /personal/auth/registration/status: the same PEM pubkey that was
+// submitted at registration — Mono uses it as the application
+// identifier.
 type RegistrationStatusRequest struct {
 	Pubkey []byte `json:"pubkey"`
 }
 
-// RegistrationStatusResponse — відповідь
-// POST /personal/auth/registration/status. KeyID заповнюється, коли
-// Mono схвалила заявку, і відповідає X-Key-Id, який корпоративний клієнт
-// зобов'язаний використовувати надалі.
+// RegistrationStatusResponse is the response of POST
+// /personal/auth/registration/status. KeyID is populated once Mono
+// approves the application and matches the X-Key-Id the corporate
+// client must use from then on.
 type RegistrationStatusResponse struct {
 	Status RegistrationState `json:"status"`
 	KeyID  string            `json:"keyId"`
 }
 
-// Register відправляє заявку на реєстрацію корпоративного API. Mono
-// розглядає її вручну (від кількох годин до кількох днів). Перевіряй
-// статус через [Client.RegistrationStatus].
+// Register submits a corporate-API registration application. Mono
+// reviews it manually (from a few hours to a few days). Poll status
+// via [Client.RegistrationStatus].
 // https://api.monobank.ua/docs/corporate.html#tag/Avtoryzaciya-ta-nalashtuvannya-kompaniyi/paths/~1personal~1auth~1registration/post
 func (c *Client) Register(ctx context.Context, in *RegistrationRequest) (*RegistrationResponse, error) {
 	if in == nil {
@@ -83,9 +89,10 @@ func (c *Client) Register(ctx context.Context, in *RegistrationRequest) (*Regist
 	return &out, nil
 }
 
-// RegistrationStatus перевіряє, чи заявка, подана з pubkeyPEM, схвалена
-// банком. Полінг 1 раз на хвилину-годину — нормальна стратегія
-// (схвалення ручне, поспішати немає сенсу).
+// RegistrationStatus checks whether the application submitted with
+// pubkeyPEM has been approved by the bank. Polling once a minute to
+// once an hour is a normal strategy (approval is manual, no point in
+// rushing).
 // https://api.monobank.ua/docs/corporate.html#tag/Avtoryzaciya-ta-nalashtuvannya-kompaniyi/paths/~1personal~1auth~1registration~1status/post
 func (c *Client) RegistrationStatus(ctx context.Context, pubkeyPEM []byte) (*RegistrationStatusResponse, error) {
 	body, err := json.Marshal(RegistrationStatusRequest{Pubkey: pubkeyPEM})

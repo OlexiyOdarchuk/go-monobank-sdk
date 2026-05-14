@@ -53,7 +53,7 @@ type QRDetails struct {
 	Currency  currency.Code `json:"ccy,omitempty"`
 }
 
-// UnmarshalJSON прив’язує Currency → Amount.Code.
+// UnmarshalJSON attaches Currency to Amount.Code.
 func (q *QRDetails) UnmarshalJSON(data []byte) error {
 	type raw QRDetails
 	var r raw
@@ -220,8 +220,8 @@ const (
 )
 
 // PaymentInfo is the card-side detail attached to a successful invoice.
-// Fee та AgentFee — у мінорних одиницях; валюта успадковується з
-// батьківського [InvoiceStatusResponse.Currency].
+// Fee and AgentFee are in minor units; the currency is inherited from
+// the parent [InvoiceStatusResponse.Currency].
 type PaymentInfo struct {
 	MaskedPan     string        `json:"maskedPan"`
 	ApprovalCode  string        `json:"approvalCode,omitempty"`
@@ -236,10 +236,10 @@ type PaymentInfo struct {
 	AgentFee      money.Money   `json:"agentFee,omitempty"`
 }
 
-// WalletStatus — стан токенізації картки.
+// WalletStatus is the tokenization state of a card.
 type WalletStatus string
 
-// Можливі значення [WalletStatus].
+// Possible [WalletStatus] values.
 const (
 	WalletNew     WalletStatus = "new"
 	WalletCreated WalletStatus = "created"
@@ -260,12 +260,13 @@ type TipsInfo struct {
 	Amount     int    `json:"amount,omitempty"`
 }
 
-// ProcessingStatus — стан асинхронної операції (cancel/finalize/
-// payment-direct/wallet-payment/sync-payment/statement). Один тип на
-// всі ці місця, бо wire-енумерація однакова.
+// ProcessingStatus is the state of an asynchronous operation
+// (cancel/finalize/payment-direct/wallet-payment/sync-payment/
+// statement). One type covers all of these places because the wire
+// enum is the same.
 type ProcessingStatus string
 
-// Можливі значення [ProcessingStatus].
+// Possible [ProcessingStatus] values.
 const (
 	StatusProcessing ProcessingStatus = "processing"
 	StatusSuccess    ProcessingStatus = "success"
@@ -285,7 +286,7 @@ type CancelOp struct {
 	ExtRef       string           `json:"extRef,omitempty"`
 }
 
-// UnmarshalJSON прив’язує Currency → Amount.Code.
+// UnmarshalJSON attaches Currency to Amount.Code.
 func (c *CancelOp) UnmarshalJSON(data []byte) error {
 	type raw CancelOp
 	var r raw
@@ -298,8 +299,9 @@ func (c *CancelOp) UnmarshalJSON(data []byte) error {
 }
 
 // InvoiceStatusResponse is the response to GET /api/merchant/invoice/status.
-// Грошові поля — типізовані [money.Money]; Code заповнюється з Currency.
-// CancelList[*].Amount, PaymentInfo.Fee/AgentFee теж отримують Currency.
+// The monetary fields are typed [money.Money]; Code is filled from
+// Currency. CancelList[*].Amount and PaymentInfo.Fee/AgentFee also
+// pick up Currency.
 type InvoiceStatusResponse struct {
 	InvoiceID     string        `json:"invoiceId"`
 	Status        InvoiceStatus `json:"status"`
@@ -318,9 +320,9 @@ type InvoiceStatusResponse struct {
 	TipsInfo      *TipsInfo     `json:"tipsInfo,omitempty"`
 }
 
-// UnmarshalJSON прив’язує Currency до всіх грошових полів — Amount, FinalAmount,
-// PaymentInfo.{Fee,AgentFee}. CancelList[i].Amount має власний Currency і
-// заповнюється його UnmarshalJSON-ом.
+// UnmarshalJSON attaches Currency to every monetary field — Amount,
+// FinalAmount, PaymentInfo.{Fee,AgentFee}. CancelList[i].Amount has
+// its own Currency and is populated by its UnmarshalJSON.
 func (i *InvoiceStatusResponse) UnmarshalJSON(data []byte) error {
 	type raw InvoiceStatusResponse
 	var r raw
@@ -462,7 +464,7 @@ type PaymentDirectResponse struct {
 	ModifiedDate  string           `json:"modifiedDate"`
 }
 
-// UnmarshalJSON прив’язує Currency → Amount.Code.
+// UnmarshalJSON attaches Currency to Amount.Code.
 func (p *PaymentDirectResponse) UnmarshalJSON(data []byte) error {
 	type raw PaymentDirectResponse
 	var r raw
@@ -551,7 +553,7 @@ type StatementInvoice struct {
 	CancelList    []StatementRefund `json:"cancelList,omitempty"`
 }
 
-// UnmarshalJSON прив’язує Currency → Amount/ProfitAmount.Code.
+// UnmarshalJSON attaches Currency to Amount and ProfitAmount.Code.
 func (s *StatementInvoice) UnmarshalJSON(data []byte) error {
 	type raw StatementInvoice
 	var r raw
@@ -575,7 +577,7 @@ type StatementRefund struct {
 	MaskedPan    string        `json:"maskedPan"`
 }
 
-// UnmarshalJSON прив’язує Currency → Amount.Code.
+// UnmarshalJSON attaches Currency to Amount.Code.
 func (s *StatementRefund) UnmarshalJSON(data []byte) error {
 	type raw StatementRefund
 	var r raw

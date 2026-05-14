@@ -5,13 +5,14 @@ import (
 	"net/http"
 )
 
-// ValidateClientLegacy — застаріла валідація клієнта. Повертає повну
-// інформацію (ПІБ, ІПН), якщо клієнт знайдений.
+// ValidateClientLegacy is the deprecated client validation. It
+// returns the full information (full name, INN) when the client is
+// found.
 //
 // POST /api/client/validate  (200 → ValidateClientResponse)
 //
-// Deprecated: використовуй [Client.ValidateClient] (v2) для всіх нових
-// інтеграцій.
+// Deprecated: use [Client.ValidateClient] (v2) for every new
+// integration.
 func (c *Client) ValidateClientLegacy(ctx context.Context, phone string) (*ValidateClientResponse, error) {
 	var out ValidateClientResponse
 	if err := c.doJSON(ctx, "/api/client/validate",
@@ -21,9 +22,9 @@ func (c *Client) ValidateClientLegacy(ctx context.Context, phone string) (*Valid
 	return &out, nil
 }
 
-// ValidateClient перевіряє, чи телефон належить клієнту monobank.
-// Повертає лише прапор found, без персональних даних (на відміну від
-// застарілої версії).
+// ValidateClient checks whether the phone belongs to a monobank
+// client. It returns only the found flag, with no personal data
+// (unlike the deprecated version).
 //
 // POST /api/v2/client/validate  (200 → ValidateClientSimpleResponse)
 func (c *Client) ValidateClient(ctx context.Context, phone string) (bool, error) {

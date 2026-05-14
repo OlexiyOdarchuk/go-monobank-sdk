@@ -8,10 +8,10 @@ import (
 	"github.com/OlexiyOdarchuk/go-monobank-sdk/auth"
 )
 
-// TokenRequest — відповідь POST /personal/auth/request. RequestID —
-// короткоживучий ідентифікатор запиту на доступ; AcceptURL — посилання,
-// на яке треба перенаправити клієнта (або вшити в QR-код), щоб він
-// підтвердив доступ у застосунку Mono.
+// TokenRequest is the response from POST /personal/auth/request.
+// RequestID is the short-lived access-request identifier; AcceptURL
+// is the link to redirect the client to (or embed in a QR code) so
+// they can approve access in the Mono mobile app.
 type TokenRequest struct {
 	RequestID string `json:"tokenRequestId"`
 	AcceptURL string `json:"acceptUrl"`
@@ -19,11 +19,11 @@ type TokenRequest struct {
 
 const urlPathAuth = "/personal/auth/request"
 
-// Auth ініціює запит на доступ до даних клієнта. callbackURL шлеться у
-// X-Callback — Mono POST-не на нього, коли клієнт підтвердить доступ
-// (як альтернатива поллінгу через [Client.CheckAuth]). Порожній
-// permissions означає «усі дозволи»; передай комбінацію з
-// [auth.PermSt], [auth.PermPI], [auth.PermFOP] для звуження scope.
+// Auth initiates a request for access to a client's data. callbackURL
+// is sent in X-Callback — Mono POSTs to it when the client approves
+// access (an alternative to polling via [Client.CheckAuth]). An empty
+// permissions list means "all permissions"; pass a combination of
+// [auth.PermSt], [auth.PermPI], [auth.PermFOP] to narrow the scope.
 // https://api.monobank.ua/docs/corporate.html#tag/Klyentski-personalni-dani/paths/~1personal~1auth~1request/post
 func (c *Client) Auth(ctx context.Context, callbackURL string, permissions ...auth.Permission) (*TokenRequest, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, urlPathAuth, http.NoBody)
@@ -39,10 +39,11 @@ func (c *Client) Auth(ctx context.Context, callbackURL string, permissions ...au
 	return &out, nil
 }
 
-// CheckAuth перевіряє статус запиту доступу за requestID. Повертає nil,
-// коли клієнт підтвердив доступ; інакше — [monobank.APIError] зі
-// StatusCode 403 (запит ще не схвалений) або іншим кодом для більш
-// фатальних помилок. Полінг кожні 3-5 секунд — типова стратегія.
+// CheckAuth checks the status of an access request by requestID. It
+// returns nil when the client has approved access; otherwise it
+// returns a [monobank.APIError] with StatusCode 403 (request not yet
+// approved) or another code for more fatal failures. Polling every
+// 3-5 seconds is a typical strategy.
 // https://api.monobank.ua/docs/corporate.html#tag/Klyentski-personalni-dani/paths/~1personal~1auth~1request/get
 func (c *Client) CheckAuth(ctx context.Context, requestID string) error {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, urlPathAuth, http.NoBody)

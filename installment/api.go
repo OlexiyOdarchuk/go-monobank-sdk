@@ -2,10 +2,10 @@ package installment
 
 import "context"
 
-// API — інтерфейс клієнта ПЧ для моків. Сам [Client] його реалізує
-// (перевіряється compile-time assert-ом нижче).
+// API is the installment client interface for mocks. [Client]
+// implements it (verified by the compile-time assert below).
 type API interface {
-	// Заявки.
+	// Orders.
 	CreateOrder(ctx context.Context, in *CreateOrderRequest) (*CreateOrderResponse, error)
 	OrderState(ctx context.Context, orderID string) (*OrderStateInfo, error)
 	ConfirmOrder(ctx context.Context, orderID string) (*OrderStateInfo, error)
@@ -15,16 +15,16 @@ type API interface {
 	OrderData(ctx context.Context, orderID string) (*OrderShortInfo, error)
 	CheckPaid(ctx context.Context, orderID string) (*CheckInstallmentsResponse, error)
 
-	// Гарантійний лист.
+	// Guarantee letter.
 	GuaranteeLetterPDF(ctx context.Context, in *OrderDataRequest) ([]byte, error)
 	GuaranteeLetterData(ctx context.Context, in *OrderDataRequest) (*OrderData, error)
 	GuaranteeLetterDataV2(ctx context.Context, in *OrderDataRequest) (*OrderData, error)
 
-	// Валідація клієнта.
+	// Client validation.
 	ValidateClient(ctx context.Context, phone string) (bool, error)
 	ValidateClientLegacy(ctx context.Context, phone string) (*ValidateClientResponse, error)
 
-	// Звітність.
+	// Reporting.
 	DailyReport(ctx context.Context, date string) ([]ReportOrder, error)
 }
 

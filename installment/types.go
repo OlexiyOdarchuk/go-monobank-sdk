@@ -1,7 +1,7 @@
 package installment
 
-// OrderState — загальний стан заявки (поле state у callback та
-// [OrderStateInfo]).
+// OrderState is the overall state of an order (the state field in
+// the callback and in [OrderStateInfo]).
 type OrderState string
 
 // Possible OrderState values.
@@ -11,7 +11,7 @@ const (
 	StateInProcess OrderState = "IN_PROCESS"
 )
 
-// OrderSubState — деталізований стан заявки.
+// OrderSubState is the detailed state of an order.
 type OrderSubState string
 
 // Possible OrderSubState values.
@@ -39,7 +39,7 @@ const (
 	SubRestrictedByRisks        OrderSubState = "RESTRICTED_BY_RISKS"
 )
 
-// InvoiceSource — канал продажу для CreateOrderRequest.Invoice.
+// InvoiceSource is the sales channel for CreateOrderRequest.Invoice.
 type InvoiceSource string
 
 // Possible InvoiceSource values.
@@ -48,7 +48,7 @@ const (
 	SourceStore    InvoiceSource = "STORE"
 )
 
-// CreateOrderRequest — тіло POST /api/order/create.
+// CreateOrderRequest is the body of POST /api/order/create.
 type CreateOrderRequest struct {
 	StoreOrderID                 string                        `json:"store_order_id"`
 	ClientPhone                  string                        `json:"client_phone"`
@@ -61,8 +61,8 @@ type CreateOrderRequest struct {
 	FinancialCompanyMerchantInfo *FinancialCompanyMerchantInfo `json:"financial_company_merchant_info,omitempty"`
 }
 
-// CreateOrderInvoice — рахунок-фактура, що йде з заявкою.
-// Source — канал продажу (INTERNET або STORE).
+// CreateOrderInvoice is the invoice that travels with the order.
+// Source is the sales channel (INTERNET or STORE).
 type CreateOrderInvoice struct {
 	Number  string        `json:"number"`
 	Date    string        `json:"date"`
@@ -70,46 +70,49 @@ type CreateOrderInvoice struct {
 	PointID string        `json:"point_id,omitempty"`
 }
 
-// Program — одна доступна програма ПЧ: список варіантів кількості частин
-// (від 3 до 25 включно).
+// Program is one available installment program: a list of the
+// number-of-parts options (3 to 25 inclusive).
 type Program struct {
 	Type                string `json:"type,omitempty"` // deprecated
 	AvailablePartsCount []int  `json:"available_parts_count"`
 }
 
-// Product — товар у заявці.
+// Product is one item in the order.
 type Product struct {
 	Name  string  `json:"name"`
 	Count int     `json:"count"`
 	Sum   float64 `json:"sum"`
 }
 
-// CreateAdditionalParams — необов'язкові параметри create-заявки.
+// CreateAdditionalParams holds optional parameters of the create
+// request.
 type CreateAdditionalParams struct {
 	SellerPhone   string  `json:"seller_phone,omitempty"`
 	NDS           float64 `json:"nds,omitempty"`
 	ExtInitialSum float64 `json:"ext_initial_sum,omitempty"`
 }
 
-// FinancialCompanyMerchantInfo — реквізити магазину для фінкомпанії.
+// FinancialCompanyMerchantInfo holds the merchant's details for the
+// financial company.
 type FinancialCompanyMerchantInfo struct {
 	StoreName   string `json:"store_name,omitempty"`
 	EDRPOUCode  string `json:"edrpou_code,omitempty"`
 	IBANAccount string `json:"iban_account,omitempty"`
 }
 
-// CreateOrderResponse — відповідь /api/order/create.
+// CreateOrderResponse is the response of /api/order/create.
 type CreateOrderResponse struct {
 	OrderID string `json:"order_id"`
 }
 
-// RequestWithOrderIdentifier — спільне тіло для endpoint-ів, що
-// працюють по order_id (state/info/data/confirm/reject/check_paid).
+// RequestWithOrderIdentifier is the shared body for endpoints that
+// operate on order_id (state/info/data/confirm/reject/check_paid).
 type RequestWithOrderIdentifier struct {
 	OrderID string `json:"order_id"`
 }
 
-// OrderStateInfo — відповідь /api/order/state, /confirm, /reject.
+// OrderStateInfo is the response of /api/order/state, /confirm,
+// /reject.
 type OrderStateInfo struct {
 	OrderID       string        `json:"order_id"`
 	State         OrderState    `json:"state"`
@@ -117,7 +120,8 @@ type OrderStateInfo struct {
 	Message       string        `json:"message,omitempty"`
 }
 
-// OrderShortInfo — відповідь /api/order/info (deprecated) та /api/order/data.
+// OrderShortInfo is the response of /api/order/info (deprecated) and
+// /api/order/data.
 type OrderShortInfo struct {
 	TotalSum        float64       `json:"total_sum"`
 	Source          InvoiceSource `json:"source,omitempty"`
@@ -131,19 +135,19 @@ type OrderShortInfo struct {
 	IBAN            string        `json:"iban,omitempty"`
 }
 
-// Reverse — одне повернення у списку OrderShortInfo.ReverseList.
+// Reverse is a single refund in the OrderShortInfo.ReverseList.
 type Reverse struct {
 	Sum       float64 `json:"sum"`
 	Timestamp string  `json:"timestamp"`
 }
 
-// CheckInstallmentsResponse — відповідь /api/order/check/paid.
+// CheckInstallmentsResponse is the response of /api/order/check/paid.
 type CheckInstallmentsResponse struct {
 	FullyPaid                bool `json:"fully_paid"`
 	BankCanReturnMoneyToCard bool `json:"bank_can_return_money_to_card"`
 }
 
-// ReturnRequest — тіло /api/order/return.
+// ReturnRequest is the body of /api/order/return.
 type ReturnRequest struct {
 	OrderID           string                  `json:"order_id"`
 	Sum               float64                 `json:"sum"`
@@ -152,30 +156,32 @@ type ReturnRequest struct {
 	AdditionalParams  *ReturnAdditionalParams `json:"additional_params,omitempty"`
 }
 
-// ReturnAdditionalParams — необов'язкові параметри повернення.
+// ReturnAdditionalParams holds optional return parameters.
 type ReturnAdditionalParams struct {
 	NDS float64 `json:"nds,omitempty"`
 }
 
-// ReturnResponse — відповідь /api/order/return.
+// ReturnResponse is the response of /api/order/return.
 type ReturnResponse struct {
 	Status string `json:"status"`
 }
 
-// ValidateClientRequest — тіло /api/client/validate, /api/v2/client/validate.
+// ValidateClientRequest is the body of /api/client/validate and
+// /api/v2/client/validate.
 type ValidateClientRequest struct {
 	Phone string `json:"phone"`
 }
 
-// ValidateClientResponse — відповідь /api/client/validate (legacy).
-// Містить повну інформацію про клієнта, якщо знайдено.
+// ValidateClientResponse is the response of /api/client/validate
+// (legacy). It carries the full client info when found.
 type ValidateClientResponse struct {
 	Found  bool        `json:"found"`
 	Client *ClientInfo `json:"client,omitempty"`
 }
 
-// ClientInfo — базова інформація про клієнта (для legacy /api/client/validate).
-// Не плутати з [Client] — це сам SDK-клієнт.
+// ClientInfo holds the basic client info (for the legacy
+// /api/client/validate). Not to be confused with [Client] — that is
+// the SDK client itself.
 type ClientInfo struct {
 	FirstName  string `json:"first_name,omitempty"`
 	LastName   string `json:"last_name,omitempty"`
@@ -183,23 +189,23 @@ type ClientInfo struct {
 	INN        string `json:"inn,omitempty"`
 }
 
-// ValidateClientSimpleResponse — відповідь /api/v2/client/validate (новий,
-// лише прапор found).
+// ValidateClientSimpleResponse is the response of
+// /api/v2/client/validate (the new endpoint, only the found flag).
 type ValidateClientSimpleResponse struct {
 	Found bool `json:"found"`
 }
 
-// DailyReportRequest — тіло /api/store/report.
+// DailyReportRequest is the body of /api/store/report.
 type DailyReportRequest struct {
 	Date string `json:"date"`
 }
 
-// DailyReportResponse — відповідь /api/store/report.
+// DailyReportResponse is the response of /api/store/report.
 type DailyReportResponse struct {
 	Orders []ReportOrder `json:"orders"`
 }
 
-// ReportOrder — одна операція у денному звіті.
+// ReportOrder is a single operation in the daily report.
 type ReportOrder struct {
 	OrderID            string  `json:"order_id"`
 	InvoiceNumber      string  `json:"invoice_number"`
@@ -213,29 +219,30 @@ type ReportOrder struct {
 	ODBContractNumber  string  `json:"odb_contract_number"`
 }
 
-// OrderDataRequest — тіло /api/order/(v2/)data/for/guarantee/letter та
+// OrderDataRequest is the body of
+// /api/order/(v2/)data/for/guarantee/letter and
 // /api/order/guarantee/letter.
 type OrderDataRequest struct {
 	OrderID string                   `json:"order_id"`
 	Invoice *OrderDataRequestInvoice `json:"invoice,omitempty"`
 }
 
-// OrderDataRequestInvoice — реквізити рахунку, які додаються до запиту
-// на гарантійний лист.
+// OrderDataRequestInvoice carries the invoice details added to the
+// guarantee-letter request.
 type OrderDataRequestInvoice struct {
 	Number string `json:"number,omitempty"`
 	Date   string `json:"date,omitempty"`
 }
 
-// OrderData — JSON-відповідь /api/order/data/for/guarantee/letter (+v2),
-// тобто структуровані дані для генерації гарантійного листа на стороні
-// клієнта.
+// OrderData is the JSON response of
+// /api/order/data/for/guarantee/letter (+v2), i.e. the structured
+// data for client-side generation of the guarantee letter.
 type OrderData struct {
 	Header    Header    `json:"header"`
 	Expansion Expansion `json:"expansion"`
 }
 
-// Header — заголовок гарантійного листа.
+// Header is the header of the guarantee letter.
 type Header struct {
 	RequestID        string `json:"request_id"`
 	AnswerDatetime   string `json:"answer_datetime,omitempty"`
@@ -245,7 +252,7 @@ type Header struct {
 	ContractDate     string `json:"contract_date,omitempty"`
 }
 
-// Expansion — основний блок гарантійного листа.
+// Expansion is the main block of the guarantee letter.
 type Expansion struct {
 	Customer           *Customer `json:"customer,omitempty"`
 	Invoice            *Invoice  `json:"invoice,omitempty"`
@@ -255,7 +262,7 @@ type Expansion struct {
 	Stamp              string    `json:"stamp,omitempty"`
 }
 
-// Customer — клієнт у гарантійному листі.
+// Customer is the client in the guarantee letter.
 type Customer struct {
 	FirstName  string           `json:"first_name,omitempty"`
 	LastName   string           `json:"last_name,omitempty"`
@@ -264,8 +271,8 @@ type Customer struct {
 	Document   *ClientDocuments `json:"document,omitempty"`
 }
 
-// ClientDocuments — оверкомплект документів клієнта; реально приходить
-// один із них.
+// ClientDocuments holds the full set of client document types; in
+// practice only one of them is populated.
 type ClientDocuments struct {
 	Passport              *PassportOrResidencePermitDocument `json:"passport,omitempty"`
 	IDCard                *IDCardDocument                    `json:"id_card,omitempty"`
@@ -273,7 +280,8 @@ type ClientDocuments struct {
 	InternationalPassport *InternationalPassport             `json:"international_passport,omitempty"`
 }
 
-// PassportOrResidencePermitDocument — паспорт або посвідка.
+// PassportOrResidencePermitDocument is a passport or residence
+// permit.
 type PassportOrResidencePermitDocument struct {
 	Number      string `json:"number,omitempty"`
 	Issued      string `json:"issued,omitempty"`
@@ -281,7 +289,7 @@ type PassportOrResidencePermitDocument struct {
 	Series      string `json:"series,omitempty"`
 }
 
-// IDCardDocument — ID-картка (паспорт нового зразка).
+// IDCardDocument is an ID card (the modern passport format).
 type IDCardDocument struct {
 	Number         string `json:"number,omitempty"`
 	Issued         string `json:"issued,omitempty"`
@@ -290,7 +298,8 @@ type IDCardDocument struct {
 	RegistryNumber string `json:"registry_number,omitempty"`
 }
 
-// InternationalPassport — закордонний паспорт.
+// InternationalPassport is an international (foreign-travel)
+// passport.
 type InternationalPassport struct {
 	Number      string `json:"number,omitempty"`
 	DateOfIssue string `json:"date_of_issue,omitempty"`
@@ -298,14 +307,14 @@ type InternationalPassport struct {
 	ValidUntil  string `json:"valid_until,omitempty"`
 }
 
-// Invoice — рахунок-фактура у гарантійному листі.
+// Invoice is the invoice in the guarantee letter.
 type Invoice struct {
 	InvoiceNumber string  `json:"invoice_number,omitempty"`
 	InvoiceDate   string  `json:"invoice_date,omitempty"`
 	InvoiceAmount float64 `json:"invoice_amount,omitempty"`
 }
 
-// Payment — реквізити отримувача коштів.
+// Payment holds the recipient's payment details.
 type Payment struct {
 	DestID       string `json:"dest_id,omitempty"`
 	DestName     string `json:"dest_name,omitempty"`
@@ -314,7 +323,7 @@ type Payment struct {
 	DestAccNo    string `json:"dest_acc_number,omitempty"`
 }
 
-// Bank — інформація про банк-кредитор.
+// Bank holds the creditor-bank information.
 type Bank struct {
 	Agreement           string  `json:"agreement,omitempty"`
 	AgreementDate       string  `json:"agreement_date,omitempty"`

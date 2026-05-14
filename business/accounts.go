@@ -7,8 +7,8 @@ import (
 	"net/url"
 )
 
-// Accounts повертає всі рахунки компанії (UAH, USD, EUR тощо — по
-// одному рядку на валюту).
+// Accounts returns every account of the company (UAH, USD, EUR etc.
+// — one row per currency).
 // https://corp-api.monobank.ua/docs/#operation/get-all-accounts
 func (c *Client) Accounts(ctx context.Context) ([]Account, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "/ext/v1/accounts", http.NoBody)
@@ -22,9 +22,9 @@ func (c *Client) Accounts(ctx context.Context) ([]Account, error) {
 	return out, nil
 }
 
-// Account повертає один рахунок за його IBAN. Зручно, коли треба
-// швидкий поточний баланс на конкретному рахунку без вантаження
-// всього списку через [Client.Accounts].
+// Account returns a single account by its IBAN. Handy when you need
+// the current balance for a specific account without fetching the
+// full list via [Client.Accounts].
 // https://corp-api.monobank.ua/docs/#operation/get-account
 func (c *Client) Account(ctx context.Context, iban string) (*Account, error) {
 	uri := "/ext/v1/accounts/" + url.PathEscape(iban)
@@ -39,10 +39,11 @@ func (c *Client) Account(ctx context.Context, iban string) (*Account, error) {
 	return &out, nil
 }
 
-// AccountBalances повертає історію щоденних балансів рахунку за період.
-// dateFrom / dateTo — дати у ISO-8601 (YYYY-MM-DD), межі включно. Поле
-// IsFinal у відповіді каже, чи можуть ще відбутися зміни балансу на
-// дату (для останньої дати в межах робочого дня — false).
+// AccountBalances returns the history of daily account balances for
+// a period. dateFrom / dateTo are ISO-8601 dates (YYYY-MM-DD), bounds
+// inclusive. The IsFinal field in the response indicates whether the
+// balance for that date may still change (for the last date within
+// the business day it is false).
 // https://corp-api.monobank.ua/docs/#operation/get-account-balances
 func (c *Client) AccountBalances(ctx context.Context, iban, dateFrom, dateTo string) ([]BalancePoint, error) {
 	q := url.Values{}

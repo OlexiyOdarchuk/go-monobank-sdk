@@ -8,18 +8,18 @@ import (
 	monobank "github.com/OlexiyOdarchuk/go-monobank-sdk"
 )
 
-// Client — обгортка над базовим [monobank.Client], що відкриває два
-// публічні (неавторизовані) endpoint-и: курси валют і серверний ключ
-// для верифікації webhook-ів. Зазвичай користувач створює один [Client]
-// на застосунок і шерить його між викликами Rates та як KeyProvider для
-// [webhook.Handler].
+// Client is a wrapper around the base [monobank.Client] that exposes
+// two public (unauthorized) endpoints: currency rates and the server
+// key for webhook verification. Typically a caller creates one
+// [Client] per application and shares it between Rates calls and as
+// a KeyProvider for [webhook.Handler].
 type Client struct {
 	c monobank.Client
 }
 
-// New повертає [Client] для неавторизованих endpoint-ів. Опції
-// (HTTP-клієнт, retry-політика, base URL для тестів) пробрасуються в
-// базовий [monobank.New].
+// New returns a [Client] for the unauthorized endpoints. Options
+// (HTTP client, retry policy, base URL for tests) are forwarded to
+// the base [monobank.New].
 //
 //	cli := bank.New()
 //	rates, err := cli.Rates(ctx)
@@ -27,12 +27,13 @@ func New(opts ...monobank.Option) *Client {
 	return &Client{c: monobank.New(opts...)}
 }
 
-// Close звільняє фонові ресурси клієнта (див. [monobank.Client.Close]).
+// Close releases the client's background resources (see
+// [monobank.Client.Close]).
 func (c *Client) Close() error { return c.c.Close() }
 
-// Rates тягне поточну таблицю курсів обміну з /bank/currency.
-// Mono обмежує цей endpoint частотою — кешуй результат на хвилину-дві.
-// Документація: https://api.monobank.ua/docs/#operation/getCurrency
+// Rates fetches the current exchange-rate table from /bank/currency.
+// Mono rate-limits this endpoint — cache the result for a minute or
+// two. Docs: https://api.monobank.ua/docs/#operation/getCurrency
 func (c *Client) Rates(ctx context.Context) (Rates, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "/bank/currency", http.NoBody)
 	if err != nil {
@@ -45,11 +46,11 @@ func (c *Client) Rates(ctx context.Context) (Rates, error) {
 	return out, nil
 }
 
-// ServerKey тягне поточний публічний ключ банку з /bank/sync. Він
-// використовується для верифікації підпису вхідних webhook-ів. Кешуй
-// результат і перевикликай тільки тоді, коли вхідний X-Key-Id перестає
-// збігатися з [ServerKey.ID]. [webhook.Handler] робить це автоматично.
-// Документація: https://api.monobank.ua/docs/#operation/getServerKey
+// ServerKey fetches the bank's current public key from /bank/sync.
+// It is used to verify the signature of incoming webhooks. Cache the
+// result and refetch only when an incoming X-Key-Id stops matching
+// [ServerKey.ID]. [webhook.Handler] does this automatically.
+// Docs: https://api.monobank.ua/docs/#operation/getServerKey
 func (c *Client) ServerKey(ctx context.Context) (*ServerKey, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "/bank/sync", http.NoBody)
 	if err != nil {

@@ -12,9 +12,9 @@ import (
 	"time"
 )
 
-// noRetryAfter — sentinel значення parseRetryAfter, що позначає
-// "header відсутній або не розпізнаний". Дозволяє відрізнити цей
-// випадок від справжнього "Retry-After: 0" (миттєвий повтор).
+// noRetryAfter is the sentinel value of parseRetryAfter meaning
+// "header missing or unparseable". It distinguishes this case from a
+// real "Retry-After: 0" (retry immediately).
 const noRetryAfter = time.Duration(-1)
 
 // retryPolicy controls automatic retries on transient HTTP failures.
@@ -82,17 +82,18 @@ func (rp retryPolicy) run(ctx context.Context, fn func() error) error {
 }
 
 // backoff returns the delay for attempt n (0-indexed) using exponential
-// growth with full jitter, clamped at max. Захищено від int64-overflow
-// при великих attempt: щойно зсув переповнює базу, повертаємо max.
+// growth with full jitter, clamped at max. Guarded against int64
+// overflow for large attempt values: as soon as the shift would
+// overflow the base, returns max.
 func backoff(base, max time.Duration, attempt int) time.Duration {
 	if base <= 0 {
 		return 0
 	}
-	// Перевіряємо overflow ДО зсуву: якщо base << attempt перевищить
-	// MaxInt64, не зсуваємо взагалі — повертаємо max (або сам base
-	// якщо max не виставлено).
+	// Check overflow BEFORE the shift: if base << attempt would exceed
+	// MaxInt64, do not shift at all — return max (or base itself when
+	// max is unset).
 	var d time.Duration
-	const maxShift = 62 // 1 << 62 ще влазить у int64
+	const maxShift = 62 // 1 << 62 still fits in int64
 	if attempt >= maxShift || base > time.Duration(math.MaxInt64>>attempt) {
 		d = max
 		if d <= 0 {
@@ -107,8 +108,8 @@ func backoff(base, max time.Duration, attempt int) time.Duration {
 	if d <= 0 {
 		return 0
 	}
-	// math/rand/v2 — без глобального мутекса (PCG per goroutine),
-	// безпечно для високого RPS у retry.
+	// math/rand/v2 has no global mutex (PCG per goroutine), safe for
+	// high RPS in retry.
 	return time.Duration(rand.Int64N(int64(d) + 1))
 }
 
@@ -136,9 +137,9 @@ func (e *transientStatus) Unwrap() error { return e.cause }
 //   - explicit "0" or HTTP-date in the past → 0 (retry immediately)
 //   - any positive value → that value
 //
-// Розрізнення "відсутній" vs "0" дозволяє retry-логіці використовувати
-// exponential backoff лише коли сервер не дав підказки, а не коли
-// сказав "ретрай негайно".
+// Distinguishing "absent" from "0" lets the retry logic apply
+// exponential backoff only when the server gave no hint, rather than
+// when it said "retry now".
 func parseRetryAfter(h http.Header) time.Duration {
 	v := strings.TrimSpace(h.Get("Retry-After"))
 	if v == "" {

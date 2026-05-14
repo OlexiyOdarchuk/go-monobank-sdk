@@ -1,19 +1,20 @@
-// Package jar — клієнт для двох публічних (без авторизації) ендпоінтів
-// Monobank, що повертають інформацію про «банки» (jars):
+// Package jar is the client for two public (no-auth) monobank
+// endpoints that return information about "jars":
 //
-//   - GET  https://api.monobank.ua/bank/jar/{longJarId}     — повна
-//     інформація по jar за «довгим» ідентифікатором.
-//   - POST https://send.monobank.ua/api/handler              — пошук
-//     jar за clientId зі share-посилання (https://send.monobank.ua/<id>);
-//     відповідь містить longJarId/extJarId для подальшого використання у
+//   - GET  https://api.monobank.ua/bank/jar/{longJarId} returns the
+//     full info for a jar by its "long" identifier.
+//   - POST https://send.monobank.ua/api/handler looks up a jar by the
+//     clientId from a share link (https://send.monobank.ua/<id>);
+//     the response carries longJarId/extJarId for later use with
 //     [Client.ByLongID].
 //
-// Обидва ендпоінти задокументовані лише в community-нотатках (див.
-// pinned-повідомлення в каналі @api_mono_chat). Це read-only API:
-// ні створювати, ні редагувати jars через них не можна.
+// Both endpoints are documented only in community notes (see the
+// pinned message in the @api_mono_chat channel). This is a read-only
+// API: jars cannot be created or edited through it.
 //
-// Ліміти на send.monobank.ua більш агресивні, ніж на /bank/jar — для
-// повторних запитів краще кешувати longJarId і ходити лише в /bank/jar.
+// The rate limits on send.monobank.ua are more aggressive than those
+// on /bank/jar — for repeated requests, cache longJarId and use only
+// /bank/jar.
 package jar
 
 import (
@@ -28,42 +29,45 @@ import (
 	"time"
 )
 
-// Default endpoints — переозначити можна через [WithAPIBaseURL] /
+// Default endpoints — override via [WithAPIBaseURL] /
 // [WithSendBaseURL].
 const (
 	defaultAPIBaseURL  = "https://api.monobank.ua"
 	defaultSendBaseURL = "https://send.monobank.ua"
 )
 
-// ErrNotFound — банка не існує або ID невалідний.
+// ErrNotFound indicates the jar does not exist or the ID is invalid.
 var ErrNotFound = errors.New("jar: not found")
 
-// ErrEmptyJarID — у [Client.ByLongID] передано порожній longJarID.
+// ErrEmptyJarID indicates that an empty longJarID was passed to
+// [Client.ByLongID].
 var ErrEmptyJarID = errors.New("jar: empty longJarID")
 
-// ErrEmptyClientID — у [Client.ByShortID] передано порожній clientID.
+// ErrEmptyClientID indicates that an empty clientID was passed to
+// [Client.ByShortID].
 var ErrEmptyClientID = errors.New("jar: empty clientID")
 
-// MaxResponseBytes — стеля на розмір відповіді. Тіла jar-ендпоінтів —
-// маленькі (<10 KiB), 1 MiB з великим запасом.
+// MaxResponseBytes is the cap on response size. Jar-endpoint bodies
+// are tiny (<10 KiB); 1 MiB leaves plenty of headroom.
 const MaxResponseBytes = 1 << 20
 
-// APIError — структурована помилка з тіла відповіді monobank (errCode/errText).
+// APIError is the structured error from the monobank response body
+// (errCode/errText).
 type APIError struct {
 	StatusCode int
 	ErrCode    string `json:"errCode"`
 	ErrText    string `json:"errText"`
 }
 
-// Error реалізує error.
+// Error implements error.
 func (e *APIError) Error() string {
 	return fmt.Sprintf("jar: %d %s: %s", e.StatusCode, e.ErrCode, e.ErrText)
 }
 
-// Info — стабільний підмножина полів /bank/jar/{longJarId}.
+// Info is the stable subset of fields from /bank/jar/{longJarId}.
 //
-// Сума у мінорних одиницях валюти (копійках для UAH). Currency — ISO 4217
-// numeric (980 = UAH).
+// Amount is in minor units of the currency (kopecks for UAH).
+// Currency is the ISO 4217 numeric code (980 = UAH).
 type Info struct {
 	JarID     string `json:"jarId"`
 	Title     string `json:"title"`
@@ -74,9 +78,9 @@ type Info struct {
 	Currency  int    `json:"currency"`
 }
 
-// SendInfo — підмножина полів від send.monobank.ua/api/handler (c="hello").
-// Цей endpoint віддає не той самий формат, що /bank/jar — поля інші,
-// тому ми тримаємо окремий тип.
+// SendInfo is the subset of fields from send.monobank.ua/api/handler
+// (c="hello"). This endpoint returns a different format from
+// /bank/jar — the field names differ, so we keep a separate type.
 type SendInfo struct {
 	Name        string `json:"name"`
 	Description string `json:"description"`
@@ -85,15 +89,15 @@ type SendInfo struct {
 	JarGoal     int64  `json:"jarGoal"`
 	JarStatus   string `json:"jarStatus"`
 	IsTrusted   bool   `json:"isTrusted"`
-	// LongJarID/ExtJarID — поле для подальшої взаємодії з /bank/jar.
-	// У різних версіях API може приходити під різними назвами; ми
-	// заповнюємо його з extJarId або longJarId, що першим знайдеться у
-	// тілі (див. UnmarshalJSON).
+	// LongJarID/ExtJarID is the field for subsequent interaction with
+	// /bank/jar. Different API versions ship it under different names;
+	// we fill it from extJarId or longJarId, whichever appears in the
+	// body first (see UnmarshalJSON).
 	LongJarID string `json:"-"`
 }
 
-// UnmarshalJSON акуратно витягує longJarId/extJarId — у різних версіях
-// поле має різну назву.
+// UnmarshalJSON carefully extracts longJarId/extJarId — different
+// versions use different field names.
 func (s *SendInfo) UnmarshalJSON(data []byte) error {
 	type raw SendInfo
 	var r raw
@@ -101,7 +105,7 @@ func (s *SendInfo) UnmarshalJSON(data []byte) error {
 		return err
 	}
 	*s = SendInfo(r)
-	// Шукаємо longJarId або extJarId окремо.
+	// Look up longJarId or extJarId separately.
 	var aux struct {
 		LongJarID string `json:"longJarId"`
 		ExtJarID  string `json:"extJarId"`
@@ -115,40 +119,39 @@ func (s *SendInfo) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-// Option — функціональна опція конструктора [New].
+// Option is a functional option for the [New] constructor.
 type Option func(*Client)
 
-// WithHTTPClient підставляє кастомний *http.Client (за дефолтом — *http.Client
-// з 15-секундним таймаутом).
+// WithHTTPClient installs a custom *http.Client (default is an
+// *http.Client with a 15-second timeout).
 func WithHTTPClient(h *http.Client) Option {
 	return func(c *Client) { c.h = h }
 }
 
-// WithAPIBaseURL перевизначає базовий URL для api.monobank.ua.
-// Призначене переважно для тестів через httptest.Server. У production
-// передавай тільки https — jar-ендпоінт публічний, але якщо custom
-// proxy між клієнтом і Mono на http, відповідь може бути підмінена
-// (banker info, jar balance).
+// WithAPIBaseURL overrides the base URL for api.monobank.ua. Mainly
+// for tests via httptest.Server. In production pass only https — the
+// jar endpoint is public, but a custom http proxy between the client
+// and Mono can substitute the response (banker info, jar balance).
 func WithAPIBaseURL(u string) Option {
 	return func(c *Client) { c.apiBase = u }
 }
 
-// WithSendBaseURL перевизначає базовий URL для send.monobank.ua.
-// Призначене переважно для тестів. Безпекові міркування — як у
-// [WithAPIBaseURL]: тільки https у production.
+// WithSendBaseURL overrides the base URL for send.monobank.ua. Mainly
+// for tests. Security considerations are the same as for
+// [WithAPIBaseURL]: https only in production.
 func WithSendBaseURL(u string) Option {
 	return func(c *Client) { c.sendBase = u }
 }
 
-// Client — read-only клієнт двох публічних jar-ендпоінтів. Створюй через
-// [New]. Без авторизації — обидва ендпоінти публічні.
+// Client is the read-only client for the two public jar endpoints.
+// Build one via [New]. No authorization — both endpoints are public.
 type Client struct {
 	h        *http.Client
 	apiBase  string
 	sendBase string
 }
 
-// New повертає клієнт із дефолтним таймаутом 15с.
+// New returns a client with a 15-second default timeout.
 func New(opts ...Option) *Client {
 	c := &Client{
 		h:        &http.Client{Timeout: 15 * time.Second},
@@ -161,9 +164,9 @@ func New(opts ...Option) *Client {
 	return c
 }
 
-// ByLongID повертає поточну інформацію по jar за довгим (longJarId /
-// extJarId) ідентифікатором. Цей ID можна знайти у URL віджета банки або
-// отримати з [Client.ByShortID].
+// ByLongID returns the current info for a jar by its long (longJarId
+// / extJarId) identifier. You can find this ID in the jar widget URL
+// or obtain it from [Client.ByShortID].
 func (c *Client) ByLongID(ctx context.Context, longJarID string) (*Info, error) {
 	if longJarID == "" {
 		return nil, ErrEmptyJarID
@@ -196,19 +199,20 @@ func (c *Client) ByLongID(ctx context.Context, longJarID string) (*Info, error) 
 	return &out, nil
 }
 
-// shortIDRequest — тіло POST на send.monobank.ua/api/handler.
+// shortIDRequest is the body of POST to send.monobank.ua/api/handler.
 type shortIDRequest struct {
 	C        string `json:"c"`
 	ClientID string `json:"clientId"`
 	Pc       string `json:"Pc"`
 }
 
-// ByShortID шукає інформацію по jar за коротким clientId (тим, що в
-// URL share-посилання https://send.monobank.ua/{clientId}). Цей виклик
-// йде на send.monobank.ua — ліміти суворіші, кешуй результат.
+// ByShortID looks up jar info by the short clientId (the one in the
+// share-link URL https://send.monobank.ua/{clientId}). This call
+// goes to send.monobank.ua, whose limits are stricter — cache the
+// result.
 //
-// Корисний для одноразового отримання longJarId з коротким посиланням.
-// Для регулярних оновлень балансу використовуй [Client.ByLongID].
+// Useful for a one-off lookup of longJarId from a short link. For
+// regular balance refreshes use [Client.ByLongID].
 func (c *Client) ByShortID(ctx context.Context, clientID string) (*SendInfo, error) {
 	if clientID == "" {
 		return nil, ErrEmptyClientID
@@ -239,7 +243,7 @@ func (c *Client) ByShortID(ctx context.Context, clientID string) (*SendInfo, err
 	if resp.StatusCode != http.StatusOK {
 		return nil, decodeAPIError(resp.StatusCode, respBody)
 	}
-	// send.monobank.ua може віддати { "errCode": "..."} зі статусом 200.
+	// send.monobank.ua can return { "errCode": "..." } with status 200.
 	var maybeErr APIError
 	if json.Unmarshal(respBody, &maybeErr) == nil && maybeErr.ErrCode != "" {
 		maybeErr.StatusCode = resp.StatusCode

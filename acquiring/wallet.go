@@ -9,9 +9,9 @@ import (
 	"net/url"
 )
 
-// Wallet повертає список карток, збережених під заданим walletID.
-// Передай "" — отримаєш всі картки мерчанта. WalletID зазвичай — це
-// твій user-ID (одна людина — один wallet із кількома її картками).
+// Wallet returns the list of cards stored under the given walletID.
+// Pass "" to receive every merchant card. WalletID is usually your
+// user-ID (one person — one wallet with their cards).
 // https://api.monobank.ua/docs/acquiring.html#tag/Tokenization/paths/~1api~1merchant~1wallet/get
 func (c *Client) Wallet(ctx context.Context, walletID string) ([]WalletCard, error) {
 	q := url.Values{}
@@ -33,8 +33,8 @@ func (c *Client) Wallet(ctx context.Context, walletID string) ([]WalletCard, err
 	return out.Wallet, nil
 }
 
-// DeleteCard видаляє токенізовану картку з гаманця. Після цього її
-// CardToken стає недійсним для [Client.WalletPayment].
+// DeleteCard removes a tokenized card from a wallet. Afterwards its
+// CardToken becomes invalid for [Client.WalletPayment].
 // https://api.monobank.ua/docs/acquiring.html#tag/Tokenization/paths/~1api~1merchant~1wallet~1card/delete
 func (c *Client) DeleteCard(ctx context.Context, cardToken string) error {
 	q := url.Values{}
@@ -52,10 +52,10 @@ func (c *Client) DeleteCard(ctx context.Context, cardToken string) error {
 	return c.c.Do(req, nil, http.StatusOK)
 }
 
-// WalletPayment списує з раніше токенізованої картки (CardToken).
-// InitiationKind ("merchant" або "client") важливий для compliance:
-// "merchant" — повторне списання за вашою ініціативою (recurring),
-// "client" — клієнт явно дав згоду тут і зараз.
+// WalletPayment charges a previously tokenized card (CardToken).
+// InitiationKind ("merchant" or "client") matters for compliance:
+// "merchant" — a repeat charge initiated by you (recurring),
+// "client" — the client explicitly consented here and now.
 // https://api.monobank.ua/docs/acquiring.html#tag/Tokenization/paths/~1api~1merchant~1wallet~1payment/post
 func (c *Client) WalletPayment(ctx context.Context, in *WalletPaymentRequest) (*WalletPaymentResponse, error) {
 	if in == nil {

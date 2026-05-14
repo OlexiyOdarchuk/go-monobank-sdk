@@ -9,11 +9,11 @@ import (
 	"net/url"
 )
 
-// PreparePayment створює чернетку платежу і відправляє її у flow
-// підпису компанії (через її бізнес-кабінет / mobile). Повернутий
-// [PaymentPrepared.ID] — ключ для опитування стану через
-// [Client.PaymentState]. idempotencyKey обов'язковий: новий UUID v4 на
-// кожну логічну спробу — повтор з тим самим ключем безпечний.
+// PreparePayment creates a payment draft and sends it into the
+// company's signing flow (via the business cabinet / mobile). The
+// returned [PaymentPrepared.ID] is the key for polling the state via
+// [Client.PaymentState]. idempotencyKey is required: use a new
+// UUID v4 per logical attempt — repeating with the same key is safe.
 // https://corp-api.monobank.ua/docs/#operation/prepare-payment
 func (c *Client) PreparePayment(ctx context.Context, idempotencyKey string,
 	in *PaymentRequest) (*PaymentPrepared, error) {
@@ -39,9 +39,10 @@ func (c *Client) PreparePayment(ctx context.Context, idempotencyKey string,
 	return &out, nil
 }
 
-// PaymentState повертає стан життєвого циклу платежу за внутрішнім id
-// Mono (DRAFT, DECLINED або IN_STATEMENT — фінальний стан передбачає,
-// що шукай результат вже у виписці через [Client.Operation]).
+// PaymentState returns the lifecycle state of a payment by its
+// internal Mono id (DRAFT, DECLINED, or IN_STATEMENT — the final
+// state implies the result should be looked up in the statement via
+// [Client.Operation]).
 // https://corp-api.monobank.ua/docs/#operation/get-payment-state
 func (c *Client) PaymentState(ctx context.Context, id string) (*PaymentState, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet,
@@ -56,9 +57,10 @@ func (c *Client) PaymentState(ctx context.Context, id string) (*PaymentState, er
 	return &out, nil
 }
 
-// PaymentStateByReference шукає платіж за externalReference, який ти
-// додав при [Client.PreparePayment]. Зручно, коли мережа впала після
-// PreparePayment і ти не знаєш id, але знаєш свій reference.
+// PaymentStateByReference looks up a payment by the
+// externalReference you added in [Client.PreparePayment]. Handy when
+// the network failed after PreparePayment and you do not know the id
+// but do know your reference.
 // https://corp-api.monobank.ua/docs/#operation/get-payment-state-by-external-reference
 func (c *Client) PaymentStateByReference(ctx context.Context, externalReference string) (*PaymentState, error) {
 	q := url.Values{}

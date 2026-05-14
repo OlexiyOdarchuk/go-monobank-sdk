@@ -1,17 +1,17 @@
-// Package currency — типізовані ISO 4217 числові коди валют, що
-// приходять у payload-ах Mono. Банк віддає валюту як звичайний int
-// (Account.CurrencyCode, Transaction.CurrencyCode тощо) — обгорни його
-// в [Code] для типізованих порівнянь і отримання alpha-3 імені через
-// [Code.String].
+// Package currency provides typed ISO 4217 numeric currency codes
+// that arrive in Mono payloads. The bank ships the currency as a
+// plain int (Account.CurrencyCode, Transaction.CurrencyCode etc.) —
+// wrap it in [Code] for typed comparisons and to obtain the alpha-3
+// name via [Code.String].
 package currency
 
 import "strconv"
 
-// Code — ISO 4217 числовий код валюти.
+// Code is an ISO 4217 numeric currency code.
 type Code int
 
-// Коди валют, що зустрічаються у payload-ах Mono. Список не вичерпний —
-// додавай за потребою.
+// Currency codes seen in Mono payloads. The list is non-exhaustive —
+// extend as needed.
 const (
 	UAH Code = 980 // Ukrainian hryvnia (account default)
 	USD Code = 840 // US dollar
@@ -26,7 +26,7 @@ const (
 	CNY Code = 156 // Chinese yuan
 )
 
-// alpha3 — мапа з числових кодів вище у їх alpha-3 еквіваленти.
+// alpha3 maps the numeric codes above to their alpha-3 equivalents.
 var alpha3 = map[Code]string{
 	UAH: "UAH",
 	USD: "USD",
@@ -41,8 +41,8 @@ var alpha3 = map[Code]string{
 	CNY: "CNY",
 }
 
-// fromAlpha3 — зворотна мапа до [alpha3]: "UAH" → 980. Заповнюється у
-// init() з alpha3, щоб тримати єдине джерело правди.
+// fromAlpha3 is the reverse map of [alpha3]: "UAH" → 980. It is
+// populated in init() from alpha3 to keep a single source of truth.
 var fromAlpha3 map[string]Code
 
 func init() {
@@ -52,21 +52,23 @@ func init() {
 	}
 }
 
-// FromAlpha3 повертає числовий код за alpha-3 ім'ям (наприклад "UAH" → 980).
-// ok=false, якщо валюта не відома SDK (доповни [alpha3], якщо треба).
+// FromAlpha3 returns the numeric code for an alpha-3 name (for
+// example "UAH" → 980). ok=false when the currency is unknown to
+// the SDK (extend [alpha3] if needed).
 //
-// Потрібно тим API, що шлють валюту рядком (наприклад, corp-api
-// /ext/v1/statement: `"currencyCode": "UAH"`).
+// Used by APIs that ship the currency as a string (for example
+// corp-api /ext/v1/statement: `"currencyCode": "UAH"`).
 func FromAlpha3(s string) (Code, bool) {
 	c, ok := fromAlpha3[s]
 	return c, ok
 }
 
-// String повертає alpha-3 код (наприклад "UAH"), якщо валюта відома, або
-// десяткове представлення числового коду — як fallback для невідомих
-// валют. Це робить тип сумісним з fmt-друком напряму:
+// String returns the alpha-3 code (for example "UAH") when the
+// currency is known, or the decimal form of the numeric code as a
+// fallback for unknown currencies. That makes the type fmt-printable
+// directly:
 //
-//	fmt.Println(currency.Code(t.CurrencyCode)) // "UAH" або "7777"
+//	fmt.Println(currency.Code(t.CurrencyCode)) // "UAH" or "7777"
 func (c Code) String() string {
 	if s, ok := alpha3[c]; ok {
 		return s
@@ -74,20 +76,21 @@ func (c Code) String() string {
 	return strconv.Itoa(int(c))
 }
 
-// decimals — overrides проти дефолту 2 для валют, у яких ISO 4217 чітко
-// фіксує іншу кількість знаків після коми. Більшість валют (UAH/USD/
-// EUR/GBP/PLN/CHF/CZK/CAD/AUD/CNY) — 2 знаки, тож у мапі їх немає.
+// decimals overrides the default of 2 for currencies for which ISO
+// 4217 fixes a different number of decimal places. Most currencies
+// (UAH/USD/EUR/GBP/PLN/CHF/CZK/CAD/AUD/CNY) have 2 decimals, so they
+// are not in the map.
 var decimals = map[Code]int{
-	JPY: 0, // Japanese yen — minor unit не використовується
+	JPY: 0, // Japanese yen — the minor unit is not used
 }
 
-// Decimals повертає кількість знаків після коми для мажорної одиниці
-// валюти за ISO 4217. Дефолт — 2 (як у UAH/USD/EUR/...). Окремі
-// валюти (JPY=0, KRW=0, BHD/JOD/KWD/OMR/TND=3) мають інші значення —
-// додай їх у [decimals], якщо потрібно підтримати.
+// Decimals returns the number of decimal places for the currency's
+// major unit per ISO 4217. The default is 2 (as for UAH/USD/EUR/...).
+// Some currencies (JPY=0, KRW=0, BHD/JOD/KWD/OMR/TND=3) have other
+// values — add them to [decimals] if you need them.
 //
-// Використовується [money.Money.Major] для коректної конверсії
-// minor → major (1250 копійок = 12.50 грн; 1250 єн = 1250 єн).
+// Used by [money.Money.Major] for the correct minor → major
+// conversion (1250 kopecks = 12.50 UAH; 1250 yen = 1250 yen).
 func (c Code) Decimals() int {
 	if d, ok := decimals[c]; ok {
 		return d

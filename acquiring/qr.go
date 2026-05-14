@@ -9,10 +9,10 @@ import (
 	"net/url"
 )
 
-// QRList перелічує всі QR-каси цього мерчанта. AmountType — режим
-// введення суми: "merchant" (мерчант задає через QRSetAmount),
-// "client" (клієнт вводить сам у мобільному застосунку Mono),
-// "fix" (зафіксована сума).
+// QRList lists every QR cash desk for this merchant. AmountType is
+// the amount-entry mode: "merchant" (the merchant sets it via
+// QRSetAmount), "client" (the client enters it in the Mono mobile
+// app), "fix" (a fixed amount).
 // https://api.monobank.ua/docs/acquiring.html#tag/QR-kasy/paths/~1api~1merchant~1qr~1list/get
 func (c *Client) QRList(ctx context.Context) ([]QR, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "/api/merchant/qr/list", http.NoBody)
@@ -26,8 +26,8 @@ func (c *Client) QRList(ctx context.Context) ([]QR, error) {
 	return out.List, nil
 }
 
-// QRDetails повертає деталі одного QR-каси (поточний інвойс, сума,
-// валюта — якщо є чекаюча оплата).
+// QRDetails returns the details of a single QR cash desk (current
+// invoice, amount, currency — if a payment is pending).
 // https://api.monobank.ua/docs/acquiring.html#tag/QR-kasy/paths/~1api~1merchant~1qr~1details/get
 func (c *Client) QRDetails(ctx context.Context, qrID string) (*QRDetails, error) {
 	q := url.Values{}
@@ -49,9 +49,10 @@ func (c *Client) QRDetails(ctx context.Context, qrID string) (*QRDetails, error)
 	return &out, nil
 }
 
-// QRResetAmount скидає очікувану суму на QR-касі з AmountType
-// "merchant" або "client". Корисно, коли мерчант помилково задав суму
-// або клієнт не оплатив і треба «звільнити» термінал.
+// QRResetAmount resets the expected amount on a QR cash desk whose
+// AmountType is "merchant" or "client". Handy when the merchant set
+// the amount by mistake, or the client did not pay and the terminal
+// needs to be "released".
 // https://api.monobank.ua/docs/acquiring.html#tag/QR-kasy/paths/~1api~1merchant~1qr~1reset-amount/post
 func (c *Client) QRResetAmount(ctx context.Context, qrID string) error {
 	body, err := json.Marshal(ResetAmountRequest{QrID: qrID})

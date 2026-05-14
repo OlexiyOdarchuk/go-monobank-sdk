@@ -1,45 +1,50 @@
-// Package acquiring — Go-клієнт для еквайрингового API monobank
-// (api.monobank.ua/api/merchant/*). Покриває:
+// Package acquiring is the Go client for monobank's acquiring API
+// (api.monobank.ua/api/merchant/*). It covers:
 //
-//   - інвойси, холди, QR-каси, токенізовані картки (wallet);
-//   - регулярні платежі (subscriptions: create/edit/remove/status/list/payments);
-//   - monopay-кнопка: імпорт/видалення/перегляд ключів торговця;
-//   - розщеплення платежів (split-receivers) та T2P-термінали (термінал
-//     у смартфоні);
-//   - періодичні виписки, фіскальні чеки, квитанції, субмерчантів.
+//   - invoices, holds, QR cash desks, tokenized cards (wallet);
+//   - recurring payments (subscriptions: create/edit/remove/
+//     status/list/payments);
+//   - the monopay button: importing/removing/listing merchant keys;
+//   - payment splitting (split receivers) and T2P terminals
+//     (terminal-on-a-smartphone);
+//   - periodic statements, fiscal checks, receipts, submerchants.
 //
-// Авторизація — один X-Token, отриманий для конкретного мерчанта.
-// Цей токен НЕ той самий, що Personal API і не той, що business
-// (corp-api) — тримай їх окремо.
+// Authorization is a single X-Token issued for a specific merchant.
+// This token is NOT the Personal API token and NOT the business
+// (corp-api) token — keep them separate.
 //
-// Верифікація webhook-ів — ECDSA-SHA256 з NIST P-256 (ASN.1 DER підпис у
-// заголовку X-Sign). Ключ із [Client.PubKey] приходить як base64(PEM(SPKI));
-// [ServerKey.Public] / [ParsePubKey] зніме обидві обгортки і поверне
-// готовий *ecdsa.PublicKey для [VerifyWebhook].
+// Webhook verification uses ECDSA-SHA256 with NIST P-256 (an ASN.1
+// DER signature in the X-Sign header). The key from [Client.PubKey]
+// arrives as base64(PEM(SPKI)); [ServerKey.Public] / [ParsePubKey]
+// strips both wrappers and returns a ready *ecdsa.PublicKey for
+// [VerifyWebhook].
 //
-// Типові сценарії:
+// Typical scenarios:
 //
-//   - Одношагова оплата (debit): [Client.CreateInvoice] із
-//     PaymentType: PaymentDebit → показати inv.PageURL → чекати
-//     webhook або поллити [Client.InvoiceStatus].
-//   - Auth-then-capture: [Client.CreateInvoice] із PaymentType:
-//     PaymentHold → клієнт оплачує → статус "hold" → [Client.FinalizeInvoice]
-//     знімає частину або всю заавторизовану суму.
-//   - Рекурент через токенізацію: перший інвойс із SaveCardData.SaveCard,
-//     на success-webhook прийде WalletData.CardToken — далі плати через
+//   - Single-step debit: [Client.CreateInvoice] with
+//     PaymentType: PaymentDebit → show inv.PageURL → wait for the
+//     webhook or poll [Client.InvoiceStatus].
+//   - Auth-then-capture: [Client.CreateInvoice] with PaymentType:
+//     PaymentHold → the client pays → status "hold" →
+//     [Client.FinalizeInvoice] captures part or all of the authorized
+//     amount.
+//   - Recurring via tokenization: the first invoice with
+//     SaveCardData.SaveCard; the success webhook brings back
+//     WalletData.CardToken — subsequent charges go via
 //     [Client.WalletPayment].
-//   - Підписки (регулярні платежі): [Client.SubscriptionCreate] → клієнт
-//     платить перший раз → банк автоматично списує далі за interval.
-//     Слухай WebHookURLs.ChargeURL / StatusURL.
-//   - QR-каси: [Client.QRList] / [Client.QRDetails] /
-//     [Client.QRResetAmount] для терміналоподібних сценаріїв.
-//   - Повернення: [Client.CancelInvoice] (повне або часткове).
-//   - Звірка: [Client.Statement] за період; у кожному рядку CancelList
-//     несе історію повернень.
+//   - Subscriptions (recurring payments):
+//     [Client.SubscriptionCreate] → the client pays the first time →
+//     the bank charges the rest automatically per interval. Listen
+//     on WebHookURLs.ChargeURL / StatusURL.
+//   - QR cash desks: [Client.QRList] / [Client.QRDetails] /
+//     [Client.QRResetAmount] for terminal-like scenarios.
+//   - Refunds: [Client.CancelInvoice] (full or partial).
+//   - Reconciliation: [Client.Statement] for a period; CancelList
+//     in each row carries the refund history.
 //
-// Прямі PAN-потоки ([Client.PaymentDirect], [Client.SyncPayment])
-// вимагають PCI DSS scope — мерчант має тримати або проксіювати через
-// сертифіковане оточення, яке може приймати сирі дані карток.
+// The direct-PAN flows ([Client.PaymentDirect], [Client.SyncPayment])
+// require PCI DSS scope — the merchant must operate, or proxy
+// through, a certified environment that may accept raw card data.
 package acquiring
 
 import (
@@ -49,19 +54,20 @@ import (
 	monobank "github.com/OlexiyOdarchuk/go-monobank-sdk"
 )
 
-// BaseURL — хост еквайрингового API. Перевизнач через
-// [monobank.WithBaseURL] у тестах.
+// BaseURL is the acquiring API host. Override via
+// [monobank.WithBaseURL] in tests.
 const BaseURL = "https://api.monobank.ua"
 
-// Client спілкується з api.monobank.ua/api/merchant/*. Обгортка над
-// [monobank.Client] для HTTP-плюмбінгу (retry, transport, маппінг
-// помилок) плюс типізовані методи й DTO-шки для еквайрингу.
+// Client talks to api.monobank.ua/api/merchant/*. It is a wrapper
+// around [monobank.Client] for HTTP plumbing (retry, transport,
+// error mapping) plus typed methods and DTOs for acquiring.
 type Client struct {
 	c monobank.Client
 }
 
-// New повертає [Client], авторизований вказаним X-Token. Додаткові
-// опції (HTTP-клієнт, retry-політика) пробрасуються в [monobank.New].
+// New returns a [Client] authorized with the given X-Token. Extra
+// options (HTTP client, retry policy) are forwarded to
+// [monobank.New].
 //
 //	cli := acquiring.New(os.Getenv("MONO_ACQUIRING_TOKEN"))
 //	out, err := cli.MerchantDetails(ctx)
@@ -73,16 +79,18 @@ func New(token string, opts ...monobank.Option) *Client {
 	return &Client{c: monobank.New(append(base, opts...)...)}
 }
 
-// Close звільняє фонові ресурси клієнта (див. [monobank.Client.Close]).
+// Close releases the client's background resources (see
+// [monobank.Client.Close]).
 func (c *Client) Close() error { return c.c.Close() }
 
-// TokenAuth реалізує [auth.Authorizer] для X-Token-авторизації
-// еквайрингу.
+// TokenAuth implements [auth.Authorizer] for acquiring X-Token
+// authorization.
 type TokenAuth struct {
 	Token string
 }
 
-// SetAuth додає X-Token до вихідного запиту. nil-request — no-op.
+// SetAuth adds X-Token to the outgoing request. A nil request is a
+// no-op.
 func (a TokenAuth) SetAuth(r *http.Request) error {
 	if r == nil {
 		return nil
@@ -91,7 +99,7 @@ func (a TokenAuth) SetAuth(r *http.Request) error {
 	return nil
 }
 
-// LogValue приховує токен у slog-виводі.
+// LogValue hides the token in slog output.
 func (a TokenAuth) LogValue() slog.Value {
 	return slog.StringValue("acquiring.TokenAuth{Token:***}")
 }

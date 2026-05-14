@@ -5,9 +5,9 @@ import (
 	"net/http"
 )
 
-// GuaranteeLetterPDF повертає байти PDF-файлу гарантійного листа для
-// заявки. Передавати invoice (число + дата) опційно — деякі магазини
-// вшивають його в назву документа.
+// GuaranteeLetterPDF returns the PDF bytes of the guarantee letter
+// for an order. Passing invoice (number + date) is optional — some
+// merchants embed it in the document name.
 //
 // POST /api/order/guarantee/letter  (200 → application/pdf)
 func (c *Client) GuaranteeLetterPDF(ctx context.Context, in *OrderDataRequest) ([]byte, error) {
@@ -17,8 +17,9 @@ func (c *Client) GuaranteeLetterPDF(ctx context.Context, in *OrderDataRequest) (
 	return c.doPDF(ctx, "/api/order/guarantee/letter", in)
 }
 
-// GuaranteeLetterData повертає структуровані дані для самостійної
-// генерації гарантійного листа (XML/PDF на стороні магазину).
+// GuaranteeLetterData returns structured data so the merchant can
+// generate the guarantee letter themselves (XML/PDF on the merchant
+// side).
 //
 // POST /api/order/data/for/guarantee/letter  (200 → OrderData)
 func (c *Client) GuaranteeLetterData(ctx context.Context, in *OrderDataRequest) (*OrderData, error) {
@@ -32,9 +33,9 @@ func (c *Client) GuaranteeLetterData(ctx context.Context, in *OrderDataRequest) 
 	return &out, nil
 }
 
-// GuaranteeLetterDataV2 — версія 2 GuaranteeLetterData: повертає ту саму
-// структуру [OrderData], але з додатково заповненими contract_number та
-// contract_date у Header.
+// GuaranteeLetterDataV2 is the version 2 of GuaranteeLetterData: it
+// returns the same [OrderData] structure but with contract_number
+// and contract_date additionally populated in Header.
 //
 // POST /api/v2/order/data/for/guarantee/letter  (200 → OrderData)
 func (c *Client) GuaranteeLetterDataV2(ctx context.Context, in *OrderDataRequest) (*OrderData, error) {

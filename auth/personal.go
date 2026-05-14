@@ -7,12 +7,14 @@ import (
 
 const personalTokenHeader = "X-Token"
 
-// Personal — Authorizer, який передає токен Personal API у заголовку X-Token.
+// Personal is the Authorizer that sends a Personal API token in the
+// X-Token header.
 type Personal struct {
 	token string
 }
 
-// SetAuth додає заголовок X-Token до запиту. nil-request — no-op.
+// SetAuth adds the X-Token header to the request. A nil request is a
+// no-op.
 func (a Personal) SetAuth(r *http.Request) error {
 	if r == nil {
 		return nil
@@ -21,16 +23,17 @@ func (a Personal) SetAuth(r *http.Request) error {
 	return nil
 }
 
-// LogValue реалізує [slog.LogValuer], щоб токен не потрапляв у логи:
+// LogValue implements [slog.LogValuer] so the token does not leak
+// into logs:
 //
 //	slog.Info("ready", "auth", auth.NewPersonal(tok))
 //	// → ... auth=auth.Personal{token:***}
 //
-// Без цього slog рендерив би сирий токен як значення struct-у.
+// Without it, slog would render the raw token as the struct's value.
 func (a Personal) LogValue() slog.Value {
 	return slog.StringValue("auth.Personal{token:***}")
 }
 
-// NewPersonal створює Authorizer для вказаного токена Personal API.
-// Токен можна отримати на https://api.monobank.ua/.
+// NewPersonal builds an Authorizer for the given Personal API token.
+// You can issue a token at https://api.monobank.ua/.
 func NewPersonal(token string) Personal { return Personal{token: token} }

@@ -11,13 +11,13 @@ import (
 	"strconv"
 )
 
-// ErrNilRequest повертається з мутаційних endpoint-ів, коли передано
-// nil body.
+// ErrNilRequest is returned from mutating endpoints when a nil body
+// is passed.
 var ErrNilRequest = errors.New("request body is nil")
 
-// Contacts повертає сторінку довідника зарплатних контактів. Передай
-// limit=0 / offset=0, щоб використати дефолти API (limit=100). Для
-// довільного пошуку є [Client.SearchContacts].
+// Contacts returns a page of the payroll-contacts directory. Pass
+// limit=0 / offset=0 to use the API defaults (limit=100). For
+// free-form search use [Client.SearchContacts].
 // https://corp-api.monobank.ua/docs/#operation/get-salary-contacts
 func (c *Client) Contacts(ctx context.Context, limit, offset int) (*ContactsPage, error) {
 	q := url.Values{}
@@ -42,9 +42,10 @@ func (c *Client) Contacts(ctx context.Context, limit, offset int) (*ContactsPage
 	return &out, nil
 }
 
-// SearchContacts виконує повнотекстовий пошук по довіднику зарплатних
-// контактів. query матчить ІПН, IBAN, номер документа, ПІБ або PAN
-// картки. Пагінація — limit/offset (0 = дефолти API).
+// SearchContacts performs a full-text search across the payroll-
+// contacts directory. query matches the INN (tax ID), IBAN, document
+// number, full name, or card PAN. Pagination is limit/offset (0
+// means API defaults).
 // https://corp-api.monobank.ua/docs/#operation/search-salary-contacts
 func (c *Client) SearchContacts(ctx context.Context, query string, limit, offset int) (*ContactsPage, error) {
 	q := url.Values{}
@@ -72,7 +73,7 @@ func (c *Client) SearchContacts(ctx context.Context, query string, limit, offset
 	return &out, nil
 }
 
-// ContactByID повертає один контакт за його UUID.
+// ContactByID returns a single contact by its UUID.
 // https://corp-api.monobank.ua/docs/#operation/get-salary-contact-by-id
 func (c *Client) ContactByID(ctx context.Context, id string) (*Contact, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet,
@@ -87,9 +88,9 @@ func (c *Client) ContactByID(ctx context.Context, id string) (*Contact, error) {
 	return &out, nil
 }
 
-// CreateContact додає новий зарплатний контакт у довідник. Достатньо
-// або INN, або пари (DocumentType + DocumentNumber) для ідентифікації
-// особи.
+// CreateContact adds a new payroll contact to the directory. Either
+// INN or the pair (DocumentType + DocumentNumber) is enough to
+// identify the person.
 // https://corp-api.monobank.ua/docs/#operation/create-salary-contact
 func (c *Client) CreateContact(ctx context.Context, in *CreateContactRequest) error {
 	if in == nil {
@@ -107,8 +108,8 @@ func (c *Client) CreateContact(ctx context.Context, in *CreateContactRequest) er
 	return c.c.Do(req, nil, http.StatusOK)
 }
 
-// DeleteContact видаляє контакт за його UUID. Для пакетного видалення
-// є [Client.DeleteContactsBatch].
+// DeleteContact removes a contact by its UUID. For batch removal
+// see [Client.DeleteContactsBatch].
 // https://corp-api.monobank.ua/docs/#operation/delete-salary-contact-by-id
 func (c *Client) DeleteContact(ctx context.Context, id string) error {
 	req, err := http.NewRequestWithContext(ctx, http.MethodDelete,
@@ -119,8 +120,9 @@ func (c *Client) DeleteContact(ctx context.Context, id string) error {
 	return c.c.Do(req, nil, http.StatusOK)
 }
 
-// DeleteContactsBatch видаляє пакет контактів за UUID-ами. Швидше за
-// послідовний цикл [Client.DeleteContact] — один HTTP-запит.
+// DeleteContactsBatch removes a batch of contacts by their UUIDs.
+// Faster than a sequential loop of [Client.DeleteContact] — one
+// HTTP request.
 // https://corp-api.monobank.ua/docs/#operation/delete-salary-contacts-batch
 func (c *Client) DeleteContactsBatch(ctx context.Context, ids []string) error {
 	if len(ids) == 0 {

@@ -6,22 +6,22 @@ import (
 	"net/http"
 )
 
-// Terminal — один T2P (terminal-to-phone) термінал у смартфоні
-// співробітника торговця.
+// Terminal is a single T2P (terminal-to-phone) terminal running on
+// a merchant employee's smartphone.
 type Terminal struct {
 	Code     string `json:"code"`
 	Name     string `json:"name"`
 	Terminal string `json:"terminal"`
 }
 
-// TerminalListResponse — обгортка для /t2p/terminal/list.
+// TerminalListResponse wraps the /t2p/terminal/list response.
 type TerminalListResponse struct {
 	List []Terminal `json:"list"`
 }
 
-// Terminals повертає список T2P-терміналів (термінал у смартфоні) для
-// цього торговця. У клієнта без терміналів список може бути порожнім або
-// взагалі відсутнім у відповіді.
+// Terminals returns the list of T2P terminals (terminal on a phone)
+// for this merchant. For a merchant without terminals the list may
+// be empty, or simply absent from the response.
 func (c *Client) Terminals(ctx context.Context) ([]Terminal, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet,
 		"/api/merchant/t2p/terminal/list", http.NoBody)

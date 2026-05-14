@@ -22,6 +22,13 @@ type testPayload struct {
 	Message string `json:"message"`
 }
 
+// roundTripperFunc — функціональний адаптер для http.RoundTripper.
+type roundTripperFunc func(*http.Request) (*http.Response, error)
+
+func (f roundTripperFunc) RoundTrip(r *http.Request) (*http.Response, error) {
+	return f(r)
+}
+
 func TestClient_Do(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -367,6 +374,46 @@ func TestWithInsecureBaseURL_overridesGuard(t *testing.T) {
 		WithBaseURL("http://staging.example.com"),
 	)
 	assert.NoError(t, c.optErr)
+}
+
+// WithRoundTripper підмінює http.Transport, зберігаючи інші
+// налаштування http.Client (наприклад, таймаут).
+func TestWithRoundTripper_appliesMiddleware(t *testing.T) {
+	var seen []string
+	rt := roundTripperFunc(func(r *http.Request) (*http.Response, error) {
+		seen = append(seen, r.URL.Path)
+		return http.DefaultTransport.RoundTrip(r)
+	})
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{}`))
+	}))
+	defer srv.Close()
+
+	c := New(WithBaseURL(srv.URL), WithRoundTripper(rt))
+	req, _ := http.NewRequest(http.MethodGet, "/x", http.NoBody)
+	require.NoError(t, c.Do(req, nil))
+	assert.Contains(t, seen, "/x")
+}
+
+// WithRoundTripper зберігає таймаут і Cookie-jar вбудованого http.Client.
+func TestWithRoundTripper_preservesHTTPClientSettings(t *testing.T) {
+	custom := &http.Client{Timeout: 7 * time.Second}
+	rt := roundTripperFunc(func(r *http.Request) (*http.Response, error) {
+		return http.DefaultTransport.RoundTrip(r)
+	})
+
+	c := New(WithHTTPClient(custom), WithRoundTripper(rt))
+	hc, ok := c.http.(*http.Client)
+	require.True(t, ok)
+	assert.Equal(t, 7*time.Second, hc.Timeout, "WithRoundTripper мусить зберегти Timeout")
+	assert.NotNil(t, hc.Transport)
+}
+
+// nil — ігнорується.
+func TestWithRoundTripper_nilIgnored(t *testing.T) {
+	c := New(WithRoundTripper(nil))
+	assert.NotNil(t, c.http)
 }
 
 // Close() зупиняє sweeper KeyedLimiter-а (немає leak goroutine-у).

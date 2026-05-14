@@ -7,8 +7,10 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/OlexiyOdarchuk/go-monobank-sdk/installment"
@@ -265,4 +267,16 @@ func TestAPIError_decode(t *testing.T) {
 	assert.Equal(t, "bad phone", apiErr.Message)
 	assert.Equal(t, "abc-123", apiErr.TraceID)
 	assert.Contains(t, apiErr.Error(), "trace=abc-123")
+}
+
+// Client.LogValue приховує store-secret у slog-виводі.
+func TestClient_LogValueRedactsSecret(t *testing.T) {
+	var buf strings.Builder
+	logger := slog.New(slog.NewTextHandler(&buf, nil))
+	cli := installment.New("STORE-1", "my-very-secret-key")
+	logger.Info("cli", "v", cli)
+	out := buf.String()
+	assert.NotContains(t, out, "my-very-secret-key", "store-secret НЕ повинен потрапити в логи")
+	assert.Contains(t, out, "STORE-1", "storeID не секрет — має бути видимий")
+	assert.Contains(t, out, "***")
 }

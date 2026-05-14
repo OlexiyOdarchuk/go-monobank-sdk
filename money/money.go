@@ -1,13 +1,14 @@
-// Package money надає типізоване представлення грошових сум разом із
-// валютою — щоб не плутати «10 копійок» і «10 центів» у тому самому
-// int64.
+// Package money provides a typed representation of monetary amounts
+// together with their currency — so "10 kopecks" and "10 cents" do
+// not get conflated inside the same int64.
 //
-// Реалізація — пара (Minor, Code), де Minor — мінорна одиниця валюти
-// (копійки для UAH, центи для USD/EUR), а Code — ISO 4217 числовий
-// код. У JSON [Money] серіалізується як гола кількість мінорних
-// одиниць (для wire-сумісності з Mono-форматом, де amount і currency
-// йдуть окремими полями) — батьківські структури проставляють Code з
-// сусіднього CurrencyCode-поля у своєму [json.Unmarshaler].
+// The representation is a pair (Minor, Code), where Minor is the
+// currency's minor unit (kopecks for UAH, cents for USD/EUR) and
+// Code is the ISO 4217 numeric code. In JSON, [Money] serializes as
+// a bare count of minor units (for wire compatibility with Mono's
+// format, where amount and currency are separate fields) — parent
+// structures set Code from the adjacent CurrencyCode field in their
+// own [json.Unmarshaler].
 package money
 
 import (
@@ -18,28 +19,29 @@ import (
 	"github.com/OlexiyOdarchuk/go-monobank-sdk/currency"
 )
 
-// Money — сума у мінорних одиницях (копійки, центи) з прив'язкою до
-// валюти. Нульове значення — 0 у невідомій валюті.
+// Money is an amount in minor units (kopecks, cents) with its
+// currency attached. The zero value is 0 in an unknown currency.
 type Money struct {
 	Minor int64
 	Code  currency.Code
 }
 
-// New створює Money з кількістю мінорних одиниць і валютою.
+// New builds a Money from a minor-unit count and a currency.
 func New(minor int64, code currency.Code) Money {
 	return Money{Minor: minor, Code: code}
 }
 
-// IsZero повертає true, якщо сума — 0 (валюта ігнорується).
+// IsZero reports whether the amount is 0 (the currency is ignored).
 func (m Money) IsZero() bool { return m.Minor == 0 }
 
-// Equal повідомляє, чи два Money рівні і за сумою, і за валютою.
+// Equal reports whether two Money values are equal in both amount
+// and currency.
 func (m Money) Equal(other Money) bool {
 	return m.Minor == other.Minor && m.Code == other.Code
 }
 
-// Add додає інше Money тієї ж валюти. Повертає помилку, якщо валюти
-// відрізняються (для крос-валютної арифметики використовуй
+// Add adds another Money of the same currency. Returns an error when
+// the currencies differ (for cross-currency arithmetic use
 // [bank.Rates.Convert]).
 func (m Money) Add(other Money) (Money, error) {
 	if m.Code != other.Code {
@@ -48,7 +50,8 @@ func (m Money) Add(other Money) (Money, error) {
 	return Money{Minor: m.Minor + other.Minor, Code: m.Code}, nil
 }
 
-// Sub віднімає інше Money тієї ж валюти. Помилка — як в [Money.Add].
+// Sub subtracts another Money of the same currency. The error is
+// the same as for [Money.Add].
 func (m Money) Sub(other Money) (Money, error) {
 	if m.Code != other.Code {
 		return Money{}, fmt.Errorf("money: cannot sub %s - %s — different currencies", m.Code, other.Code)
@@ -56,17 +59,18 @@ func (m Money) Sub(other Money) (Money, error) {
 	return Money{Minor: m.Minor - other.Minor, Code: m.Code}, nil
 }
 
-// Neg повертає Money з протилежним знаком (валюта не змінюється).
+// Neg returns Money with the sign flipped (the currency does not
+// change).
 func (m Money) Neg() Money { return Money{Minor: -m.Minor, Code: m.Code} }
 
-// Mul множить суму на цілий скаляр. Корисно для агрегатів «10 одиниць
-// по такій-то ціні». Для дробових множників (комісії, відсотки)
-// використовуй [Money.Scale].
+// Mul multiplies the amount by an integer scalar. Handy for
+// aggregates like "10 units at this price". For fractional
+// multipliers (fees, percentages) use [Money.Scale].
 func (m Money) Mul(n int64) Money { return Money{Minor: m.Minor * n, Code: m.Code} }
 
-// Scale множить суму на дробовий множник (наприклад 0.05 для 5%
-// комісії), округлюючи до найближчої мінорної одиниці (banker's rounding
-// не застосовується — звичайне «round half away from zero»).
+// Scale multiplies the amount by a fractional factor (for example
+// 0.05 for a 5% fee), rounding to the nearest minor unit (banker's
+// rounding is not used — plain "round half away from zero").
 func (m Money) Scale(factor float64) Money {
 	r := float64(m.Minor) * factor
 	if r >= 0 {
@@ -75,10 +79,10 @@ func (m Money) Scale(factor float64) Money {
 	return Money{Minor: int64(r - 0.5), Code: m.Code}
 }
 
-// Major повертає суму у мажорних одиницях (грн/USD/EUR/...). Кількість
-// знаків після коми береться з [currency.Code.Decimals]: 2 для більшості
-// валют, 0 для JPY (1250 єн = 1250 одиниць, не 12.50). Якщо валюта
-// невідома SDK — припускаємо 2 знаки.
+// Major returns the amount in major units (UAH/USD/EUR/...). The
+// number of decimals comes from [currency.Code.Decimals]: 2 for most
+// currencies, 0 for JPY (1250 yen = 1250 units, not 12.50). For
+// currencies the SDK does not know, 2 decimals are assumed.
 func (m Money) Major() float64 {
 	d := m.Code.Decimals()
 	if d == 0 {
@@ -87,22 +91,23 @@ func (m Money) Major() float64 {
 	return float64(m.Minor) / math.Pow10(d)
 }
 
-// String форматує гроші у вигляді «42.50 UAH» (кількість знаків після
-// коми відповідає валюті — 2 для UAH, 0 для JPY тощо). Корисно для
-// логів і дебагу.
+// String formats the amount as "42.50 UAH" (the number of decimals
+// matches the currency — 2 for UAH, 0 for JPY etc.). Handy for logs
+// and debugging.
 func (m Money) String() string {
 	return fmt.Sprintf("%.*f %s", m.Code.Decimals(), m.Major(), m.Code)
 }
 
-// MarshalJSON серіалізує Money як голу кількість мінорних одиниць —
-// сумісно з wire-форматом Mono (де сума і валюта йдуть окремими полями).
+// MarshalJSON serializes Money as a bare count of minor units —
+// compatible with Mono's wire format (where amount and currency are
+// separate fields).
 func (m Money) MarshalJSON() ([]byte, error) {
 	return json.Marshal(m.Minor)
 }
 
-// UnmarshalJSON читає голу int64 у Minor. Code лишається нульовим — його
-// проставляє батьківська структура у власному UnmarshalJSON, копіюючи
-// зі сусіднього поля CurrencyCode.
+// UnmarshalJSON reads a bare int64 into Minor. Code stays zero —
+// the parent structure sets it in its own UnmarshalJSON by copying
+// from the adjacent CurrencyCode field.
 func (m *Money) UnmarshalJSON(data []byte) error {
 	return json.Unmarshal(data, &m.Minor)
 }

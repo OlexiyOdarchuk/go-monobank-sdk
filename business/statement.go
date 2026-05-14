@@ -9,13 +9,14 @@ import (
 	"time"
 )
 
-// Statement повертає операції на рахунку account за період [from, to]
-// (включно). to-нульовий означає «до теперішнього часу». limit і
-// direction мапляться у відповідні query-параметри; передай
-// StatementDirection("") для дефолту API.
+// Statement returns operations on account within [from, to]
+// (inclusive). A zero to means "up to now". limit and direction map
+// to the matching query parameters; pass StatementDirection("") for
+// the API default.
 //
-// На відміну від Personal/Corporate Open API, тут немає 31-денного
-// обмеження — corp-api повертає скільки попросиш у межах limit.
+// Unlike the Personal/Corporate Open API, there is no 31-day
+// constraint here — corp-api returns as much as you ask for within
+// limit.
 // https://corp-api.monobank.ua/docs/#operation/get-statement
 func (c *Client) Statement(ctx context.Context, account string, from, to time.Time,
 	direction StatementDirection, limit int) ([]StatementItem, error) {
@@ -46,9 +47,10 @@ func (c *Client) Statement(ctx context.Context, account string, from, to time.Ti
 	return out, nil
 }
 
-// Operation повертає одну операцію за id Mono і твоїм externalReference.
-// Треба передати обидва — банк звіряє відповідність. Корисно, щоб
-// підтвердити, що твій платіж справді дійшов у виписку.
+// Operation returns a single operation by Mono's id and your
+// externalReference. Both must be supplied — the bank checks they
+// match. Useful for confirming that your payment really landed in
+// the statement.
 // https://corp-api.monobank.ua/docs/#operation/get-payment-from-statement
 func (c *Client) Operation(ctx context.Context, id, externalReference string) (*StatementItem, error) {
 	q := url.Values{}

@@ -8,37 +8,37 @@ import (
 	"github.com/OlexiyOdarchuk/go-monobank-sdk/bank"
 )
 
-// ErrUnknownType повертається з [Parse], коли поле "type" на верхньому
-// рівні payload-у не входить у відомий список Type*-констант. Це не
-// помилка верифікації — payload автентичний, просто його тип ще не
-// представлений у SDK.
+// ErrUnknownType is returned from [Parse] when the top-level "type"
+// field of the payload is not in the known list of Type* constants.
+// This is not a verification error — the payload is authentic, its
+// type just is not represented in the SDK yet.
 var ErrUnknownType = errors.New("unknown webhook type")
 
-// Відомі типи webhook-подій.
+// Known webhook event types.
 const (
-	// TypeStatementItem — один запис виписки по рахунку (єдиний тип,
-	// який Mono документує станом на сьогодні).
+	// TypeStatementItem is a single account-statement entry (the
+	// only type Mono documents as of today).
 	TypeStatementItem = "StatementItem"
 )
 
-// Response — payload вебхука Mono верхнього рівня.
+// Response is the top-level Mono webhook payload.
 type Response struct {
-	Type string `json:"type"` // див. Type*-константи
+	Type string `json:"type"` // see the Type* constants
 	Data Data   `json:"data"`
 }
 
-// Data — корисне навантаження вебхука. Для TypeStatementItem
-// Transaction містить повну транзакцію (як з /personal/statement), а
-// AccountID — id рахунку, на якому вона сталась.
+// Data is the webhook payload. For TypeStatementItem, Transaction
+// holds the full transaction (as in /personal/statement) and
+// AccountID is the id of the account it happened on.
 type Data struct {
 	AccountID   string           `json:"account"`
 	Transaction bank.Transaction `json:"statementItem"`
 }
 
-// Parse декодує сирий body вебхука у [Response]. Якщо "type" не входить
-// у відомі Type*-константи — Response усе одно повертається (із
-// розпарсеним type), але разом із [ErrUnknownType]. Так викликач може
-// або проігнорувати такі події, або обробити їх загальним кодом.
+// Parse decodes the raw webhook body into a [Response]. If "type" is
+// not in the known Type* constants, Response is still returned (with
+// the parsed type) along with [ErrUnknownType]. The caller can then
+// either ignore such events or handle them with generic code.
 func Parse(body []byte) (*Response, error) {
 	var v Response
 	if err := json.Unmarshal(body, &v); err != nil {

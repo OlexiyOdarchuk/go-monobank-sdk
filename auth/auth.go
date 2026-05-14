@@ -1,33 +1,34 @@
-// Package auth — авторизатори для запитів до monobank API.
+// Package auth provides authorizers for monobank API requests.
 //
-// Інтерфейс [Authorizer] дозволяє базовому HTTP-клієнту лишатися
-// агностиком щодо того, як конкретний запит авторизується. Три
-// реалізації покривають усі публічні поверхні Mono:
+// The [Authorizer] interface lets the base HTTP client stay agnostic
+// about how a given request is authorized. Three implementations cover
+// every public Mono surface:
 //
-//   - [Public] — для endpoint-ів без авторизації (курси, серверний ключ).
-//   - [Personal] — токен Personal API (заголовок X-Token).
-//   - [Corp] — ECDSA-підписаний доступ Corporate API (X-Key-Id, X-Time,
-//     X-Sign, плюс X-Request-Id або X-Permissions залежно від endpoint-а).
+//   - [Public] — for endpoints without authorization (rates, server key).
+//   - [Personal] — Personal API token (X-Token header).
+//   - [Corp] — ECDSA-signed Corporate API access (X-Key-Id, X-Time,
+//     X-Sign, plus either X-Request-Id or X-Permissions depending on
+//     the endpoint).
 //
-// Підпакети business (corp-api юр. осіб) та acquiring використовують
-// простішу схему з одного X-Token і мають власні authorizer-и в
-// своїх пакетах.
+// The business (legal-entity corp-api) and acquiring sub-packages use
+// a simpler single X-Token scheme and have their own authorizers in
+// their respective packages.
 package auth
 
 import "net/http"
 
-// Authorizer модифікує вихідний запит, додаючи credentials, на які
-// чекає певна поверхня monobank.
+// Authorizer mutates an outgoing request to add the credentials a
+// specific monobank surface expects.
 type Authorizer interface {
 	SetAuth(*http.Request) error
 }
 
-// Public — no-op Authorizer для endpoint-ів, яким не потрібна авторизація
-// (наприклад /bank/currency, /bank/sync).
+// Public is a no-op Authorizer for endpoints that do not require
+// authorization (for example /bank/currency, /bank/sync).
 type Public struct{}
 
-// SetAuth реалізує [Authorizer]; нічого не робить.
+// SetAuth implements [Authorizer]; it does nothing.
 func (Public) SetAuth(_ *http.Request) error { return nil }
 
-// NewPublic повертає no-op Authorizer для неавторизованих викликів.
+// NewPublic returns a no-op Authorizer for unauthorized calls.
 func NewPublic() Public { return Public{} }

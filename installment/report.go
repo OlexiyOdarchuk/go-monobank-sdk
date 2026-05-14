@@ -5,8 +5,9 @@ import (
 	"net/http"
 )
 
-// DailyReport повертає денний звіт операцій (видачі, повернення,
-// комісії) для магазину за дату у форматі "YYYY-MM-DD".
+// DailyReport returns the merchant's daily report of operations
+// (issuances, returns, commissions) for a date in "YYYY-MM-DD"
+// format.
 //
 // POST /api/store/report  (200 → DailyReportResponse)
 func (c *Client) DailyReport(ctx context.Context, date string) ([]ReportOrder, error) {

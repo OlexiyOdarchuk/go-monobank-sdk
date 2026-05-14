@@ -12,15 +12,15 @@ import (
 
 const defaultBaseURL = "https://api.monobank.ua"
 
-// Option конфігурує [Client]. Передається у [New] (і так само у фабрики
-// підпакетів — [personal.New], [bank.New] тощо, які пробрасують опції
-// в New). Аддитивний дизайн: нові опції додаються без ламання існуючих
-// викликів.
+// Option configures [Client]. Pass it to [New] (and likewise to
+// sub-package factories — [personal.New], [bank.New] etc., which
+// forward options to New). Additive design: new options are added
+// without breaking existing call sites.
 type Option func(*Client)
 
-// WithHTTPClient ставить кастомний *http.Client (зручно для таймаутів,
-// власних транспортів, проксі). nil або відсутність опції — використає
-// стандартний &http.Client{} без таймауту.
+// WithHTTPClient sets a custom *http.Client (handy for timeouts,
+// custom transports, proxies). nil or omission falls back to the
+// standard &http.Client{} with no timeout.
 func WithHTTPClient(httpClient *http.Client) Option {
 	return func(c *Client) {
 		if httpClient == nil {
@@ -30,9 +30,9 @@ func WithHTTPClient(httpClient *http.Client) Option {
 	}
 }
 
-// WithHTTPDoer приймає будь-який [HTTPDoer]. Зручно для підставляння
-// middleware-ів (circuit breakers, кастомні транспорти, тестові фейки).
-// nil — ігнорується.
+// WithHTTPDoer accepts any [HTTPDoer]. Useful for plugging in
+// middleware (circuit breakers, custom transports, test fakes).
+// nil is ignored.
 func WithHTTPDoer(d HTTPDoer) Option {
 	return func(c *Client) {
 		if d == nil {
@@ -42,10 +42,52 @@ func WithHTTPDoer(d HTTPDoer) Option {
 	}
 }
 
-// WithAuth прив'язує [auth.Authorizer] до клієнта. Підпакети (personal,
-// corporate, business, acquiring) застосовують її, щоб підставити свою
-// схему авторизації (X-Token, ECDSA-підпис тощо). nil ігнорується —
-// дефолт залишається [auth.Public] (без авторизації).
+// WithRoundTripper installs a custom [http.RoundTripper] without
+// touching the rest of the embedded *http.Client settings (timeout,
+// Cookie jar, redirect policy). This is the standard middleware
+// slot: OpenTelemetry / Datadog / Prometheus / custom auth-refresh
+// or circuit-breaker logic that does not require rewriting the whole
+// HTTP stack.
+//
+//	type loggingRT struct{ next http.RoundTripper }
+//	func (l loggingRT) RoundTrip(r *http.Request) (*http.Response, error) {
+//	    log.Println("→", r.Method, r.URL.Path)
+//	    return l.next.RoundTrip(r)
+//	}
+//
+//	cli := personal.New(token, monobank.WithRoundTripper(
+//	    loggingRT{next: http.DefaultTransport},
+//	))
+//
+// Compose by ordinary wrapping: build the middleware chain from the
+// outside in, or via a helper function. nil is ignored.
+//
+// Option order: [WithRoundTripper] MUST come AFTER [WithHTTPClient]
+// (otherwise WithHTTPClient overwrites the transport). If you pass
+// your own http.Client that already has the right Transport, use
+// [WithHTTPClient] alone, without [WithRoundTripper].
+func WithRoundTripper(rt http.RoundTripper) Option {
+	return func(c *Client) {
+		if rt == nil {
+			return
+		}
+		// If c.http is a standard *http.Client, clone it and replace
+		// Transport. Otherwise build a new client with the default
+		// timeout.
+		if hc, ok := c.http.(*http.Client); ok {
+			cloned := *hc
+			cloned.Transport = rt
+			c.http = &cloned
+			return
+		}
+		c.http = &http.Client{Transport: rt}
+	}
+}
+
+// WithAuth attaches an [auth.Authorizer] to the client. Sub-packages
+// (personal, corporate, business, acquiring) use it to plug in their
+// authorization scheme (X-Token, ECDSA signature, etc.). nil is
+// ignored — the default stays [auth.Public] (no authorization).
 func WithAuth(a auth.Authorizer) Option {
 	return func(c *Client) {
 		if a == nil {
@@ -55,23 +97,24 @@ func WithAuth(a auth.Authorizer) Option {
 	}
 }
 
-// WithLogger прикріплює *slog.Logger до клієнта. Якщо встановлений, SDK
-// логує:
+// WithLogger attaches a *slog.Logger to the client. When set, the
+// SDK logs:
 //
-//   - Debug "monobank: sending request" — перед кожним HTTP-викликом
+//   - Debug "monobank: sending request" — before every HTTP call
 //     (method, url).
-//   - Debug "monobank: http response" — успішну відповідь (method, url,
-//     status, duration).
-//   - Warn "monobank: http error" — транспортний збій (method, url,
+//   - Debug "monobank: http response" — successful response (method,
+//     url, status, duration).
+//   - Warn "monobank: http error" — transport failure (method, url,
 //     duration, err).
 //
-// Логер викликається на кожну спробу окремо — ретраї дадуть кілька
-// записів. nil ігнорується. Дефолт: не логувати.
+// The logger fires per attempt — retries produce multiple records.
+// nil is ignored. Default: do not log.
 //
-// УВАГА (PII): на рівні Debug у логи потрапляє повний URL запиту,
-// включно з path-сегментом accountID для /personal/statement/{acc}/...
-// У production не вмикай Debug, або налаштуй handler-фільтр у власному
-// slog.Handler (банківська тайна). Info/Warn — безпечні.
+// CAUTION (PII): at Debug level the full request URL goes into the
+// log, including the accountID path segment for
+// /personal/statement/{acc}/... Do not enable Debug in production,
+// or wire up a handler-side filter in your own slog.Handler (banking
+// secrecy). Info/Warn are safe.
 //
 //	cli := personal.New(token, monobank.WithLogger(slog.Default()))
 func WithLogger(l *slog.Logger) Option {
@@ -83,11 +126,11 @@ func WithLogger(l *slog.Logger) Option {
 	}
 }
 
-// WithRequestHook ставить callback, який викликається перед кожним
-// надсиланням HTTP-запиту (включно з кожним ретраєм). Запит уже
-// зрезолвлений до повного URL і має виставлені заголовки авторизації —
-// hook може домутитити власні (наприклад, OpenTelemetry trace context,
-// X-Correlation-Id). nil ігнорується.
+// WithRequestHook installs a callback invoked before every HTTP
+// request (including each retry). The request has been resolved to
+// its full URL and has the authorization headers set — the hook may
+// add its own (for example, OpenTelemetry trace context,
+// X-Correlation-Id). nil is ignored.
 //
 //	cli := personal.New(token, monobank.WithRequestHook(func(r *http.Request) {
 //	    r.Header.Set("X-Correlation-Id", uuid.NewString())
@@ -101,11 +144,12 @@ func WithRequestHook(fn func(*http.Request)) Option {
 	}
 }
 
-// WithResponseHook ставить callback, який викликається після кожної
-// HTTP-відповіді (успіх і збій). Викликається ОДРАЗУ після
-// http.Doer.Do, до парсингу й до перевірки expected-status. resp може
-// бути nil (якщо err != nil); err може бути nil (якщо все добре). Корисно
-// для метрик (latency per attempt, error counts). nil ігнорується.
+// WithResponseHook installs a callback invoked after every HTTP
+// response (success and failure). It runs IMMEDIATELY after
+// http.Doer.Do, before parsing and before the expected-status check.
+// resp may be nil (if err != nil); err may be nil (when everything
+// is fine). Useful for metrics (per-attempt latency, error counts).
+// nil is ignored.
 //
 //	cli := personal.New(token, monobank.WithResponseHook(func(r *http.Response, err error) {
 //	    if r != nil {
@@ -121,16 +165,18 @@ func WithResponseHook(fn func(*http.Response, error)) Option {
 	}
 }
 
-// WithBaseURL перевизначає дефолтний base URL (https://api.monobank.ua).
-// Корисно для тестування проти httptest.Server, записаного proxy або
-// окремих хостів (corp-api.monobank.ua — використовується автоматично
-// у [business.New], тут не потрібно).
+// WithBaseURL overrides the default base URL
+// (https://api.monobank.ua). Handy for testing against httptest.Server,
+// a recorded proxy, or alternative hosts (corp-api.monobank.ua is
+// applied automatically inside [business.New], no need to set it
+// here).
 //
-// БЕЗПЕКА: якщо uri використовує не-https схему І хост не є
-// loopback-ом (localhost / 127.0.0.1 / ::1), клієнт запам'ятає
-// [ErrInsecureBaseURL] і поверне її з першого ж [Client.Do]. Це
-// захист від випадкового деплою з staging-конфігом, що відкритим
-// текстом шле X-Token. Свідомо обійти можна через [WithInsecureBaseURL].
+// SECURITY: if uri uses a non-https scheme AND the host is not a
+// loopback (localhost / 127.0.0.1 / ::1), the client remembers
+// [ErrInsecureBaseURL] and returns it from the very first
+// [Client.Do]. This guards against accidentally deploying with a
+// staging config that sends X-Token in cleartext. Opt out
+// deliberately via [WithInsecureBaseURL].
 func WithBaseURL(uri string) Option {
 	return func(c *Client) {
 		if isInsecureBaseURL(uri) && !c.allowInsecureBaseURL {
@@ -141,22 +187,23 @@ func WithBaseURL(uri string) Option {
 	}
 }
 
-// WithInsecureBaseURL свідомо дозволяє http://-URL на не-loopback-хост
-// у [WithBaseURL]. Корисно для записаного MITM-proxy для дебагу
-// (mitmproxy, burp) чи staging-сетапів за VPN-ом, де https зайвий.
-// За дефолтом — false; вмикай тільки якщо точно розумієш, що токен
-// піде відкритим текстом і це прийнятно у твоїй мережі.
+// WithInsecureBaseURL deliberately allows an http:// URL on a
+// non-loopback host in [WithBaseURL]. Useful for a recorded MITM
+// proxy used for debugging (mitmproxy, burp) or staging setups
+// behind a VPN where https is overkill. The default is false; turn
+// it on only if you understand that the token will travel in
+// cleartext and that is acceptable on your network.
 //
-// Порядок опцій важливий: [WithInsecureBaseURL] має бути ДО
-// [WithBaseURL], інакше bypass не спрацює.
+// Option order matters: [WithInsecureBaseURL] must come BEFORE
+// [WithBaseURL], otherwise the bypass has no effect.
 func WithInsecureBaseURL(allow bool) Option {
 	return func(c *Client) {
 		c.allowInsecureBaseURL = allow
 	}
 }
 
-// isInsecureBaseURL повертає true, якщо схема не https і хост не
-// є loopback.
+// isInsecureBaseURL reports whether the scheme is not https and the
+// host is not a loopback.
 func isInsecureBaseURL(uri string) bool {
 	u, err := url.Parse(uri)
 	if err != nil || u == nil {
@@ -172,16 +219,17 @@ func isInsecureBaseURL(uri string) bool {
 	return true
 }
 
-// WithRetry вмикає автоматичний ретрай для transient-помилок (5xx і
-// 429). Бекоф — експонентний із full jitter; Retry-After із відповіді
-// поважається, якщо є.
+// WithRetry enables automatic retry for transient failures (5xx and
+// 429). Backoff is exponential with full jitter; Retry-After from the
+// response is honored when present.
 //
-// attempts == 0 — успадковує дефолти (4 спроби, base 500ms, max 30s).
-// attempts <= 1 — явно вимикає ретрай. Непозитивні baseDelay / maxDelay
-// успадковують дефолти.
+// attempts == 0 inherits the defaults (4 attempts, base 500ms,
+// max 30s). attempts <= 1 explicitly disables retry. Non-positive
+// baseDelay / maxDelay inherit the defaults.
 //
-// Ретраяться тільки transient-помилки (5xx, 429); чотирьохсотки повертаються
-// як [APIError] без повтору, бо це справжні помилки клієнтського коду.
+// Only transient failures (5xx, 429) are retried; 4xx errors come
+// back as [APIError] without a retry, because they are genuine
+// client-side errors.
 func WithRetry(attempts int, baseDelay, maxDelay time.Duration) Option {
 	return func(c *Client) {
 		if attempts == 0 {
@@ -202,15 +250,15 @@ func WithRetry(attempts int, baseDelay, maxDelay time.Duration) Option {
 	}
 }
 
-// WithUserAgent перевизначає User-Agent, який SDK ставить на кожному
-// запиті (за замовчуванням — [UserAgent]). Корисно, щоб Mono у support-
-// кейсах міг розрізнити твій сервіс серед інших користувачів SDK:
+// WithUserAgent overrides the User-Agent the SDK sets on every
+// request (default is [UserAgent]). Helpful so Mono support can tell
+// your service apart from other SDK users:
 //
 //	cli := personal.New(token,
 //	    monobank.WithUserAgent("acme-receipts/2.1.0 "+monobank.UserAgent()),
 //	)
 //
-// Порожній рядок ігнорується (зберігається SDK-дефолт).
+// An empty string is ignored (the SDK default is kept).
 func WithUserAgent(ua string) Option {
 	return func(c *Client) {
 		if ua == "" {
@@ -220,38 +268,39 @@ func WithUserAgent(ua string) Option {
 	}
 }
 
-// WithUnsafeRetries вмикає автоматичні ретраї POST/PATCH без заголовка
-// Idempotency-Key. За замовчуванням такі методи не ретраяться, бо
-// 502/504 від балансера може прийти ПІСЛЯ того, як upstream уже
-// обробив запит — повтор створить дублікат операції (наприклад, два
-// інвойси через [acquiring.Client.CreateInvoice]).
+// WithUnsafeRetries enables automatic retries for POST/PATCH without
+// an Idempotency-Key header. By default such methods are not retried,
+// because a 502/504 from the load balancer can arrive AFTER upstream
+// has already processed the request — a retry then creates a
+// duplicate operation (for example, two invoices via
+// [acquiring.Client.CreateInvoice]).
 //
-// Mono приймає Idempotency-Key для всіх мутаційних endpoint-ів, де він
-// має сенс (див. [business.NewIdempotencyKey], який автоматично
-// проставляється у [business.Client.PreparePayment] /
-// [business.Client.CreateSalaryRegistry]). Для решти POST-методів,
-// якщо ти впевнений, що endpoint ідемпотентний на стороні Mono або
-// готовий мирно жити з дублями — постав WithUnsafeRetries(true).
+// Mono accepts Idempotency-Key for every mutating endpoint where it
+// makes sense (see [business.NewIdempotencyKey], which is set
+// automatically in [business.Client.PreparePayment] /
+// [business.Client.CreateSalaryRegistry]). For the remaining POST
+// methods, if you are sure the endpoint is idempotent on Mono's side
+// or are happy to live with duplicates, set WithUnsafeRetries(true).
 func WithUnsafeRetries(enabled bool) Option {
 	return func(c *Client) {
 		c.unsafeRetries = enabled
 	}
 }
 
-// WithRateLimiter ставить клієнтський throttle. [RateLimiter.Wait]
-// викликається ОДИН раз на логічний запит (до retry-циклу) — токен не
-// витрачається повторно при ретраях. nil ігнорується.
+// WithRateLimiter sets a client-side throttle. [RateLimiter.Wait] is
+// called ONCE per logical request (before the retry loop) — the
+// token is not spent again on retries. nil is ignored.
 //
-// Mono має жорсткі ліміти (наприклад, /personal/client-info — 1 виклик
-// на 60 с); без лімітера SDK покладається лише на серверні 429
-// + [WithRetry] backoff. Локальний лімітер допомагає не вистрілити в
-// 429 з самого початку.
+// Mono has strict limits (for example, /personal/client-info is one
+// call per 60 s); without a limiter the SDK relies solely on
+// server-side 429 plus [WithRetry] backoff. A local limiter helps
+// avoid getting 429-ed right away.
 //
 //	lim := monobank.NewLimiter(time.Minute, 1)
 //	cli := personal.New(token, monobank.WithRateLimiter(lim))
 //
-// Можна підставити будь-який *golang.org/x/time/rate.Limiter — його
-// сигнатура Wait(ctx) збігається з [RateLimiter].
+// You can drop in any *golang.org/x/time/rate.Limiter — its Wait(ctx)
+// signature matches [RateLimiter].
 func WithRateLimiter(l RateLimiter) Option {
 	return func(c *Client) {
 		if l == nil {
@@ -261,11 +310,12 @@ func WithRateLimiter(l RateLimiter) Option {
 	}
 }
 
-// New повертає базовий [Client], зібраний із переданих опцій. Без
-// [WithAuth] клієнт використовує [auth.Public] (no-op) — підходить для
-// публічних bank-endpoint-ів через підпакет bank, але не для personal,
-// corporate, business чи acquiring (їм потрібна реальна авторизація;
-// зазвичай вони викликають New самі, додаючи свій [auth.Authorizer]).
+// New returns the base [Client] assembled from the supplied options.
+// Without [WithAuth] the client uses [auth.Public] (no-op) — fine for
+// the public bank endpoints via the bank sub-package, but not for
+// personal, corporate, business or acquiring (which require real
+// authorization; they normally call New themselves, adding their own
+// [auth.Authorizer]).
 //
 //	c := monobank.New(
 //	    monobank.WithHTTPClient(myHTTP),

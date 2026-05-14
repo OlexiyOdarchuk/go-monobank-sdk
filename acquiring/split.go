@@ -6,24 +6,24 @@ import (
 	"net/http"
 )
 
-// SplitReceiver — один отримувач у схемі розщеплення платежів.
-// SplitReceiverID використовується у тілі CreateInvoiceRequest при
-// розщепленні (передається банку через окремий механізм агентської
-// угоди — недоступний у дефолтних мерчантів).
+// SplitReceiver is a single recipient in a payment-splitting scheme.
+// SplitReceiverID is used in CreateInvoiceRequest when splitting (it
+// is wired up via a separate agent-agreement mechanism on the bank's
+// side — unavailable for default merchants).
 type SplitReceiver struct {
 	SplitReceiverID string `json:"splitReceiverId"`
 	OKPO            string `json:"okpo"`
 	Name            string `json:"name"`
 }
 
-// SplitReceiverListResponse — обгортка для /split-receiver/list.
+// SplitReceiverListResponse wraps the /split-receiver/list response.
 type SplitReceiverListResponse struct {
 	List []SplitReceiver `json:"list"`
 }
 
-// SplitReceivers повертає список отримувачів для розщеплення платежів
-// (саб-мерчантів). Працює лише в мерчантів, у яких налаштована схема
-// агентського/розщеплювального еквайрингу.
+// SplitReceivers returns the list of recipients for payment
+// splitting (submerchants). Only available to merchants whose
+// agent / split-acquiring scheme has been configured.
 func (c *Client) SplitReceivers(ctx context.Context) ([]SplitReceiver, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet,
 		"/api/merchant/split-receiver/list", http.NoBody)

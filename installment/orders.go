@@ -5,13 +5,13 @@ import (
 	"net/http"
 )
 
-// CreateOrder створює заявку на «Покупка частинами». Повертає order_id;
-// решту інформації магазин отримує асинхронно: callback на
-// CreateOrderRequest.ResultCallback (якщо переданий), або polling через
+// CreateOrder creates an installment order. It returns order_id; the
+// rest of the information arrives asynchronously: a callback to
+// CreateOrderRequest.ResultCallback (when provided) or polling via
 // [Client.OrderState].
 //
-// Замовлення з тим самим store_order_id ідемпотентне — повторний виклик
-// поверне той самий order_id замість створення нового.
+// An order with the same store_order_id is idempotent — repeating
+// the call returns the same order_id instead of creating a new one.
 //
 // POST /api/order/create  (201 → CreateOrderResponse)
 func (c *Client) CreateOrder(ctx context.Context, in *CreateOrderRequest) (*CreateOrderResponse, error) {
@@ -25,9 +25,10 @@ func (c *Client) CreateOrder(ctx context.Context, in *CreateOrderRequest) (*Crea
 	return &out, nil
 }
 
-// OrderState повертає поточний стан заявки.
-// IN_PROCESS/WAITING_FOR_STORE_CONFIRM — момент, коли треба викликати
-// [Client.ConfirmOrder] після видачі товару. Усі FAIL/* — фінальні.
+// OrderState returns the order's current state.
+// IN_PROCESS/WAITING_FOR_STORE_CONFIRM is the moment to call
+// [Client.ConfirmOrder] after handing over the goods. All FAIL/*
+// states are terminal.
 //
 // POST /api/order/state  (200 → OrderStateInfo)
 func (c *Client) OrderState(ctx context.Context, orderID string) (*OrderStateInfo, error) {
@@ -39,8 +40,9 @@ func (c *Client) OrderState(ctx context.Context, orderID string) (*OrderStateInf
 	return &out, nil
 }
 
-// ConfirmOrder підтверджує видачу товару — активує розстрочку. Викликай
-// у відповідь на стан WAITING_FOR_STORE_CONFIRM.
+// ConfirmOrder confirms that the goods have been handed over — this
+// activates the installment plan. Call in response to a
+// WAITING_FOR_STORE_CONFIRM state.
 //
 // POST /api/order/confirm  (200 → OrderStateInfo)
 func (c *Client) ConfirmOrder(ctx context.Context, orderID string) (*OrderStateInfo, error) {
@@ -52,8 +54,9 @@ func (c *Client) ConfirmOrder(ctx context.Context, orderID string) (*OrderStateI
 	return &out, nil
 }
 
-// RejectOrder скасовує заявку з боку магазину (наприклад, товару немає
-// на складі). Допустимо до видачі товару.
+// RejectOrder cancels the order from the merchant's side (for
+// example, the goods are out of stock). Allowed before the goods are
+// handed over.
 //
 // POST /api/order/reject  (200 → OrderStateInfo)
 func (c *Client) RejectOrder(ctx context.Context, orderID string) (*OrderStateInfo, error) {
@@ -65,9 +68,9 @@ func (c *Client) RejectOrder(ctx context.Context, orderID string) (*OrderStateIn
 	return &out, nil
 }
 
-// ReturnOrder реєструє повернення товару (повне або часткове).
-// ReturnMoneyToCard: true — гроші повертаються на картку клієнта;
-// false — клієнт забирає готівкою в магазині.
+// ReturnOrder records a return of goods (full or partial).
+// ReturnMoneyToCard: true sends the money back to the client's card;
+// false means the client collects cash at the store.
 //
 // POST /api/order/return  (200 → ReturnResponse)
 func (c *Client) ReturnOrder(ctx context.Context, in *ReturnRequest) (*ReturnResponse, error) {
@@ -81,12 +84,12 @@ func (c *Client) ReturnOrder(ctx context.Context, in *ReturnRequest) (*ReturnRes
 	return &out, nil
 }
 
-// OrderInfo — застаріла версія OrderData. У нових інтеграціях використовуй
-// [Client.OrderData].
+// OrderInfo is a deprecated version of OrderData. In new
+// integrations use [Client.OrderData].
 //
 // POST /api/order/info  (200 → OrderShortInfo)
 //
-// Deprecated: використовуй [Client.OrderData].
+// Deprecated: use [Client.OrderData].
 func (c *Client) OrderInfo(ctx context.Context, orderID string) (*OrderShortInfo, error) {
 	var out OrderShortInfo
 	if err := c.doJSON(ctx, "/api/order/info",
@@ -96,8 +99,8 @@ func (c *Client) OrderInfo(ctx context.Context, orderID string) (*OrderShortInfo
 	return &out, nil
 }
 
-// OrderData повертає детальну інформацію по заявці, включно зі списком
-// повернень та маскованою карткою.
+// OrderData returns detailed information about an order, including
+// the return list and the masked card.
 //
 // POST /api/order/data  (200 → OrderShortInfo)
 func (c *Client) OrderData(ctx context.Context, orderID string) (*OrderShortInfo, error) {
@@ -109,8 +112,8 @@ func (c *Client) OrderData(ctx context.Context, orderID string) (*OrderShortInfo
 	return &out, nil
 }
 
-// CheckPaid каже, чи повністю сплачена заявка клієнтом і чи може банк
-// повернути кошти на картку при поверненні товару.
+// CheckPaid reports whether the client has fully paid the order and
+// whether the bank can refund the money to the card on a return.
 //
 // POST /api/order/check/paid  (200 → CheckInstallmentsResponse)
 func (c *Client) CheckPaid(ctx context.Context, orderID string) (*CheckInstallmentsResponse, error) {

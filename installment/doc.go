@@ -1,41 +1,48 @@
-// Package installment — Go-клієнт для API «Покупка частинами» Monobank
-// (u2.monobank.com.ua). Дозволяє магазину створювати заявки на
-// безвідсоткову розстрочку, відслідковувати їх статус, видавати товар,
-// робити повернення та формувати гарантійні листи.
+// Package installment is the Go client for monobank's "Pay in
+// installments" API (u2.monobank.com.ua). It lets a merchant create
+// interest-free installment orders, track their status, hand over
+// the goods, issue refunds, and produce guarantee letters.
 //
-// Авторизація — HMAC-SHA256 підпис тіла запиту з парним заголовком
-// store-id (ідентифікатор магазину) та signature (base64 від HMAC).
-// Секрет видається банком окремо для тестового середовища, stage та
-// production.
+// Authorization uses an HMAC-SHA256 signature of the request body
+// paired with the headers store-id (store identifier) and signature
+// (base64 of the HMAC). The bank issues the secret separately for
+// the sandbox, stage, and production environments.
 //
-// Середовища (це базові URL для API-викликів, не сторінки документації;
-// відкривати їх у браузері безглуздо — sandbox-root повертає 404,
-// stage/prod — 503, бо вони закриті без store-id+signature):
+// Environments (these are API hostnames, not documentation pages;
+// opening them in a browser is pointless — sandbox-root returns 404,
+// stage/prod return 503 because they are closed without
+// store-id+signature):
 //
-//   - Тестове (sandbox)   — https://u2-demo-ext.mono.st4g3.com
-//     Доступ публічний, працює з демо-credentials test_store_with_confirm
-//     / secret_98765432--123-123. Документація — у Swagger UI:
+//   - Sandbox          — https://u2-demo-ext.mono.st4g3.com
+//     Publicly accessible, works with the demo credentials
+//     test_store_with_confirm / secret_98765432--123-123. Docs in
+//     Swagger UI:
 //     https://u2-demo-ext.mono.st4g3.com/docs/index.html
-//   - Stage (передпрод)   — https://u2-ext.mono.st4g3.com
-//     Доступ лише після того, як банк відкриє ваш store-id; інакше 503.
-//   - Production          — https://u2.monobank.com.ua
-//     Доступ лише за продакшн-credentials, виданими банком; інакше 503.
+//   - Stage (pre-prod) — https://u2-ext.mono.st4g3.com
+//     Available only after the bank opens your store-id; otherwise
+//     503.
+//   - Production       — https://u2.monobank.com.ua
+//     Available only with production credentials issued by the bank;
+//     otherwise 503.
 //
-// Перевизнач базовий URL через [WithBaseURL]; за дефолтом — production.
+// Override the base URL via [WithBaseURL]; the default is production.
 //
-// Типовий потік (див. /api/order/create -> callback / polling):
+// Typical flow (see /api/order/create -> callback / polling):
 //
-//  1. [Client.CreateOrder] — створюєш заявку із товарами та номером
-//     телефону клієнта; повертається order_id.
-//  2. Клієнт отримує push у застосунку Mono та підтверджує договір.
-//  3. Магазин отримує callback (POST на result_callback) або поллить
-//     [Client.OrderState] до стану IN_PROCESS/WAITING_FOR_STORE_CONFIRM.
-//  4. Магазин видає товар і викликає [Client.ConfirmOrder] — це
-//     активує розстрочку і списується перший платіж.
-//  5. У разі відмови — [Client.RejectOrder]; повернення товару —
+//  1. [Client.CreateOrder] — create an order with items and the
+//     client's phone number; you receive an order_id.
+//  2. The client receives a push in the Mono app and confirms the
+//     contract.
+//  3. The merchant gets a callback (POST to result_callback) or
+//     polls [Client.OrderState] until it reaches
+//     IN_PROCESS/WAITING_FOR_STORE_CONFIRM.
+//  4. The merchant ships the goods and calls [Client.ConfirmOrder]
+//     — this activates the installment and the first payment is
+//     charged.
+//  5. On rejection — [Client.RejectOrder]; for returns —
 //     [Client.ReturnOrder].
 //
-// Усі грошові поля — це гривні з копійками як `number` (float64).
-// На відміну від інших API monobank-sdk, ПЧ не використовує мінорні
-// одиниці; передавай 2499.99, а не 249999.
+// Every monetary field is hryvnias-with-kopecks as a `number`
+// (float64). Unlike the other monobank-sdk APIs, the installment API
+// does not use minor units; pass 2499.99, not 249999.
 package installment

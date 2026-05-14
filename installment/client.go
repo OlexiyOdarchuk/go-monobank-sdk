@@ -15,40 +15,42 @@ import (
 	"time"
 )
 
-// Стандартні базові URL для трьох середовищ ПЧ.
+// Standard base URLs for the three installment environments.
 const (
 	BaseURLSandbox    = "https://u2-demo-ext.mono.st4g3.com"
 	BaseURLStage      = "https://u2-ext.mono.st4g3.com"
 	BaseURLProduction = "https://u2.monobank.com.ua"
 )
 
-// HeaderStoreID — назва HTTP-заголовка ідентифікатора магазину.
+// HeaderStoreID is the name of the store-identifier HTTP header.
 const HeaderStoreID = "store-id"
 
-// HeaderSignature — назва HTTP-заголовка з підписом.
+// HeaderSignature is the name of the signature HTTP header.
 const HeaderSignature = "signature"
 
-// ErrNilRequest повертається з мутаційних методів, коли body == nil.
+// ErrNilRequest is returned from mutating methods when body == nil.
 var ErrNilRequest = errors.New("installment: request body is nil")
 
-// ErrCallbackSignatureMismatch повертається з [Client.VerifyCallback],
-// коли підпис у заголовку signature не збігається з очікуваним.
+// ErrCallbackSignatureMismatch is returned from
+// [Client.VerifyCallback] when the value of the signature header
+// does not match the expected one.
 var ErrCallbackSignatureMismatch = errors.New("installment: callback signature mismatch")
 
-// MaxResponseBytes — стеля на розмір відповіді, після якої тіло
-// обрізається. Захист від OOM у разі зловмисного/glitched проксі.
-// PDF-документи (payslips, інвойси) можуть досягати кількох MB; 50 MiB
-// — з великим запасом.
+// MaxResponseBytes is the cap on response size beyond which the body
+// is truncated. Guards against OOM when a malicious or glitched
+// proxy returns enormous bodies. PDF documents (payslips, invoices)
+// can reach a few MB; 50 MiB leaves plenty of headroom.
 const MaxResponseBytes = 50 << 20
 
-// APIError — структура помилки сервера (тіло відповіді {"message": "..."}).
+// APIError is the server-error shape (response body
+// {"message": "..."}).
 type APIError struct {
 	StatusCode int
 	Message    string `json:"message"`
 	TraceID    string
 }
 
-// Error реалізує error.
+// Error implements error.
 func (e *APIError) Error() string {
 	if e.TraceID != "" {
 		return fmt.Sprintf("installment: %d: %s (trace=%s)", e.StatusCode, e.Message, e.TraceID)
@@ -56,24 +58,24 @@ func (e *APIError) Error() string {
 	return fmt.Sprintf("installment: %d: %s", e.StatusCode, e.Message)
 }
 
-// Option — функціональна опція [New].
+// Option is a functional option for [New].
 type Option func(*Client)
 
-// WithBaseURL перевизначає базовий URL (за дефолтом — production).
+// WithBaseURL overrides the base URL (default is production).
 //
-// УВАГА (безпека): передавай тільки https-URL у не-локальному
-// середовищі. installment-секрет ходить у HMAC-підписі тіла —
-// якщо хтось перехопить пару (body, signature) через http, він
-// зможе підробити callback (бо secret = HMAC-ключ). На відміну від
-// root [monobank.WithBaseURL], тут немає логера для runtime-warn,
-// тому http-схема пропускається мовчки. Localhost / 127.0.0.1 — ОК
-// для тестів через httptest.
+// CAUTION (security): pass only https URLs in non-local environments.
+// The installment secret travels in the body's HMAC signature — if
+// someone intercepts a (body, signature) pair over http they can
+// forge a callback (since the secret is the HMAC key). Unlike root
+// [monobank.WithBaseURL], there is no logger here for a runtime
+// warning, so an http scheme is accepted silently. Localhost /
+// 127.0.0.1 is fine for tests via httptest.
 func WithBaseURL(u string) Option { return func(c *Client) { c.baseURL = u } }
 
-// WithHTTPClient підставляє кастомний http.Client.
+// WithHTTPClient installs a custom http.Client.
 func WithHTTPClient(h *http.Client) Option { return func(c *Client) { c.h = h } }
 
-// Client — клієнт API «Покупка частинами». Будуй через [New].
+// Client is the installment API client. Build one via [New].
 type Client struct {
 	h       *http.Client
 	baseURL string
@@ -81,16 +83,16 @@ type Client struct {
 	secret  []byte
 }
 
-// New повертає клієнт із дефолтним таймаутом 30с, налаштований на
-// production. Для тестів використовуй [WithBaseURL] зі значенням
-// [BaseURLSandbox] або [BaseURLStage].
+// New returns a client with a 30s default timeout, pointed at
+// production. For tests use [WithBaseURL] with [BaseURLSandbox] or
+// [BaseURLStage].
 //
-// УВАГА: дефолт — production. Якщо забути [WithBaseURL] у тестовому
-// середовищі, перший виклик уже вдарить по бойовому API. Sandbox- і
-// production-secrets різні, тож автентифікація провалиться при
-// несумісності — але якщо у тебе production-secret в тестовому коді,
-// проведеться реальна операція. Завжди передавай явний BaseURL у
-// non-prod коді.
+// CAUTION: the default is production. Forgetting [WithBaseURL] in a
+// test environment makes the first call hit the live API. Sandbox
+// and production secrets differ, so authentication will fail on
+// mismatch — but if your test code holds a production secret, a real
+// operation will be performed. Always pass an explicit BaseURL in
+// non-prod code.
 //
 //	cli := installment.New("test_store_with_confirm", "secret_98765432--123-123",
 //	    installment.WithBaseURL(installment.BaseURLSandbox))
@@ -107,9 +109,9 @@ func New(storeID, secret string, opts ...Option) *Client {
 	return c
 }
 
-// LogValue — slog-серіалізатор, що приховує store-secret. Без нього
-// `slog.Info("cli", "installment", cli)` вивів би сирий байт-зріз
-// секрету як значення поля.
+// LogValue is the slog serializer that hides the store secret.
+// Without it, `slog.Info("cli", "installment", cli)` would dump the
+// raw byte slice of the secret as the field value.
 func (c *Client) LogValue() slog.Value {
 	return slog.GroupValue(
 		slog.String("storeID", c.storeID),
@@ -118,28 +120,30 @@ func (c *Client) LogValue() slog.Value {
 	)
 }
 
-// Sign обчислює base64(HMAC-SHA256(body, secret)). Експортовано для
-// тестів та для верифікації вхідних callback-запитів (підпис у заголовку
-// signature рахується тим самим способом).
+// Sign computes base64(HMAC-SHA256(body, secret)). Exported for
+// tests and for verifying incoming callback requests (the signature
+// in the signature header is computed the same way).
 func (c *Client) Sign(body []byte) string {
 	mac := hmac.New(sha256.New, c.secret)
 	mac.Write(body)
 	return base64.StdEncoding.EncodeToString(mac.Sum(nil))
 }
 
-// VerifyCallback повертає nil, якщо HMAC-SHA256(body, secret) збігається
-// з [ErrCallbackSignatureMismatch] значенням заголовка signature,
-// прийнятим у вхідному callback. Викликай перед обробкою тіла, інакше
-// будь-хто може прислати фейковий запит.
+// VerifyCallback returns nil when HMAC-SHA256(body, secret) matches
+// the value of the signature header received in an incoming
+// callback; otherwise it returns [ErrCallbackSignatureMismatch].
+// Call it before processing the body, otherwise anyone can send a
+// fake request.
 //
-// Реалізація відхиляє підпис із некоректною довжиною (base64 від
-// 32-байтного HMAC-SHA256 завжди має 44 символи) ДО обчислення HMAC —
-// це захист від CPU-DoS, коли атакуючий шле гігабайтне тіло з порожнім
-// або довільним signature. Незалежно від довжини, фінальне порівняння
-// constant-time через [hmac.Equal].
+// The implementation rejects a signature of incorrect length
+// (base64 of a 32-byte HMAC-SHA256 is always 44 characters) BEFORE
+// computing the HMAC — this guards against a CPU-DoS where an
+// attacker sends a gigabyte body with an empty or arbitrary
+// signature. Regardless of length, the final comparison is
+// constant-time via [hmac.Equal].
 //
-// Окремо рекомендую загорнути запит у [http.MaxBytesReader] перед
-// викликом VerifyCallback, щоб обмежити верхню межу читання тіла.
+// Also wrap the request body in [http.MaxBytesReader] before calling
+// VerifyCallback to cap the upper bound on body reads.
 func (c *Client) VerifyCallback(body []byte, signatureHeader string) error {
 	const wantLen = 44 // base64.StdEncoding.EncodedLen(sha256.Size)
 	if len(signatureHeader) != wantLen {
@@ -152,8 +156,9 @@ func (c *Client) VerifyCallback(body []byte, signatureHeader string) error {
 	return nil
 }
 
-// doJSON виконує POST з JSON-тілом, підписує його, перевіряє очікуваний
-// статус і декодує відповідь у out (якщо out != nil).
+// doJSON performs a POST with a JSON body, signs it, checks the
+// expected status, and decodes the response into out (when
+// out != nil).
 func (c *Client) doJSON(ctx context.Context, path string, in, out any, wantStatus int) error {
 	body, err := json.Marshal(in)
 	if err != nil {
@@ -188,7 +193,8 @@ func (c *Client) doJSON(ctx context.Context, path string, in, out any, wantStatu
 	return nil
 }
 
-// doPDF виконує POST з JSON-тілом і повертає сире тіло відповіді (PDF).
+// doPDF performs a POST with a JSON body and returns the raw
+// response body (PDF).
 func (c *Client) doPDF(ctx context.Context, path string, in any) ([]byte, error) {
 	body, err := json.Marshal(in)
 	if err != nil {

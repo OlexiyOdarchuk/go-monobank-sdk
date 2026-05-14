@@ -13,78 +13,83 @@ import (
 	"golang.org/x/sync/singleflight"
 )
 
-// DefaultMaxBodyBytes — стеля на розмір webhook-body, якщо не вказано
-// інше через [Options.MaxBodyBytes]. Реальні Mono-payload-и — десятки
-// KB; 1 MiB з великим запасом і захищає від OOM, коли атакуючий шле
-// гігабайтне тіло на твій webhook-URL.
+// DefaultMaxBodyBytes is the cap on webhook body size used when
+// [Options.MaxBodyBytes] is not set. Real Mono payloads are tens of
+// KB; 1 MiB leaves headroom and guards against OOM when an attacker
+// posts a gigabyte body to your webhook URL.
 const DefaultMaxBodyBytes = 1 << 20
 
-// minRefreshInterval — мінімальна пауза між викликами /bank/sync для
-// оновлення серверного ключа. Захист від DoS-амплифікації, коли
-// атакуючий заливає handler POST-ами з випадковим X-Key-Id.
+// minRefreshInterval is the minimum pause between calls to
+// /bank/sync to refresh the server key. Guards against DoS
+// amplification when an attacker floods the handler with POSTs that
+// have a random X-Key-Id.
 const minRefreshInterval = 30 * time.Second
 
-// KeyProvider — будь-що, що вміє віддати поточний публічний ключ банку.
-// [bank.Client] його реалізує; у тестах можна підставити фейк.
+// KeyProvider is anything that knows how to return the bank's current
+// public key. [bank.Client] implements it; in tests, plug in a fake.
 type KeyProvider interface {
 	ServerKey(ctx context.Context) (*bank.ServerKey, error)
 }
 
-// Options конфігурує [NewHandler].
+// Options configures [NewHandler].
 type Options struct {
-	// Keys — обов'язковий. Handler викликає Keys.ServerKey при старті,
-	// щоб завантажити поточний публічний ключ банку, і ще раз — щоразу,
-	// коли вхідний X-Key-Id перестає збігатися з кешованим (тобто Mono
-	// провернула ключ).
+	// Keys is required. The handler calls Keys.ServerKey at startup
+	// to load the current bank public key, and again whenever an
+	// incoming X-Key-Id stops matching the cached one (i.e. Mono
+	// rotated the key).
 	Keys KeyProvider
 
-	// OnEvent — обов'язковий. Отримує верифікований і розпарсений
-	// payload. Якщо повертає не-nil error — handler відповідає 500, і
-	// Mono ретраїть доставку; nil → 200 (ack).
+	// OnEvent is required. It receives the verified and parsed
+	// payload. If it returns a non-nil error, the handler responds
+	// 500 and Mono retries delivery; nil → 200 (ack).
 	OnEvent func(ctx context.Context, event *Response) error
 
-	// OnUnknownType — необов'язковий. Викликається для payload-ів, які
-	// пройшли верифікацію підпису, але мають невідомий "type" (не
-	// входить у Type*-константи). Якщо nil — handler тихо ack-ить 200.
-	// Payload автентичний, просто його тип ще не представлений у SDK.
+	// OnUnknownType is optional. It is invoked for payloads that
+	// pass signature verification but have an unknown "type" (not
+	// in the Type* constants). When nil, the handler silently acks
+	// with 200. The payload is authentic — its type just is not
+	// represented in the SDK yet.
 	OnUnknownType func(ctx context.Context, raw []byte)
 
-	// OnError — необов'язковий. Викликається для внутрішніх збоїв, які
-	// handler не може показати через HTTP-відповідь (наприклад, провал
-	// рефрешу ключа). Використовуй для логування / метрик.
+	// OnError is optional. It is invoked for internal failures the
+	// handler cannot surface through the HTTP response (for example,
+	// a key-refresh failure). Use for logging / metrics.
 	OnError func(err error)
 
-	// Dedup — необов'язковий. Якщо вказаний, handler консультується з
-	// ним перед OnEvent і скіпає дублікати (відповідає 200, щоб Mono
-	// припинила ретраї). Без deduper-а подія, яку OnEvent успішно
-	// обробив, але клієнт не встиг отримати 200 — буде оброблена двічі.
+	// Dedup is optional. When set, the handler consults it before
+	// OnEvent and skips duplicates (responding 200 so Mono stops
+	// retrying). Without a deduper, an event OnEvent processed
+	// successfully but for which the client did not get a 200 in
+	// time will be processed twice.
 	//
-	// Для production обов'язково використовуй ПЕРСИСТЕНТНИЙ deduper
-	// (Redis/SQL) — in-memory [NewMemoryDeduper] втрачає стан при
-	// рестарті і дозволяє replay-атаку: атакуючий, що раз перехопив
-	// валідно підписаний webhook, може повторно його надіслати після
-	// твого рестарту, бо Mono не включає freshness-токен у payload.
+	// For production always use a PERSISTENT deduper (Redis/SQL) —
+	// the in-memory [NewMemoryDeduper] loses state on restart and
+	// allows a replay attack: an attacker that intercepted a
+	// validly signed webhook once can re-send it after your
+	// restart, because Mono does not include a freshness token in
+	// the payload.
 	Dedup Deduper
 
-	// MaxBodyBytes — верхня межа розміру тіла webhook-запиту. 0 або
-	// негативне значення → [DefaultMaxBodyBytes] (1 MiB). Реальні
-	// payload-и Mono — десятки KB, тож стандартний ліміт безпечний.
-	// При перевищенні handler відповідає 413 Request Entity Too Large.
+	// MaxBodyBytes is the upper bound on the webhook request body.
+	// 0 or a negative value falls back to [DefaultMaxBodyBytes]
+	// (1 MiB). Real Mono payloads are tens of KB, so the default
+	// limit is safe. When exceeded, the handler responds with 413
+	// Request Entity Too Large.
 	MaxBodyBytes int64
 }
 
-// Handler — готовий http.Handler, який приймає підписані webhook-и Mono.
-// Поведінка:
+// Handler is a ready http.Handler that accepts signed Mono webhooks.
+// Behavior:
 //
-//   - GET /твій-шлях — повертає 200. Mono пінгує URL через GET при
-//     підписці, щоб переконатися, що він живий.
-//   - POST — читає body, верифікує X-Sign проти кешованого ключа
-//     (перевикликає [KeyProvider.ServerKey] якщо X-Key-Id змінився),
-//     парсить payload і запускає OnEvent. Поганий підпис → 401;
-//     OnEvent повернув error → 500 (Mono ретраїть); інакше 200.
+//   - GET /your-path returns 200. Mono pings the URL with a GET on
+//     subscription to verify that it is alive.
+//   - POST reads the body, verifies X-Sign against the cached key
+//     (calling [KeyProvider.ServerKey] again if X-Key-Id changed),
+//     parses the payload and runs OnEvent. Bad signature → 401;
+//     OnEvent returned an error → 500 (Mono retries); otherwise 200.
 //
-// Монтується на будь-який роутер: net/http, chi, gin через
-// http.HandlerFunc — це звичайний http.Handler.
+// Mounts on any router: net/http, chi, gin via http.HandlerFunc — it
+// is a regular http.Handler.
 type Handler struct {
 	opts         Options
 	maxBodyBytes int64
@@ -98,18 +103,18 @@ type Handler struct {
 	lastRefreshAt time.Time
 }
 
-// Помилки конфігурації Handler-а.
+// Handler configuration errors.
 var (
-	// ErrNilKeyProvider — у Options не задано Keys.
+	// ErrNilKeyProvider indicates that Options.Keys is not set.
 	ErrNilKeyProvider = errors.New("webhook.Options.Keys is required")
-	// ErrNilOnEvent — у Options не задано OnEvent.
+	// ErrNilOnEvent indicates that Options.OnEvent is not set.
 	ErrNilOnEvent = errors.New("webhook.Options.OnEvent is required")
 )
 
-// NewHandler валідує opts і прогріває кеш ключа (синхронно тягне
-// серверний ключ через Keys.ServerKey). Передавай некасельовуваний
-// контекст, якщо немає вимоги обмежити час старту — без початкового
-// ключа handler непрацездатний.
+// NewHandler validates opts and warms the key cache (it
+// synchronously fetches the server key via Keys.ServerKey). Pass a
+// non-cancelable context if you have no need to bound startup time
+// — the handler is not usable without the initial key.
 func NewHandler(ctx context.Context, opts Options) (*Handler, error) {
 	if opts.Keys == nil {
 		return nil, ErrNilKeyProvider
@@ -128,8 +133,8 @@ func NewHandler(ctx context.Context, opts Options) (*Handler, error) {
 	return h, nil
 }
 
-// KeyID повертає кешований ідентифікатор серверного ключа. Корисно для
-// діагностики/метрик (бачити, як часто ключ ротується).
+// KeyID returns the cached server-key identifier. Handy for
+// diagnostics/metrics (to see how often the key rotates).
 func (h *Handler) KeyID() string {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
@@ -150,16 +155,17 @@ func (h *Handler) refresh(ctx context.Context) error {
 	return nil
 }
 
-// refreshCoalesced виконує refresh, об'єднуючи паралельні виклики через
-// singleflight (один похід у /bank/sync на пак конкурентних запитів) і
-// дроссельуючи частоту до [minRefreshInterval] (захист від DoS-
-// амплифікації, коли атакуючий шле POST з випадковим X-Key-Id).
+// refreshCoalesced runs refresh, coalescing parallel calls via
+// singleflight (one hit to /bank/sync per burst of concurrent
+// requests) and throttling the frequency to [minRefreshInterval]
+// (guards against DoS amplification when an attacker posts with a
+// random X-Key-Id).
 //
-// Внутрішній double-check на lastRefreshAt захищає від рейсу: коли
-// singleflight завершує одну Do-функцію, а друга хвиля goroutine-ів
-// уже встигла пройти зовнішній throttle-check і потрапити у Do —
-// другий fn виявить, що lastRefreshAt свіжий, і одразу вийде без
-// нового виклику ServerKey().
+// The internal double-check on lastRefreshAt protects against a
+// race: when singleflight finishes one Do function and a second
+// wave of goroutines has already cleared the outer throttle check
+// and entered Do, the second fn notices lastRefreshAt is fresh and
+// exits immediately without another call to ServerKey().
 func (h *Handler) refreshCoalesced(ctx context.Context) error {
 	h.refreshMu.Lock()
 	if time.Since(h.lastRefreshAt) < minRefreshInterval {
@@ -193,8 +199,9 @@ func (h *Handler) currentKey() *bank.ServerKey {
 	return h.key
 }
 
-// ServeHTTP реалізує http.Handler — вся логіка прийому вебхука: GET
-// підтвердження, POST з верифікацією + парсингом + dedup + OnEvent.
+// ServeHTTP implements http.Handler — the full webhook-ingest logic:
+// GET confirmation, POST with verification + parsing + dedup +
+// OnEvent.
 func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
@@ -211,7 +218,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	limited := http.MaxBytesReader(w, r.Body, h.maxBodyBytes)
 	body, err := io.ReadAll(limited)
 	if err != nil {
-		// MaxBytesReader повертає *http.MaxBytesError при перевищенні.
+		// MaxBytesReader returns *http.MaxBytesError on overflow.
 		var mbe *http.MaxBytesError
 		if errors.As(err, &mbe) {
 			http.Error(w, "request body too large", http.StatusRequestEntityTooLarge)
@@ -223,8 +230,8 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	key := h.currentKey()
 	if key == nil {
-		// Захист на випадок Handler{} напряму (без NewHandler) — без
-		// ключа верифікувати неможливо.
+		// Guard against constructing Handler{} directly (without
+		// NewHandler) — verification is impossible without a key.
 		h.reportError(errors.New("ServerKey not loaded"))
 		http.Error(w, "key not ready", http.StatusServiceUnavailable)
 		return

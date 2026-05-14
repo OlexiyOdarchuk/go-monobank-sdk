@@ -4,9 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -248,4 +250,14 @@ func TestQRDetails(t *testing.T) {
 	out, err := c.QRDetails(context.Background(), "Q1")
 	require.NoError(t, err)
 	assert.Equal(t, int64(100), out.Amount.Minor)
+}
+
+// TokenAuth.LogValue приховує токен у slog-виводі.
+func TestTokenAuth_LogValueRedactsToken(t *testing.T) {
+	var buf strings.Builder
+	logger := slog.New(slog.NewTextHandler(&buf, nil))
+	logger.Info("auth", "creds", TokenAuth{Token: "super-secret"})
+	out := buf.String()
+	assert.NotContains(t, out, "super-secret")
+	assert.Contains(t, out, "***")
 }

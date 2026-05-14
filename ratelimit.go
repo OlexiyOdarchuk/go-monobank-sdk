@@ -10,23 +10,23 @@ import (
 // for concurrent use. [Wait] blocks until a token is available or ctx
 // is canceled.
 //
-// Сигнатура збігається з *golang.org/x/time/rate.Limiter.Wait — туди
-// можна підставити будь-який вже існуючий лімітер без обгортки.
+// The signature matches *golang.org/x/time/rate.Limiter.Wait — any
+// existing limiter can be dropped in without a wrapper.
 type RateLimiter interface {
 	Wait(ctx context.Context) error
 }
 
-// Limiter — простий token-bucket. Корзина наповнюється 1 токеном кожні
-// every; максимум — burst токенів одночасно. Безпечний для конкурентного
-// використання.
+// Limiter is a simple token bucket. The bucket refills at one token
+// every every; up to burst tokens are stored at once. Safe for
+// concurrent use.
 //
-// Дефолтні ліміти Mono:
+// Mono's default limits:
 //
-//   - /personal/client-info — 1 виклик на 60 с (every=time.Minute, burst=1)
-//   - /personal/statement/{account}/… — 1 виклик на акаунт на 60 с
+//   - /personal/client-info — 1 call per 60 s (every=time.Minute, burst=1)
+//   - /personal/statement/{account}/… — 1 call per account per 60 s
 //
-// Для per-account обмежень створюй окремий [Limiter] (і відповідно
-// окремий клієнт) на кожен акаунт або реалізуй власний [RateLimiter].
+// For per-account limits, create a separate [Limiter] (and a separate
+// client) for each account, or implement a custom [RateLimiter].
 type Limiter struct {
 	mu     sync.Mutex
 	every  time.Duration
@@ -35,12 +35,11 @@ type Limiter struct {
 	last   time.Time
 }
 
-// NewLimiter повертає лімітер, що допускає 1 запит кожні every із
-// можливістю короткочасних сплесків до burst. every <= 0 означає «без
-// обмежень» — Wait завжди повертається миттєво. burst < 1 нормалізується
-// до 1.
+// NewLimiter returns a limiter that allows one request every every
+// with short bursts up to burst. every <= 0 means "no limit" — Wait
+// always returns immediately. burst < 1 is normalized to 1.
 //
-//	// 1 запит на 60 секунд (як у /personal/client-info)
+//	// 1 request per 60 seconds (as in /personal/client-info)
 //	lim := monobank.NewLimiter(time.Minute, 1)
 //	cli := personal.New(token, monobank.WithRateLimiter(lim))
 func NewLimiter(every time.Duration, burst int) *Limiter {
@@ -55,8 +54,8 @@ func NewLimiter(every time.Duration, burst int) *Limiter {
 	}
 }
 
-// Wait блокує до моменту, коли доступний хоча б один токен, або до
-// скасування контексту.
+// Wait blocks until at least one token is available or the context
+// is canceled.
 func (l *Limiter) Wait(ctx context.Context) error {
 	if err := ctx.Err(); err != nil {
 		return err
@@ -92,13 +91,14 @@ func (l *Limiter) Wait(ctx context.Context) error {
 	}
 }
 
-// limiterKeyType — приватний тип ключа контексту, щоб уникнути колізій
-// з ключами інших пакетів.
+// limiterKeyType is the private context-key type, used to avoid
+// collisions with keys from other packages.
 type limiterKeyType struct{}
 
-// WithLimiterKey повертає копію ctx із key, який [KeyedLimiter] використає
-// для вибору відповідної per-key корзини. Якщо ключа в контексті нема,
-// KeyedLimiter трактує запит як "" (спільна дефолтна корзина).
+// WithLimiterKey returns a copy of ctx carrying key, which
+// [KeyedLimiter] uses to pick the matching per-key bucket. If the
+// key is absent from the context, KeyedLimiter treats the request as
+// "" (the shared default bucket).
 //
 //	ctx = monobank.WithLimiterKey(ctx, accountID)
 //	cli.Transactions(ctx, accountID, from, to)
@@ -106,20 +106,21 @@ func WithLimiterKey(ctx context.Context, key string) context.Context {
 	return context.WithValue(ctx, limiterKeyType{}, key)
 }
 
-// limiterKeyFrom повертає ключ, прокладений [WithLimiterKey], або "".
+// limiterKeyFrom returns the key threaded through by [WithLimiterKey]
+// or "".
 func limiterKeyFrom(ctx context.Context) string {
 	v, _ := ctx.Value(limiterKeyType{}).(string)
 	return v
 }
 
-// KeyedLimiter ліниво створює окремий [Limiter] на кожен ключ — типово
-// це accountID, бо Mono обмежує /personal/statement/{account}/… незалежно
-// для кожного рахунку. Реалізує [RateLimiter]: ключ береться з контексту
-// через [WithLimiterKey].
+// KeyedLimiter lazily creates a separate [Limiter] per key — typically
+// the accountID, because Mono limits /personal/statement/{account}/…
+// independently per account. Implements [RateLimiter]: the key is
+// taken from the context via [WithLimiterKey].
 //
-//	// idleTTL=10*time.Minute — корзини, до яких не зверталися
-//	// 10 хв, видаляються фоновим sweeper-ом, щоб мапа не росла
-//	// безкінечно у long-running процесах.
+//	// idleTTL=10*time.Minute — buckets that have not been used for
+//	// 10 min are removed by a background sweeper so the map does
+//	// not grow without bound in long-running processes.
 //	klim := monobank.NewKeyedLimiter(time.Minute, 1, 10*time.Minute)
 //	defer klim.Stop()
 //
@@ -131,7 +132,7 @@ func limiterKeyFrom(ctx context.Context) string {
 //	    // …
 //	}
 //
-// Безпечний для конкурентного використання.
+// Safe for concurrent use.
 type KeyedLimiter struct {
 	every   time.Duration
 	burst   int
@@ -149,18 +150,17 @@ type keyedBucket struct {
 	lastAccess time.Time
 }
 
-// NewKeyedLimiter повертає лімітер, що для кожного унікального ключа
-// створює власну корзину з параметрами every / burst (як [NewLimiter]).
+// NewKeyedLimiter returns a limiter that, for each unique key, creates
+// its own bucket with the every / burst parameters (as in [NewLimiter]).
 //
-// idleTTL > 0 запускає фоновий sweeper, який видаляє корзини, до яких
-// не зверталися довше за idleTTL (захист від витоку пам'яті при
-// великій кількості унікальних ключів). idleTTL <= 0 — eviction
-// вимкнений; підходить для коротких CLI-утиліт, але long-running
-// процесам обов'язково передавай розумне значення (наприклад, у 10×
-// більше за every).
+// idleTTL > 0 starts a background sweeper that removes buckets not
+// touched for longer than idleTTL (guards against memory leaks with a
+// large number of unique keys). idleTTL <= 0 disables eviction; fine
+// for short-lived CLI utilities, but long-running processes should
+// always pass a reasonable value (for example, 10× every).
 //
-// Завжди викликай [KeyedLimiter.Stop] на завершенні роботи (через
-// defer одразу після створення), щоб зупинити sweeper-горутину.
+// Always call [KeyedLimiter.Stop] on shutdown (via defer right after
+// construction) to stop the sweeper goroutine.
 func NewKeyedLimiter(every time.Duration, burst int, idleTTL time.Duration) *KeyedLimiter {
 	if burst < 1 {
 		burst = 1
@@ -178,10 +178,11 @@ func NewKeyedLimiter(every time.Duration, burst int, idleTTL time.Duration) *Key
 	return k
 }
 
-// Stop зупиняє фоновий sweeper. Безпечно викликати кілька разів і на
-// лімітері без sweeper-а (idleTTL <= 0) — у такому випадку no-op.
-// Після Stop лімітер усе ще обслуговує Wait/WaitKey-виклики коректно;
-// просто корзини більше не евіктяться автоматично.
+// Stop stops the background sweeper. Safe to call multiple times,
+// and on a limiter without a sweeper (idleTTL <= 0) — in that case
+// it is a no-op. After Stop the limiter still serves Wait/WaitKey
+// calls correctly; the buckets are simply no longer evicted
+// automatically.
 func (k *KeyedLimiter) Stop() {
 	k.stopOnce.Do(func() { close(k.stopCh) })
 }
@@ -213,15 +214,16 @@ func (k *KeyedLimiter) evictIdle(now time.Time) {
 	}
 }
 
-// WaitKey блокує до моменту, коли в корзині для key буде доступний токен.
-// Зручно, коли користувач не хоче пробрасувати ключ через контекст.
+// WaitKey blocks until a token is available in the bucket for key.
+// Handy when the caller does not want to thread the key through the
+// context.
 func (k *KeyedLimiter) WaitKey(ctx context.Context, key string) error {
 	return k.bucket(key).Wait(ctx)
 }
 
-// Wait — реалізація [RateLimiter]. Витягує ключ із контексту через
-// [WithLimiterKey]; якщо ключа нема — використовує спільну корзину з
-// ключем "".
+// Wait implements [RateLimiter]. It extracts the key from the
+// context via [WithLimiterKey]; if no key is present, it uses the
+// shared bucket with the "" key.
 func (k *KeyedLimiter) Wait(ctx context.Context) error {
 	return k.WaitKey(ctx, limiterKeyFrom(ctx))
 }
