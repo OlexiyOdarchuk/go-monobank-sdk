@@ -7,7 +7,110 @@
 
 ## [Unreleased]
 
-## [1.0.0] — 2026-05-14
+## [1.1.0] — 2026-05-14
+
+Реліз із виправленнями знайденими у повному code review v1.0.0:
+runtime-баги retry/limiter-стеку, DoS-векторів у webhook/installment/jar
++ публічна type-cleanup. Часом source-incompatible — оновлення з v1.0.0
+вимагає реімпорту, але v1.0.0 ще ніхто не використовував.
+
+### Fixed (critical)
+
+- **Retry POST з body тепер працює.** До цього `client.Do` не
+  скидав `req.Body` між спробами; будь-який `acquiring.CreateInvoice`,
+  `personal.SetWebHook` чи `business.PreparePayment`, що тригернув
+  ретрай на 5xx/429, надсилав другий запит із порожнім тілом і
+  отримував "400 Bad Request". Тепер тіло один раз буферується через
+  `req.GetBody`. Регресійний тест: `TestClient_Do_retriesPreserveBody`.
+- **POST без `Idempotency-Key` більше не ретраїться автоматично.**
+  Раніше 502/504 від балансера після того, як upstream уже обробив
+  запит, створював дублікат операції. Тепер POST/PATCH ретраяться
+  тільки за наявності `Idempotency-Key`. Поведінку відновлюй через
+  нову опцію `monobank.WithUnsafeRetries(true)`.
+- **`KeyedLimiter` більше не тече памʼяттю.** Дефолтний eviction
+  через TTL+sweeper. Сигнатура `NewKeyedLimiter` тепер приймає
+  третій параметр `idleTTL`; передавай 0 для коротких CLI, розумний
+  TTL (~10× за `every`) для long-running сервісів. Виклик
+  `Stop()` зупиняє sweeper-горутину.
+- **`backoff` більше не панікує при високих attempts.** До цього
+  `WithRetry(40, 500ms, 30s)` падав із `rand.Int63n: invalid argument`
+  через int64-overflow на 35-й спробі.
+
+### Fixed (high — DoS hardening)
+
+- **Webhook handler обмежує body 1 MiB за замовчуванням** (
+  `webhook.Options.MaxBodyBytes`). Без цього атакуючий міг
+  OOM-нути сервіс, надіславши гігабайтне тіло.
+- **Webhook ServerKey refresh** тепер через
+  `golang.org/x/sync/singleflight` + 30 с дросель. Без цього
+  атакуючий, що знає публічний URL вебхуку, амплифікував DoS на
+  `/bank/sync` 1:1, вичерпуючи ліміт Mono і провалюючи реальні
+  ротації ключа.
+- **`installment` і `jar` body обмежений** через `io.LimitReader`
+  (50 MiB для PDF, 1 MiB для JSON).
+- **`installment.VerifyCallback` має fast-path** на довжину підпису
+  до обчислення HMAC — без цього атакуючий з гігабайтним body +
+  порожнім signature зʼїдав CPU.
+- **Webhook handler nil-key захист.** `Handler{}` без `NewHandler`
+  тепер віддає 503 замість NPE.
+
+### Fixed (medium / low)
+
+- `bank.serverkey`: валідація точки на кривій через
+  `secp256k1.ParsePubKey` (захист від MITM-injected off-curve key).
+- `acquiring.ParsePubKey`: явне відхилення не-P-256 кривих.
+- `auth`: deprecated `elliptic.Marshal` замінено на нативний
+  `secp256k1.SerializeUncompressed`.
+- `personal.Transactions`/`corporate.Transactions`: `url.PathEscape`
+  для accountID — як уже є в `business`.
+- `parseRetryAfter` повертає `-1` для відсутнього header-а — щоб
+  відрізняти від явного `0` (миттєвий повтор).
+- `client.Do` коректно обробляє 204 No Content і `Content-Length: 0`
+  — без `io.EOF` як помилки декоду.
+- `math/rand` → `math/rand/v2` у backoff (без глобального мутекса).
+- `WithBaseURL` логує warn при не-https + не-localhost (token у
+  cleartext — майже завжди помилка конфігурації).
+- README виправлено: dedup-ключ — `event.Data.Transaction.ID` (а не
+  неіснуюче `Response.UID`); business має 23 endpoint-и (не 17).
+
+### Added
+
+- `monobank.RateLimiter` sentinel-помилки: `ErrUnauthorized`,
+  `ErrForbidden`, `ErrNotFound`, `ErrTooManyRequests`. `APIError.Is`
+  робить `errors.Is(err, monobank.ErrUnauthorized)` валідним.
+- `monobank.WithUnsafeRetries(bool)` — opt-in повернення старої
+  поведінки ретраю POST без `Idempotency-Key`.
+- `currency.Code.Decimals()` метод; `Money.Major`/`Money.String`
+  тепер currency-aware (JPY=0, інші 2 знаки).
+- `business.StatementAll`, `acquiring.SubscriptionListAll`,
+  `acquiring.SubscriptionPaymentsAll` — `iter.Seq2`-пагінатори.
+- `golang.org/x/sync` — нова залежність (singleflight у webhook).
+
+### Changed (BREAKING — source-incompatible)
+
+- `bank.Account.CurrencyCode int` → `Currency currency.Code`. Те саме
+  для `bank.Jar`, `bank.Transaction`. Wire-формат (`json:"currencyCode"`)
+  не змінюється.
+- `acquiring.*` усі поля `Ccy int` → `Currency currency.Code` (
+  `CreateInvoiceRequest`, `InvoiceStatusResponse`, `PaymentDirectResponse`,
+  `WalletPaymentRequest`, `CancelOp`, `QRDetails`, `StatementInvoice`,
+  `StatementRefund`, `SubscriptionCreateRequest`,
+  `SubscriptionStatusResponse`, `SubscriptionPayment`, `SyncPaymentRequest`).
+- `business.StatementItem.CurrencyCode string` → `CurrencyAlpha3 string`
+  (експліцитно, що це alpha-3, на відміну від інших Currency-полів).
+- `acquiring`: `WalletData.Status string` → `WalletStatus`;
+  `CancelOp.Status` / `CancelResponse.Status` /
+  `FinalizeResponse.Status` / `PaymentDirectResponse.Status` /
+  `StatementInvoice.Status` → `ProcessingStatus` (типізовані enum-и).
+- `auth.Permission` тепер typed `string` замість сирого; `PermSt`,
+  `PermPI`, `PermFOP` — `Permission`-консти. Сигнатура
+  `corporate.Client.Auth(...permissions ...auth.Permission)`,
+  `auth.CorpAuthMakerAPI.NewPermissions(...auth.Permission)`.
+- `monobank.NewKeyedLimiter(every, burst)` →
+  `NewKeyedLimiter(every, burst, idleTTL)`. Передавай `0` для
+  колишньої поведінки без eviction.
+
+
 
 Перший стабільний реліз. Публічний API зафіксовано: подальші мінорні
 версії додають функціональність без ламань; breaking-зміни вимагатимуть
@@ -114,6 +217,7 @@
 - `monobanktest` — мок-сервер на `httptest.Server` із fluent-builder-ами.
 - Пагінатори через `iter.Seq2` (Go 1.23+).
 
-[Unreleased]: https://github.com/OlexiyOdarchuk/go-monobank-sdk/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/OlexiyOdarchuk/go-monobank-sdk/compare/v1.1.0...HEAD
+[1.1.0]: https://github.com/OlexiyOdarchuk/go-monobank-sdk/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/OlexiyOdarchuk/go-monobank-sdk/compare/v0.1.0...v1.0.0
 [0.1.0]: https://github.com/OlexiyOdarchuk/go-monobank-sdk/releases/tag/v0.1.0

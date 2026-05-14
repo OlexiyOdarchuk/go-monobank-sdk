@@ -10,6 +10,12 @@
 //	srv.WithClientInfo(&bank.ClientInfo{ID: "c1", Name: "Test"})
 //	cli := personal.New("token", srv.Option())
 //	info, _ := cli.ClientInfo(ctx)  // повертає те, що зашили вище
+//
+// Покриття білдерами: наразі готові [Server.WithClientInfo],
+// [Server.WithRates], [Server.WithServerKey], [Server.WithStatement],
+// [Server.WithWebHookSubscription] — це переважно personal/corporate
+// + bank. Для acquiring/business/installment/jar використовуй
+// [Server.Handle] напряму, щоб додати матчинг на потрібний шлях.
 package monobanktest
 
 import (

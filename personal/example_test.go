@@ -7,7 +7,6 @@ import (
 	"os"
 	"time"
 
-	"github.com/OlexiyOdarchuk/go-monobank-sdk/currency"
 	"github.com/OlexiyOdarchuk/go-monobank-sdk/personal"
 )
 
@@ -19,8 +18,8 @@ func ExampleNew() {
 		log.Fatal(err)
 	}
 	for _, a := range info.Accounts {
-		fmt.Printf("%s · %d %s\n",
-			a.IBAN, a.Balance, currency.Code(a.Currency))
+		// Balance.String() форматує як "12.50 UAH".
+		fmt.Printf("%s · %s\n", a.IBAN, a.Balance)
 	}
 }
 
@@ -37,7 +36,9 @@ func ExampleClient_TransactionsRange() {
 		log.Fatal(err)
 	}
 	for _, t := range txs {
-		fmt.Printf("%s · %d · %s\n",
+		// Amount.String() форматує як "150.00 UAH"; MCCCode().Category()
+		// — людиночитана категорія операції.
+		fmt.Printf("%s · %s · %s\n",
 			t.Time.Format(time.RFC3339),
 			t.Amount, t.MCCCode().Category())
 	}

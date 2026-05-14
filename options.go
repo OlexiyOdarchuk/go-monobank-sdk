@@ -67,6 +67,11 @@ func WithAuth(a auth.Authorizer) Option {
 // Логер викликається на кожну спробу окремо — ретраї дадуть кілька
 // записів. nil ігнорується. Дефолт: не логувати.
 //
+// УВАГА (PII): на рівні Debug у логи потрапляє повний URL запиту,
+// включно з path-сегментом accountID для /personal/statement/{acc}/...
+// У production не вмикай Debug, або налаштуй handler-фільтр у власному
+// slog.Handler (банківська тайна). Info/Warn — безпечні.
+//
 //	cli := personal.New(token, monobank.WithLogger(slog.Default()))
 func WithLogger(l *slog.Logger) Option {
 	return func(c *Client) {

@@ -40,7 +40,7 @@ Go 1.25+ (вимога самого OpenTelemetry).
 |---|---|---|---|
 | Open API — personal (X-Token) | [api.monobank.ua/docs](https://api.monobank.ua/docs/) | `personal` | 4 |
 | Open API — corporate (ECDSA) + monoКЕП | [corporate.html](https://api.monobank.ua/docs/corporate.html) | `corporate` | 11 |
-| corp-api для юр. осіб | [corp-api.monobank.ua](https://corp-api.monobank.ua/) | `business` | 17 |
+| corp-api для юр. осіб | [corp-api.monobank.ua](https://corp-api.monobank.ua/) | `business` | 23 |
 | Acquiring (`/api/merchant/*`) | [acquiring.html](https://api.monobank.ua/docs/acquiring.html) | `acquiring` | 31 |
 | Покупка частинами (HMAC-SHA256) | [chast docs](https://u2-demo-ext.mono.st4g3.com/docs/index.html) | `installment` | 14 |
 | JAR / банки (community) | community docs | `jar` | 2 |
@@ -55,7 +55,7 @@ monobank-sdk/
 │                   (ClientInfo, Account, Jar, Transaction) + Rates.Convert
 ├── personal/       Personal Open API (X-Token)
 ├── corporate/      Corporate Open API (ECDSA) + monoКЕП
-├── business/       corp-api.monobank.ua — 17 endpoint-ів
+├── business/       corp-api.monobank.ua — 23 endpoint-и
 ├── acquiring/      /api/merchant/* — 31 endpoint (інвойси, QR, wallet,
 │                   subscriptions, monopay-keys, split, T2P) +
 │                   ECDSA-верифікація webhook

@@ -76,6 +76,13 @@ type Client struct {
 // production. Для тестів використовуй [WithBaseURL] зі значенням
 // [BaseURLSandbox] або [BaseURLStage].
 //
+// УВАГА: дефолт — production. Якщо забути [WithBaseURL] у тестовому
+// середовищі, перший виклик уже вдарить по бойовому API. Sandbox- і
+// production-secrets різні, тож автентифікація провалиться при
+// несумісності — але якщо у тебе production-secret в тестовому коді,
+// проведеться реальна операція. Завжди передавай явний BaseURL у
+// non-prod коді.
+//
 //	cli := installment.New("test_store_with_confirm", "secret_98765432--123-123",
 //	    installment.WithBaseURL(installment.BaseURLSandbox))
 func New(storeID, secret string, opts ...Option) *Client {
