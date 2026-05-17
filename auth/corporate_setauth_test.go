@@ -57,8 +57,8 @@ func TestCorp_SetAuth_withPermissions(t *testing.T) {
 // Permission — typed string, тож константи мають правильний
 // тип, конкатенація летерів зберігається, custom Permission приймається.
 func TestPermission_typedStringSemantics(t *testing.T) {
-	// Compile-time: PermSt має тип Permission, не плоский string.
-	var p Permission = PermSt
+	p := PermSt
+	assert.IsType(t, Permission(""), p)
 	assert.Equal(t, "s", string(p))
 
 	// Custom Permission приймається (якщо Mono додасть нову букву —
