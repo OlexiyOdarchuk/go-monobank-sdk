@@ -624,7 +624,7 @@ Each one runs as `go run ./examples/<name>` with the matching env
 
 ## Documentation
 
-Full godoc per package, type, and function (in Ukrainian) at
+Full godoc per package, type, and function at
 <https://pkg.go.dev/github.com/OlexiyOdarchuk/go-monobank-sdk>.
 
 Wire identifiers (HTTP headers, JSON keys) stay in English — exactly as
