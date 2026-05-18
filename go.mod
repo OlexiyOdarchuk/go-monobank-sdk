@@ -1,6 +1,6 @@
 module github.com/OlexiyOdarchuk/go-monobank-sdk
 
-go 1.25.0
+go 1.23.0
 
 // v1.1.0 транзитивно тягнув golang.org/x/sync v0.20.0, що вимагає Go
 // 1.25.0 — модуль не збирався на CI-матриці 1.23/1.24, заявлених як
