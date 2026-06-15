@@ -18,7 +18,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        go: ['1.23.x', '1.24.x', '1.25.x', '1.26.x']
+        go: ['1.25.x', '1.26.x']
     runs-on: ubuntu-latest
     # go.work pins the workspace at Go 1.25 (otelmonobank requires it),
     # but the test matrix exercises older toolchains too. CI tests each
@@ -47,14 +47,11 @@ jobs:
         run: go build ./examples/...
       - run: go test -race -coverprofile=coverage.txt ./...
       - name: test otelmonobank sub-module
-        # otelmonobank tracks go.opentelemetry.io/otel which requires
-        # Go 1.25+; older toolchains skip this step.
-        if: matrix.go == '1.25.x' || matrix.go == '1.26.x'
         run: |
           cd otelmonobank
           go vet ./...
           go test -race ./...
-      - if: matrix.go == '1.24.x'
+      - if: matrix.go == '1.25.x'
         uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
         with:
           files: ./coverage.txt
