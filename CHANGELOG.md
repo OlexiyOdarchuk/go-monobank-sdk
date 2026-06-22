@@ -7,6 +7,38 @@
 
 ## [Unreleased]
 
+## [1.3.1] — 2026-06-22
+
+Проміжний patch-реліз: hardening за CodeQL-алертами, оновлення тулчейну
+й залежностей. Жодних змін публічного API.
+
+### Security
+
+- **CodeQL «Log entries created from user input»** — у прикладах
+  (`examples/personal`, `examples/webhook`, `examples/acquiring`,
+  `examples/business`, `examples/corporate`) рядки помилок тепер
+  санітизуються від CR/LF (`\r`/`\n`) перед записом у лог, щоб
+  виключити log-injection/forging. Стосується лише демо-коду; сам SDK
+  логів з user input не пише.
+
+### Changed
+
+- **`go.mod`** — `go`-директива піднята з `1.23` до `1.25.0` (узгоджено
+  з `go.work` і вимогами `otelmonobank`/`golang.org/x/sync`). CI-матриця
+  скорочена до `1.25.x`/`1.26.x`; крок тесту `otelmonobank` і
+  codecov-upload більше не гейтяться окремими версіями.
+- **README** — прибрано згадку, що godoc «українською» (формулювання
+  не відповідало стану документації).
+- **`auth.TestPermission_typedStringSemantics`** — перевірка типу через
+  `assert.IsType` замість compile-time-присвоєння.
+
+### Dependencies
+
+- `golang.org/x/sync` 0.10.0 → 0.21.0.
+- `otelmonobank`: `go.opentelemetry.io/otel`(`/trace`) 1.43.0 → 1.44.0.
+- CI: `actions/checkout` 6.0.2 → 7.0.0, `codecov/codecov-action`
+  6.0.0 → 7.0.0.
+
 ## [1.3.0] — 2026-05-14
 
 Повний прохід багфіксів за результатами code review, фокус на correctness/security/data-loss. Багато breaking changes у тому, як обробляються помилки конфігурації (раніше `panic` чи silent default, тепер `(*T, error)`).
@@ -508,7 +540,8 @@ defer klim.Stop()
 - `monobanktest` — мок-сервер на `httptest.Server` із fluent-builder-ами.
 - Пагінатори через `iter.Seq2` (Go 1.23+).
 
-[Unreleased]: https://github.com/OlexiyOdarchuk/go-monobank-sdk/compare/v1.3.0...HEAD
+[Unreleased]: https://github.com/OlexiyOdarchuk/go-monobank-sdk/compare/v1.3.1...HEAD
+[1.3.1]: https://github.com/OlexiyOdarchuk/go-monobank-sdk/compare/v1.3.0...v1.3.1
 [1.3.0]: https://github.com/OlexiyOdarchuk/go-monobank-sdk/compare/v1.2.0...v1.3.0
 [1.2.0]: https://github.com/OlexiyOdarchuk/go-monobank-sdk/compare/v1.1.3...v1.2.0
 [1.1.3]: https://github.com/OlexiyOdarchuk/go-monobank-sdk/compare/v1.1.2...v1.1.3
