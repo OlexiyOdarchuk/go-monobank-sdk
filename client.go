@@ -179,7 +179,7 @@ type Client struct {
 // If no hook was installed before, fn becomes the sole hook.
 //
 // Used by integrations that want to add their own request-side
-// behaviour (OpenTelemetry span start, custom headers) without
+// behavior (OpenTelemetry span start, custom headers) without
 // stomping on a hook the application installed via
 // [WithRequestHook]. nil is ignored.
 func (c *Client) ChainRequestHook(fn func(*http.Request)) {

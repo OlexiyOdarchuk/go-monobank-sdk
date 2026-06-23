@@ -13,9 +13,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/OlexiyOdarchuk/go-monobank-sdk/installment"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/OlexiyOdarchuk/go-monobank-sdk/installment"
 )
 
 const (

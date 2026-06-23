@@ -4,9 +4,10 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/vtopc/epoch"
+
 	"github.com/OlexiyOdarchuk/go-monobank-sdk/currency"
 	"github.com/OlexiyOdarchuk/go-monobank-sdk/money"
-	"github.com/vtopc/epoch"
 )
 
 // Rate is one row from /bank/currency: an exchange rate between two

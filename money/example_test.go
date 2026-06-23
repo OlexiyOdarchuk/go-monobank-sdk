@@ -14,6 +14,28 @@ func ExampleNew() {
 	// Output: 125.50 UAH
 }
 
+// UAH будує суму з гривень, прибираючи плутанину «×100»: 149.99 грн —
+// це 14999 копійок. Major повертає назад у гривні.
+func ExampleUAH() {
+	price := money.UAH(149.99)
+	fmt.Println(price.Minor)
+	fmt.Println(price.Major())
+	// Output:
+	// 14999
+	// 149.99
+}
+
+// ParseMajor парсить десятковий рядок ціломатематично, тож "0.10" дає
+// рівно 10 копійок без бінарно-float похибки літерала 0.10.
+func ExampleParseMajor() {
+	m, err := money.ParseMajor("0.10", currency.UAH)
+	if err != nil {
+		panic(err)
+	}
+	fmt.Println(m.Minor)
+	// Output: 10
+}
+
 // Add повертає помилку при різних валютах — інших комбінацій банк не приймає.
 func ExampleMoney_Add() {
 	a := money.New(10000, currency.UAH)

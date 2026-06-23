@@ -7,8 +7,6 @@ import (
 	"sync"
 	"testing"
 
-	monobank "github.com/OlexiyOdarchuk/go-monobank-sdk"
-	"github.com/OlexiyOdarchuk/go-monobank-sdk/otelmonobank"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/otel/attribute"
@@ -16,6 +14,9 @@ import (
 	"go.opentelemetry.io/otel/trace"
 	"go.opentelemetry.io/otel/trace/embedded"
 	"go.opentelemetry.io/otel/trace/noop"
+
+	monobank "github.com/OlexiyOdarchuk/go-monobank-sdk"
+	"github.com/OlexiyOdarchuk/go-monobank-sdk/otelmonobank"
 )
 
 // --- recording tracer (мінімальна імплементація trace.Tracer для тестів) ---

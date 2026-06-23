@@ -42,6 +42,23 @@
 //   - Reconciliation: [Client.Statement] for a period; CancelList
 //     in each row carries the refund history.
 //
+// Beyond the raw endpoints, the package ships server-side batteries for
+// the common production tasks:
+//
+//   - [NewWebhookHandler] — a ready http.Handler that verifies X-Sign,
+//     refreshes the key on rotation, enforces freshness, deduplicates
+//     by (invoiceId, modifiedDate) via [Deduper], and runs your
+//     callback.
+//   - [Client.PollInvoice] — poll to a terminal status when a webhook
+//     is missed (and the only way to observe "expired").
+//   - [ReconcileStatement] — diff a statement against local records.
+//   - [NewBasket] / [NewBasketItem] — build a validated basket order
+//     (required code, total = qty*sum).
+//   - [AsAPIError] / [IsNotFound] / [IsTooManyRequests] … — typed
+//     {errCode, errText} errors with predicate helpers.
+//   - [ClassifyCharge] / [ClassifySubscription] — classify subscription
+//     events into grace-driving [SubscriptionHealth] states.
+//
 // The direct-PAN flows ([Client.PaymentDirect], [Client.SyncPayment])
 // require PCI DSS scope — the merchant must operate, or proxy
 // through, a certified environment that may accept raw card data.

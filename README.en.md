@@ -513,10 +513,77 @@ Other useful sentinel errors:
   once per 30 s — an attacker spamming POSTs with random `X-Key-Id`
   cannot amplify a DoS against `/bank/sync`.
 
+### `acquiring` — server-side helpers & reconciliation
+
+Beyond the raw endpoints, acquiring ships batteries for the common
+production tasks:
+
+```go
+// 1. A drop-in http.Handler for acquiring webhooks (the acquiring twin of
+//    webhook.NewHandler): verify → freshness → parse → dedup → callback.
+//    Dedup by (invoiceId, modifiedDate); the key auto-refreshes on a bad sig.
+h, _ := acquiring.NewWebhookHandler(ctx, acquiring.WebhookHandlerOptions{
+    Keys:   cli,                              // *acquiring.Client (PubKeyProvider)
+    Dedup:  acquiring.NewMemoryDeduper(4096), // use a persistent one in prod
+    MaxAge: 15 * time.Minute,                 // anti-replay on top of dedup
+    OnEvent: func(ctx context.Context, inv *acquiring.InvoiceStatusResponse) error {
+        return fulfil(ctx, inv) // error → 500 → Mono retries; nil → 200
+    },
+})
+mux.Handle("/mono/webhook", h)
+
+// 2. Reconciliation: finish the status when a webhook is missed (the only way
+//    to observe "expired", which never sends a webhook) + diff a statement.
+inv, err := cli.PollInvoice(ctx, invoiceID, acquiring.PollOptions{
+    Interval: time.Second, Timeout: 2 * time.Minute,
+}) // → terminal state or acquiring.ErrPollTimeout
+stmt, _ := cli.Statement(ctx, from, time.Time{}, "")
+rec := acquiring.ReconcileStatement(stmt, local) // local: map[invoiceID]LocalPayment
+if !rec.Clean() { /* rec.OnlyRemote / OnlyLocal / Mismatches */ }
+
+// 3. Basket builder with validation (the classic mistakes: missing code, or
+//    total != qty*sum). Build cross-checks the basket sum vs the invoice amount.
+items, err := acquiring.NewBasket().
+    AddItem("Coffee", "SKU-1", 2, money.UAH(45).Minor, acquiring.WithUnit("pcs")).
+    AddItem("Tea", "SKU-2", 1, money.UAH(30).Minor).
+    Build(money.UAH(120).Minor)
+
+// 4. Typed API errors ({errCode, errText}) with predicates.
+if _, err := cli.InvoiceStatus(ctx, id); err != nil {
+    switch {
+    case acquiring.IsNotFound(err):        // unknown invoiceId
+    case acquiring.IsTooManyRequests(err): // back off
+    }
+    if e, ok := acquiring.AsAPIError(err); ok { log.Println(e.Code, e.Text) }
+}
+
+// 5. Subscription lifecycle classifier that drives grace logic.
+switch acquiring.ClassifyCharge(payment.Status, sub.WalletData.Status) {
+case acquiring.HealthChargeFailed: // transient — keep access in a grace window
+case acquiring.HealthWalletDead:   // token dead — prompt the customer to re-link
+case acquiring.HealthActive:       // ok
+}
+```
+
+- `NewWebhookHandler` mirrors `webhook.NewHandler`: `singleflight` + throttle
+  on key refresh, `MaxBodyBytes` (default 1 MiB), an `OnError` hook, ack-200
+  for the GET subscription ping.
+- `Deduper` / `NewMemoryDeduper(n)` — LRU keyed on `DedupKey(inv)` =
+  `invoiceId|modifiedDate`.
+- `InvoiceStatus.IsTerminal()` and `PollOptions.TreatHoldAsTerminal` — for
+  auth-then-capture, where the target state is `hold`.
+- `AsAPIError` / `Code` / `Is{BadRequest,Forbidden,NotFound,TooManyRequests,InternalError}`
+  — fall back to the HTTP status when the body carries no `errCode`; keep the
+  monobank sentinels matchable via `Unwrap`.
+- `SubscriptionHealth`: `GraceEligible()`, `Terminal()`, `RetainAccess()`.
+
 ### `money` — typed amounts
 
 ```go
 m := money.New(12550, currency.UAH)        // 125.50 UAH
+k := money.UAH(125.50)                      // 12550 kopecks — no ×100 confusion
+p, _ := money.ParseMajor("0.10", currency.UAH) // 10 kopecks, integer math (no float error)
+fmt.Println(money.UAH(125.50).Major())     // 125.5 — back to major units
 trip, err := m.Mul(3)                      // → ErrOverflow on MaxInt64*N
 if err != nil { return err }
 sum, err := m.Add(other)                   // currency mismatch → error
@@ -587,6 +654,24 @@ info, _ := cli.ClientInfo(ctx) // returns whatever you wired above
 
 Builders cover the typical scenarios: client info, statements over a
 range, rates, webhook events. Concurrency-safe.
+
+For integration tests of acquiring webhook verification there is a signed-body
+generator — no need to hand-roll ECDSA keys:
+
+```go
+signer := monobanktest.NewAcquiringWebhookSigner(t)         // P-256 keypair
+srv := monobanktest.NewServer(t).WithAcquiringPubKey(signer) // serves /api/merchant/pubkey
+cli := acquiring.New("tok", srv.Option())
+h, _ := acquiring.NewWebhookHandler(ctx, acquiring.WebhookHandlerOptions{
+    Keys: cli, OnEvent: onEvent,
+})
+
+body := signer.MarshalBody(t, &acquiring.InvoiceStatusResponse{
+    InvoiceID: "p2_x", Status: acquiring.InvoiceSuccess,
+})
+req := signer.Request(t, "POST", "/webhook", body) // X-Sign set
+h.ServeHTTP(rec, req)                              // signature verifies against the real key
+```
 
 ### `otelmonobank` — OpenTelemetry
 

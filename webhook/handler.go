@@ -9,8 +9,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/OlexiyOdarchuk/go-monobank-sdk/bank"
 	"golang.org/x/sync/singleflight"
+
+	"github.com/OlexiyOdarchuk/go-monobank-sdk/bank"
 )
 
 // DefaultMaxBodyBytes is the cap on webhook body size used when
@@ -122,11 +123,11 @@ func NewHandler(ctx context.Context, opts Options) (*Handler, error) {
 	if opts.OnEvent == nil {
 		return nil, ErrNilOnEvent
 	}
-	max := opts.MaxBodyBytes
-	if max <= 0 {
-		max = DefaultMaxBodyBytes
+	maxBody := opts.MaxBodyBytes
+	if maxBody <= 0 {
+		maxBody = DefaultMaxBodyBytes
 	}
-	h := &Handler{opts: opts, maxBodyBytes: max}
+	h := &Handler{opts: opts, maxBodyBytes: maxBody}
 	if err := h.refresh(ctx); err != nil {
 		return nil, fmt.Errorf("initial ServerKey fetch: %w", err)
 	}

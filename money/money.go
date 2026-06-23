@@ -40,6 +40,129 @@ func New(minor int64, code currency.Code) Money {
 	return Money{Minor: minor, Code: code}
 }
 
+// FromMajor builds a Money from an amount in major units (hryvnias,
+// dollars, ...) and a currency, rounding to the nearest minor unit
+// (round half away from zero). The number of decimals comes from
+// [currency.Code.Decimals]: 2 for most currencies, 0 for JPY/KRW, 3
+// for dinars. It is the inverse of [Money.Major].
+//
+//	money.FromMajor(42.00, currency.UAH) // {Minor: 4200, Code: 980}
+//	money.FromMajor(12.50, currency.JPY) // {Minor: 13,   Code: 392} (0 decimals)
+//
+// Precision: float64 is exact for integers up to 2^53, which covers
+// every realistic single amount. To build Money from a
+// human-entered decimal string, prefer [ParseMajor] — it uses
+// integer math and avoids the binary-float error of literals like
+// 0.1.
+func FromMajor(major float64, code currency.Code) Money {
+	factor := math.Pow10(code.Decimals())
+	r := major * factor
+	if r >= 0 {
+		return Money{Minor: int64(r + 0.5), Code: code}
+	}
+	return Money{Minor: int64(r - 0.5), Code: code}
+}
+
+// UAH is the hryvnia-specific shorthand for
+// FromMajor(major, currency.UAH): it turns 42.00 into 4200 kopecks.
+// The vast majority of Mono integrations are UAH-only, and confusing
+// hryvnias with kopecks (a 100× error) is the single most common
+// money bug — this constructor makes the unit explicit at the call
+// site.
+//
+//	inv := &acquiring.CreateInvoiceRequest{Amount: money.UAH(149.99).Minor}
+func UAH(major float64) Money {
+	return FromMajor(major, currency.UAH)
+}
+
+// ParseMajor parses a decimal string in major units ("42.00",
+// "149.99", "-3.5") into Money using integer math, so values like
+// "0.10" do not pick up the float64 representation error of the
+// literal 0.10. The number of fractional digits accepted is capped
+// by the currency's decimals; extra digits are an error rather than
+// being silently truncated, so a typo cannot quietly drop kopecks.
+//
+//	m, err := money.ParseMajor("149.99", currency.UAH) // {14999, 980}
+func ParseMajor(s string, code currency.Code) (Money, error) {
+	if s == "" {
+		return Money{}, fmt.Errorf("money: empty major-unit string")
+	}
+	neg := false
+	switch s[0] {
+	case '+':
+		s = s[1:]
+	case '-':
+		neg = true
+		s = s[1:]
+	}
+
+	intPart, fracPart, hasFrac := s, "", false
+	if i := indexByte(s, '.'); i >= 0 {
+		intPart, fracPart, hasFrac = s[:i], s[i+1:], true
+	}
+	if intPart == "" && fracPart == "" {
+		return Money{}, fmt.Errorf("money: %q is not a valid amount", s)
+	}
+
+	decimals := code.Decimals()
+	if len(fracPart) > decimals {
+		return Money{}, fmt.Errorf("money: %q has more than %d fractional digits for %s", s, decimals, code)
+	}
+
+	var minor int64
+	for _, r := range intPart {
+		d, err := digit(r)
+		if err != nil {
+			return Money{}, fmt.Errorf("money: %q is not a valid amount: %w", s, err)
+		}
+		next := minor*10 + int64(d)
+		if next < minor { // int64 overflow
+			return Money{}, fmt.Errorf("%w: %q", ErrOverflow, s)
+		}
+		minor = next
+	}
+	// Shift the integer part into minor units.
+	for range decimals {
+		minor *= 10
+	}
+	if hasFrac {
+		var frac int64
+		for _, r := range fracPart {
+			d, err := digit(r)
+			if err != nil {
+				return Money{}, fmt.Errorf("money: %q is not a valid amount: %w", s, err)
+			}
+			frac = frac*10 + int64(d)
+		}
+		// Right-pad the fraction to the currency's decimals (so "1.5"
+		// in a 2-decimal currency becomes 50, not 5 minor units).
+		for i := len(fracPart); i < decimals; i++ {
+			frac *= 10
+		}
+		minor += frac
+	}
+	if neg {
+		minor = -minor
+	}
+	return Money{Minor: minor, Code: code}, nil
+}
+
+func indexByte(s string, b byte) int {
+	for i := 0; i < len(s); i++ {
+		if s[i] == b {
+			return i
+		}
+	}
+	return -1
+}
+
+func digit(r rune) (int, error) {
+	if r < '0' || r > '9' {
+		return 0, fmt.Errorf("unexpected character %q", r)
+	}
+	return int(r - '0'), nil
+}
+
 // IsZero reports whether the amount is 0 (the currency is ignored).
 func (m Money) IsZero() bool { return m.Minor == 0 }
 

@@ -7,6 +7,58 @@
 
 ## [Unreleased]
 
+## [1.4.0] — 2026-06-23
+
+Серверні «батарейки» для еквайрингу, UAH-конструктори для `money` та
+генератор підписаних вебхуків для тестів. Усі зміни адитивні — жодного
+breaking-у в наявних підписах.
+
+### Added
+
+- **`acquiring.NewWebhookHandler`** — готовий `http.Handler` для
+  acquiring-вебхуків (аналог `webhook.NewHandler`): верифікація `X-Sign`,
+  автооновлення публічного ключа при ротації (throttle + `singleflight`),
+  опційна freshness-перевірка (`WebhookHandlerOptions.MaxAge`),
+  парсинг та pluggable дедуплікація. Разом із ним — інтерфейс `Deduper`,
+  in-memory `NewMemoryDeduper` (LRU) і `DedupKey` за парою
+  `(invoiceId, modifiedDate)`.
+- **`acquiring` реконсіляція** — `Client.PollInvoice` опитує статус
+  інвойсу до термінального стану (єдиний спосіб побачити `expired`, по
+  якому вебхук не приходить; `PollOptions.TreatHoldAsTerminal` для
+  auth-then-capture), `ReconcileStatement` робить diff виписки проти
+  локальних записів (`LocalPayment` → `Reconciliation`), плюс
+  `InvoiceStatus.IsTerminal`.
+- **`acquiring` basket-білдер** — `NewBasketItem` / `NewBasket` з
+  валідацією (обовʼязковий `code`, `total == qty*sum`),
+  `BasketItem.Validate`, `Basket.Build` звіряє суму кошика з amount
+  інвойсу; набір `BasketOption` для фіскальних полів.
+- **`acquiring` типізовані помилки** — `APIError` (`errCode`/`errText`)
+  з константами (`CodeBadRequest`, `CodeNotFound`, `CodeTooManyRequests`…),
+  `AsAPIError`, `Code` та предикати `IsBadRequest`/`IsForbidden`/
+  `IsNotFound`/`IsTooManyRequests`/`IsInternalError`; зберігають
+  `monobank`-sentinel-и через `Unwrap`.
+- **`acquiring` lifecycle підписок** — `ClassifyCharge` /
+  `ClassifySubscription` зводять сирі статуси до `SubscriptionHealth`
+  (`HealthActive`/`HealthChargeFailed`/`HealthWalletDead`/`HealthCancelled`)
+  з хелперами `GraceEligible`/`Terminal`/`RetainAccess` для grace-логіки.
+- **`money.UAH` / `money.FromMajor` / `money.ParseMajor`** — конструктори
+  з мажорних одиниць (гривні → копійки) без плутанини «×100»; `ParseMajor`
+  парсить десятковий рядок ціломатематично (без float-похибки `0.10`).
+- **`monobanktest.NewAcquiringWebhookSigner`** + builder
+  `Server.WithAcquiringPubKey` — генератор підписаного тіла вебхука
+  (ECDSA P-256) для інтеграційних тестів верифікації без реального банку.
+
+### Changed
+
+- **golangci-lint** — конфіг мігровано на формат v2 (`version: "2"`,
+  `linters.settings`, `goimports` у секції `formatters`); виправлено
+  застарілий `local-prefixes`. Виключення налаштовані під специфіку
+  репо (британське `cancelled` — це wire-значення Mono; навмисна
+  overflow-математика в `money`; secp256k1 для ECDSA-interop).
+- **internal** — параметр `max` у `backoff()` і змінну `max` у
+  `webhook.NewHandler` перейменовано, щоб не затіняти вбудований `max`
+  (Go 1.21+); орфографія коментарів зведена до US-English.
+
 ## [1.3.1] — 2026-06-22
 
 Проміжний patch-реліз: hardening за CodeQL-алертами, оновлення тулчейну
@@ -540,7 +592,8 @@ defer klim.Stop()
 - `monobanktest` — мок-сервер на `httptest.Server` із fluent-builder-ами.
 - Пагінатори через `iter.Seq2` (Go 1.23+).
 
-[Unreleased]: https://github.com/OlexiyOdarchuk/go-monobank-sdk/compare/v1.3.1...HEAD
+[Unreleased]: https://github.com/OlexiyOdarchuk/go-monobank-sdk/compare/v1.4.0...HEAD
+[1.4.0]: https://github.com/OlexiyOdarchuk/go-monobank-sdk/compare/v1.3.1...v1.4.0
 [1.3.1]: https://github.com/OlexiyOdarchuk/go-monobank-sdk/compare/v1.3.0...v1.3.1
 [1.3.0]: https://github.com/OlexiyOdarchuk/go-monobank-sdk/compare/v1.2.0...v1.3.0
 [1.2.0]: https://github.com/OlexiyOdarchuk/go-monobank-sdk/compare/v1.1.3...v1.2.0

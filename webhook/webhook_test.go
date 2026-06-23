@@ -17,10 +17,11 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"github.com/OlexiyOdarchuk/go-monobank-sdk/bank"
 	secp256k1 "github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/OlexiyOdarchuk/go-monobank-sdk/bank"
 )
 
 // Test vector captured from a real mono personal-API webhook (a jar top-up).
@@ -39,6 +40,7 @@ func testServerPubKey(t *testing.T) *ecdsa.PublicKey {
 	require.Equal(t, 65, len(raw))
 	require.Equal(t, byte(0x04), raw[0])
 	return &ecdsa.PublicKey{
+		//nolint:staticcheck // SA1019: Mono signs on secp256k1; S256() is needed for crypto/ecdsa interop in this test fixture.
 		Curve: secp256k1.S256(),
 		X:     new(big.Int).SetBytes(raw[1:33]),
 		Y:     new(big.Int).SetBytes(raw[33:]),
@@ -207,7 +209,7 @@ func TestMemoryDeduper_zeroCapacityFallback(t *testing.T) {
 
 // fakeKeyProvider is a KeyProvider whose returned key and error are
 // settable at runtime. It also counts calls so tests can assert refresh
-// behaviour.
+// behavior.
 type fakeKeyProvider struct {
 	key   *bank.ServerKey
 	err   error

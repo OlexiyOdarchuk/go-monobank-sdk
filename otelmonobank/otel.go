@@ -24,10 +24,11 @@ import (
 	"net/url"
 	"sync"
 
-	monobank "github.com/OlexiyOdarchuk/go-monobank-sdk"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
+
+	monobank "github.com/OlexiyOdarchuk/go-monobank-sdk"
 )
 
 // WithTracer returns a [monobank.Option] that instruments the client

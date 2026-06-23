@@ -4,9 +4,10 @@ import (
 	"encoding/json"
 	"math"
 
+	"github.com/vtopc/epoch"
+
 	"github.com/OlexiyOdarchuk/go-monobank-sdk/currency"
 	"github.com/OlexiyOdarchuk/go-monobank-sdk/money"
-	"github.com/vtopc/epoch"
 )
 
 // DocumentType is the kind of ID document a salary contact / recipient can
@@ -275,14 +276,14 @@ type DeletePayslipsRequest struct {
 	Identifications []string `json:"identifications"`
 }
 
-// BatchStats summarises a single payslip upload batch.
+// BatchStats summarizes a single payslip upload batch.
 type BatchStats struct {
 	EmployeesInBatch int `json:"employeesInBatch"`
 	SuccessInBatch   int `json:"successInBatch"`
 	FailedInBatch    int `json:"failedInBatch"`
 }
 
-// OverallStats summarises everything uploaded for a period.
+// OverallStats summarizes everything uploaded for a period.
 type OverallStats struct {
 	TotalEmployees        int `json:"totalEmployees"`
 	TotalSuccessEmployees int `json:"totalSuccessEmployees"`

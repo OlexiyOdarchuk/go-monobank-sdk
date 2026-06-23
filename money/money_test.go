@@ -5,9 +5,10 @@ import (
 	"math"
 	"testing"
 
-	"github.com/OlexiyOdarchuk/go-monobank-sdk/currency"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/OlexiyOdarchuk/go-monobank-sdk/currency"
 )
 
 func TestNew(t *testing.T) {

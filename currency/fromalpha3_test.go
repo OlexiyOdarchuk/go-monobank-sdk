@@ -3,8 +3,9 @@ package currency_test
 import (
 	"testing"
 
-	"github.com/OlexiyOdarchuk/go-monobank-sdk/currency"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/OlexiyOdarchuk/go-monobank-sdk/currency"
 )
 
 func TestFromAlpha3(t *testing.T) {

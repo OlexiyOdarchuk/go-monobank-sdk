@@ -6,9 +6,10 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	monobank "github.com/OlexiyOdarchuk/go-monobank-sdk"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	monobank "github.com/OlexiyOdarchuk/go-monobank-sdk"
 )
 
 func TestRates(t *testing.T) {

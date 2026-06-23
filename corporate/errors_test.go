@@ -8,9 +8,10 @@ import (
 	"testing"
 	"time"
 
-	monobank "github.com/OlexiyOdarchuk/go-monobank-sdk"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	monobank "github.com/OlexiyOdarchuk/go-monobank-sdk"
 )
 
 func TestClientInfo_apiError(t *testing.T) {

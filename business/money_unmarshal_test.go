@@ -4,10 +4,11 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/OlexiyOdarchuk/go-monobank-sdk/business"
-	"github.com/OlexiyOdarchuk/go-monobank-sdk/currency"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/OlexiyOdarchuk/go-monobank-sdk/business"
+	"github.com/OlexiyOdarchuk/go-monobank-sdk/currency"
 )
 
 func TestStatementItem_propagatesCurrencyString(t *testing.T) {

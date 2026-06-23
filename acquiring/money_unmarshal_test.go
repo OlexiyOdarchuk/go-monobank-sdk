@@ -4,10 +4,11 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/OlexiyOdarchuk/go-monobank-sdk/acquiring"
-	"github.com/OlexiyOdarchuk/go-monobank-sdk/currency"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/OlexiyOdarchuk/go-monobank-sdk/acquiring"
+	"github.com/OlexiyOdarchuk/go-monobank-sdk/currency"
 )
 
 // Усі типи відповідей із Ccy-полем повинні прив'язувати Code до Money.

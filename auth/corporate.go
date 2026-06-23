@@ -118,7 +118,7 @@ func NewCorpAuthMaker(secKey []byte) (*CorpAuthMaker, error) {
 	// secp256k1.SerializeUncompressed (the deprecated elliptic.Marshal
 	// is replaced by the native method).
 	pkBytes := serializeECDSAPubKeyUncompressed(&privateKey.PublicKey)
-	hash := sha1.New() //nolint:gosec // SHA-1 is Mono's X-Key-Id format, not used for signing
+	hash := sha1.New()
 	if _, err := hash.Write(pkBytes); err != nil {
 		return nil, ErrEncodePublicKey
 	}
@@ -273,6 +273,7 @@ func parseECPrivateKey(b []byte) (*ecdsa.PrivateKey, error) {
 		return nil, fmt.Errorf("unknown EC private key version %d", privKey.Version)
 	}
 
+	//nolint:staticcheck // SA1019: Mono signs on secp256k1; the deprecated S256() is the only way to get an elliptic.Curve for crypto/ecdsa interop.
 	curve := secp256k1.S256()
 	// SEC1 allows leading zeros; secp256k1 expects exactly 32 bytes.
 	raw := privKey.PrivateKey

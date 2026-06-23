@@ -149,15 +149,15 @@ func TestCode_Category(t *testing.T) {
 // Groceries. If someone re-orders Category() and breaks this, the
 // regression shows up here.
 func TestCode_Category_specificOverridesRange(t *testing.T) {
-	// 5411 vs neighbour 5410 (not a carve-out)
+	// 5411 vs neighbor 5410 (not a carve-out)
 	assert.Equal(t, CategoryGroceries, Code(5411).Category())
 	assert.Equal(t, CategoryRetail, Code(5410).Category())
 
-	// 5541 vs neighbour 5540
+	// 5541 vs neighbor 5540
 	assert.Equal(t, CategoryFuel, Code(5541).Category())
 	assert.Equal(t, CategoryRetail, Code(5540).Category())
 
-	// 8398 vs neighbour 8399
+	// 8398 vs neighbor 8399
 	assert.Equal(t, CategoryCharity, Code(8398).Category())
 	assert.Equal(t, CategoryProfessional, Code(8399).Category())
 }
@@ -173,7 +173,7 @@ func TestCode_Category_healthOverride(t *testing.T) {
 }
 
 // Regression: lodging MCCs in 3500-3999 must be Hotels (the old
-// 3000-3999 range incorrectly labelled them Transport).
+// 3000-3999 range incorrectly labeled them Transport).
 func TestCode_Category_lodgingIsHotels(t *testing.T) {
 	for _, c := range []Code{3500, 3501, 3750, 3999} {
 		assert.Equalf(t, CategoryHotels, c.Category(), "MCC %d must be Hotels", int(c))

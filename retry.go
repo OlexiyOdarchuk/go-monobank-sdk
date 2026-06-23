@@ -89,30 +89,33 @@ const minBackoffFloor = 50 * time.Millisecond
 
 // backoff returns the delay for attempt n (0-indexed) using
 // exponential growth with EQUAL jitter (d/2 + rand(d/2)), clamped
-// at max. The d/2 floor avoids the full-jitter degenerate case
+// at ceiling. The d/2 floor avoids the full-jitter degenerate case
 // where rand.Int64N(d+1) can produce 0 and turn the retry loop
 // into a tight spin. Guarded against int64 overflow for large
 // attempt values: as soon as the shift would overflow the base,
-// returns max.
-func backoff(base, max time.Duration, attempt int) time.Duration {
+// returns ceiling.
+//
+// The parameter is named ceiling rather than max to avoid shadowing
+// the Go 1.21 builtin max.
+func backoff(base, ceiling time.Duration, attempt int) time.Duration {
 	if base <= 0 {
 		return 0
 	}
 	// Check overflow BEFORE the shift: if base << attempt would exceed
-	// MaxInt64, do not shift at all — return max (or base itself when
-	// max is unset).
+	// MaxInt64, do not shift at all — return ceiling (or base itself
+	// when ceiling is unset).
 	var d time.Duration
 	const maxShift = 62 // 1 << 62 still fits in int64
 	if attempt >= maxShift || base > time.Duration(math.MaxInt64>>attempt) {
-		d = max
+		d = ceiling
 		if d <= 0 {
 			d = base
 		}
 	} else {
 		d = base << attempt
 	}
-	if max > 0 && d > max {
-		d = max
+	if ceiling > 0 && d > ceiling {
+		d = ceiling
 	}
 	if d <= 0 {
 		return 0
@@ -123,12 +126,13 @@ func backoff(base, max time.Duration, attempt int) time.Duration {
 	if half <= 0 {
 		half = 1
 	}
+	//nolint:gosec // G404: backoff jitter does not need crypto-grade randomness.
 	jitter := time.Duration(half + rand.Int64N(half))
 	if jitter < minBackoffFloor {
 		jitter = minBackoffFloor
 	}
-	if max > 0 && jitter > max {
-		jitter = max
+	if ceiling > 0 && jitter > ceiling {
+		jitter = ceiling
 	}
 	return jitter
 }

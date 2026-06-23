@@ -67,7 +67,7 @@ var healthMCC = map[Code]struct{}{
 // Specific codes (for example 5411 — grocery stores) are matched
 // before the range that contains them (first-match wins), so
 // grocery does not get bucketed as generic Retail. The 3000-3999
-// block, often labelled "Travel/Transport", is split:
+// block, often labeled "Travel/Transport", is split:
 //
 //   - 3000-3299: airlines
 //   - 3300-3499: car rental

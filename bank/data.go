@@ -23,10 +23,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/vtopc/epoch"
+
 	"github.com/OlexiyOdarchuk/go-monobank-sdk/currency"
 	"github.com/OlexiyOdarchuk/go-monobank-sdk/mcc"
 	"github.com/OlexiyOdarchuk/go-monobank-sdk/money"
-	"github.com/vtopc/epoch"
 )
 
 // MaxStatementWindow is the largest interval /personal/statement

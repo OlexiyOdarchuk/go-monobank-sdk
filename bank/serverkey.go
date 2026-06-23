@@ -71,6 +71,7 @@ func (r bankSyncResponse) asServerKey() (*ServerKey, error) {
 	return &ServerKey{
 		ID: r.ServerKeyID,
 		PubKey: &ecdsa.PublicKey{
+			//nolint:staticcheck // SA1019: Mono signs on secp256k1; the deprecated S256() is the only way to get an elliptic.Curve for crypto/ecdsa interop.
 			Curve: secp256k1.S256(),
 			X:     pk.X(),
 			Y:     pk.Y(),

@@ -3,10 +3,11 @@ package bank
 import (
 	"testing"
 
-	"github.com/OlexiyOdarchuk/go-monobank-sdk/currency"
-	"github.com/OlexiyOdarchuk/go-monobank-sdk/money"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/OlexiyOdarchuk/go-monobank-sdk/currency"
+	"github.com/OlexiyOdarchuk/go-monobank-sdk/money"
 )
 
 // Стандартний набір курсів — USD/UAH (buy/sell) і EUR/UAH (тільки cross).

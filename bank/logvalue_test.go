@@ -5,11 +5,12 @@ import (
 	"log/slog"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/OlexiyOdarchuk/go-monobank-sdk/bank"
 	"github.com/OlexiyOdarchuk/go-monobank-sdk/currency"
 	"github.com/OlexiyOdarchuk/go-monobank-sdk/money"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 // PII redaction: ClientInfo.LogValue must hide full name and the

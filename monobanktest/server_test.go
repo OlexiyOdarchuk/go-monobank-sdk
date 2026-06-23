@@ -8,13 +8,14 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	monobank "github.com/OlexiyOdarchuk/go-monobank-sdk"
 	"github.com/OlexiyOdarchuk/go-monobank-sdk/bank"
 	"github.com/OlexiyOdarchuk/go-monobank-sdk/currency"
 	"github.com/OlexiyOdarchuk/go-monobank-sdk/monobanktest"
 	"github.com/OlexiyOdarchuk/go-monobank-sdk/personal"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 func TestServer_WithClientInfo_personalClient(t *testing.T) {

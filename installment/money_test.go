@@ -4,9 +4,10 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/OlexiyOdarchuk/go-monobank-sdk/installment"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/OlexiyOdarchuk/go-monobank-sdk/installment"
 )
 
 func TestMoney_ExactRoundTrip(t *testing.T) {
@@ -36,7 +37,7 @@ func TestMoney_ExactRoundTrip(t *testing.T) {
 			// And back out exactly (without quotes — JSON number).
 			out, err := m.MarshalJSON()
 			require.NoError(t, err)
-			// Unmarshalling the marshalled output yields the same int.
+			// Unmarshaling the marshaled output yields the same int.
 			var roundTrip installment.Money
 			require.NoError(t, roundTrip.UnmarshalJSON(out))
 			assert.Equal(t, m.Kopecks, roundTrip.Kopecks,
@@ -61,7 +62,7 @@ func TestMoney_String(t *testing.T) {
 	assert.Equal(t, "-100.50", installment.MoneyFromKopecks(-10050).String())
 }
 
-// Regression: marshalling a struct that embeds Money must keep the
+// Regression: marshaling a struct that embeds Money must keep the
 // JSON number shape (no quotes), so Mono's server-side decoder is
 // happy.
 func TestMoney_WireFormat(t *testing.T) {
@@ -76,7 +77,7 @@ func TestMoney_WireFormat(t *testing.T) {
 
 	got := string(body)
 	assert.Contains(t, got, `"total_sum":2499.99`,
-		"Money must serialise as bare JSON number, not a string")
+		"Money must serialize as bare JSON number, not a string")
 	assert.Contains(t, got, `"sum":2499.99`)
 }
 

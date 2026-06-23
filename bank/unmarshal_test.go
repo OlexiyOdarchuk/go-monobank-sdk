@@ -4,9 +4,10 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/OlexiyOdarchuk/go-monobank-sdk/currency"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/OlexiyOdarchuk/go-monobank-sdk/currency"
 )
 
 // Custom UnmarshalJSON на Account/Jar/Transaction має проставити Code у

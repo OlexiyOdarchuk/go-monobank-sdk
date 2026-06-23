@@ -43,7 +43,7 @@ func TestTransactionsRange_paginates31DayWindows(t *testing.T) {
 
 	// Chronological order: each window's from < next window's from.
 	for i := 1; i < len(got); i++ {
-		assert.Less(t, int64(got[i-1].Time.Unix()), int64(got[i].Time.Unix()))
+		assert.Less(t, got[i-1].Time.Unix(), got[i].Time.Unix())
 	}
 }
 
