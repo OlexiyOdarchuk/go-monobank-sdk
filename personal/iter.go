@@ -12,7 +12,9 @@ import (
 // [Client.TransactionsRange]. Instead of accumulating every
 // transaction in memory and returning them as a single slice, the
 // iterator yields one transaction at a time and only pulls the next
-// 31-day window when the current one is exhausted.
+// 31-day window when the current one is exhausted. Windows that exceed
+// Mono's 500-rows-per-response cap are drained transparently (see
+// [bank.DrainWindow]).
 //
 //	for tx, err := range cli.TransactionsRangeIter(ctx, accID, from, to) {
 //	    if err != nil { return err }
@@ -41,15 +43,18 @@ func (c *Client) TransactionsRangeIter(ctx context.Context, accountID string,
 			if end.After(to) {
 				end = to
 			}
-			chunk, err := c.Transactions(ctx, accountID, cursor, end)
+			cont, err := bank.DrainWindow(cursor, end,
+				func(f, t time.Time) (bank.Transactions, error) {
+					return c.Transactions(ctx, accountID, f, t)
+				},
+				func(tx bank.Transaction) bool { return yield(tx, nil) },
+			)
 			if err != nil {
 				_ = yield(bank.Transaction{}, err)
 				return
 			}
-			for _, tx := range chunk {
-				if !yield(tx, nil) {
-					return
-				}
+			if !cont {
+				return
 			}
 			// Mono's /personal/statement is inclusive on both ends —
 			// the next window starts at end+1s to avoid yielding the

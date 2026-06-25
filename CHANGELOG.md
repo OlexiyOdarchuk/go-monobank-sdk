@@ -7,6 +7,29 @@
 
 ## [Unreleased]
 
+## [1.4.1] — 2026-06-25
+
+Багфікс виписки: вікна з понад 500 транзакцій більше не губляться.
+
+### Fixed
+
+- **Виписка тепер добирає вікна понад 500 транзакцій.** Mono віддає
+  максимум 500 рядків на відповідь (newest-first, без offset-курсора) —
+  цей ліміт офіційно не задокументований. Раніше `TransactionsRange` /
+  `TransactionsRangeIter` (`personal` і `corporate`) різали період лише на
+  31-денні вікна й тихо губили транзакції, якщо в одному вікні їх було
+  понад 500. Тепер повне вікно добирається повторними запитами з
+  переанкоруванням `to` на найстарішу секунду й дедупом за id — той самий
+  safe-на-однакову-секунду підхід, що вже застосований у
+  `business.Client.StatementAll` (зсув `to` на цілу секунду губив би рядки,
+  що ділять межову секунду).
+
+### Added
+
+- **`bank.DrainWindow`** / **`bank.StatementFetcher`** /
+  **`bank.StatementMaxRows`** — спільний хелпер, що обходить
+  500-рядковий ліміт виписки (використовується `personal` і `corporate`).
+
 ## [1.4.0] — 2026-06-23
 
 Серверні «батарейки» для еквайрингу, UAH-конструктори для `money` та
@@ -592,7 +615,8 @@ defer klim.Stop()
 - `monobanktest` — мок-сервер на `httptest.Server` із fluent-builder-ами.
 - Пагінатори через `iter.Seq2` (Go 1.23+).
 
-[Unreleased]: https://github.com/OlexiyOdarchuk/go-monobank-sdk/compare/v1.4.0...HEAD
+[Unreleased]: https://github.com/OlexiyOdarchuk/go-monobank-sdk/compare/v1.4.1...HEAD
+[1.4.1]: https://github.com/OlexiyOdarchuk/go-monobank-sdk/compare/v1.4.0...v1.4.1
 [1.4.0]: https://github.com/OlexiyOdarchuk/go-monobank-sdk/compare/v1.3.1...v1.4.0
 [1.3.1]: https://github.com/OlexiyOdarchuk/go-monobank-sdk/compare/v1.3.0...v1.3.1
 [1.3.0]: https://github.com/OlexiyOdarchuk/go-monobank-sdk/compare/v1.2.0...v1.3.0

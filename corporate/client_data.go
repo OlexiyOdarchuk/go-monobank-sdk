@@ -68,11 +68,14 @@ func (c *Client) TransactionsRange(ctx context.Context, requestID, accountID str
 		if end.After(to) {
 			end = to
 		}
-		chunk, err := c.Transactions(ctx, requestID, accountID, cursor, end)
-		if err != nil {
+		if _, err := bank.DrainWindow(cursor, end,
+			func(f, t time.Time) (bank.Transactions, error) {
+				return c.Transactions(ctx, requestID, accountID, f, t)
+			},
+			func(tx bank.Transaction) bool { all = append(all, tx); return true },
+		); err != nil {
 			return nil, fmt.Errorf("range %s..%s: %w", cursor.Format(time.RFC3339), end.Format(time.RFC3339), err)
 		}
-		all = append(all, chunk...)
 		next := end.Add(time.Second)
 		if !next.After(cursor) {
 			break

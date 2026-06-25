@@ -27,8 +27,8 @@ MCC and currency codes, and a fake server for tests.
 go get github.com/OlexiyOdarchuk/go-monobank-sdk
 ```
 
-Requires Go 1.23+ (`iter.Seq2` for paginators). `otelmonobank` needs Go 1.25+
-(an OpenTelemetry requirement).
+Requires Go 1.25+ (`iter.Seq2` for paginators; the workspace is pinned to
+1.25 by `otelmonobank`'s OpenTelemetry dependency).
 
 ## API coverage
 
@@ -38,11 +38,11 @@ The internal mobile API has no public spec — out of scope.
 | API | Spec | Subpackage | Endpoints |
 |---|---|---|---|
 | Open API — personal (X-Token) | [api.monobank.ua/docs](https://api.monobank.ua/docs/) | `personal` | 4 |
-| Open API — corporate (ECDSA) + monoКЕП | [corporate.html](https://api.monobank.ua/docs/corporate.html) | `corporate` | 11 |
+| Open API — corporate (ECDSA) + monoКЕП | [api-docs/providers](https://monobank.ua/api-docs/providers) | `corporate` | 11 |
 | corp-api for legal entities | [corp-api.monobank.ua](https://corp-api.monobank.ua/) | `business` | 23 |
-| Acquiring (`/api/merchant/*`) | [acquiring.html](https://api.monobank.ua/docs/acquiring.html) | `acquiring` | 31 |
-| Installment (HMAC-SHA256) | [chast docs](https://u2-demo-ext.mono.st4g3.com/docs/index.html) | `installment` | 14 |
-| JAR / public jars (community) | community docs | `jar` | 2 |
+| Acquiring (`/api/merchant/*`) | [api-docs/acquiring](https://monobank.ua/api-docs/acquiring) | `acquiring` | 31 |
+| Installment (HMAC-SHA256) | [api-docs/chast](https://monobank.ua/api-docs/chast) | `installment` | 14 |
+| JAR / public jars (community) | [community docs](https://github.com/andrew-demb/monobank-api-community-docs) | `jar` | 2 |
 
 ## Package layout
 
@@ -398,6 +398,14 @@ Mono throttles most endpoints — for example, `/personal/client-info` and
 token / per account respectively). Past the limit the server returns `429`
 with `Retry-After`, which `WithRetry` honors automatically.
 
+> Under sustained abuse Mono's edge (AWS) may return `403` with an HTML
+> body (not a JSON `errorDescription`) and block the IP for roughly a
+> day — distinct from a token-permission `403`. The `ErrForbidden`
+> sentinel still matches on status, but `APIError.ErrorDescription` is
+> empty and `Body` holds HTML. Don't retry that `403` aggressively.
+> (Undocumented officially; described by the
+> [community docs](https://github.com/andrew-demb/monobank-api-community-docs).)
+
 To avoid hitting `429` from the start, add `WithRateLimiter`:
 
 ```go
@@ -632,7 +640,10 @@ amt = installment.MoneyFromMajor(2499.99) // rounds half away from zero
 Every endpoint with a natural cursor ships an `iter.Seq2` wrapper:
 
 - `personal.Client.TransactionsRangeIter` — lazy paging over a
-  multi-window statement.
+  multi-window statement. Windows exceeding the 500-rows-per-response
+  cap are drained transparently (Mono returns at most 500 rows with no
+  offset cursor — the SDK re-anchors `to` to the oldest second and dedups
+  by id, like `business.StatementAll`).
 - `corporate.Client.TransactionsRangeIter` — same for corp-API.
 - `business.Client.ContactsAll` / `SearchContactsAll` — salary
   contacts.
@@ -721,8 +732,8 @@ the API itself uses them.
 
 ## Compatibility
 
-- Go: 1.23+ (requires `iter.Seq2`). `otelmonobank` — 1.25+.
-- Verified on 1.23.x – 1.26.x in CI.
+- Go: 1.25+ (`iter.Seq2` paginators; `otelmonobank` pins 1.25 via OpenTelemetry).
+- Verified on 1.25.x – 1.26.x in CI.
 - Race-clean — `go test -race ./...` passes.
 
 ## Relation to vtopc/go-monobank

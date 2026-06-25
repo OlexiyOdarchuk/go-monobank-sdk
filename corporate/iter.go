@@ -35,15 +35,18 @@ func (c *Client) TransactionsRangeIter(ctx context.Context, requestID, accountID
 			if end.After(to) {
 				end = to
 			}
-			chunk, err := c.Transactions(ctx, requestID, accountID, cursor, end)
+			cont, err := bank.DrainWindow(cursor, end,
+				func(f, t time.Time) (bank.Transactions, error) {
+					return c.Transactions(ctx, requestID, accountID, f, t)
+				},
+				func(tx bank.Transaction) bool { return yield(tx, nil) },
+			)
 			if err != nil {
 				_ = yield(bank.Transaction{}, err)
 				return
 			}
-			for _, tx := range chunk {
-				if !yield(tx, nil) {
-					return
-				}
+			if !cont {
+				return
 			}
 			// inclusive [from, to] on both sides — bump by +1s to
 			// avoid double-yielding the boundary transaction.
