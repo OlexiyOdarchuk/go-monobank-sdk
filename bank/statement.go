@@ -9,8 +9,9 @@ import "time"
 // transactions in the requested window were truncated and have to be
 // fetched again with a smaller `to`.
 //
-// This limit is absent from the official OpenAPI spec; it is documented
-// by the community:
+// This cap is part of Mono's documented /personal/statement contract
+// (max 500 rows, newest-first; window <= 2682000s; 1 call / 60s) and is
+// reproduced by independent community clients:
 // https://github.com/andrew-demb/monobank-api-community-docs
 const StatementMaxRows = 500
 
