@@ -10,8 +10,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/OlexiyOdarchuk/go-monobank-sdk/bank"
-	"github.com/OlexiyOdarchuk/go-monobank-sdk/webhook"
+	"github.com/OlexiyOdarchuk/go-monobank-sdk/v2/bank"
+	"github.com/OlexiyOdarchuk/go-monobank-sdk/v2/webhook"
 )
 
 func sanitizeForLog(s string) string {

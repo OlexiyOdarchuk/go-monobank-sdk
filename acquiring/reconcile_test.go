@@ -10,10 +10,10 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/OlexiyOdarchuk/go-monobank-sdk/acquiring"
-	"github.com/OlexiyOdarchuk/go-monobank-sdk/currency"
-	"github.com/OlexiyOdarchuk/go-monobank-sdk/money"
-	"github.com/OlexiyOdarchuk/go-monobank-sdk/monobanktest"
+	"github.com/OlexiyOdarchuk/go-monobank-sdk/v2/acquiring"
+	"github.com/OlexiyOdarchuk/go-monobank-sdk/v2/currency"
+	"github.com/OlexiyOdarchuk/go-monobank-sdk/v2/money"
+	"github.com/OlexiyOdarchuk/go-monobank-sdk/v2/monobanktest"
 )
 
 func TestInvoiceStatus_IsTerminal(t *testing.T) {

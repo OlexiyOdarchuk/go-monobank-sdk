@@ -6,8 +6,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/OlexiyOdarchuk/go-monobank-sdk/acquiring"
-	"github.com/OlexiyOdarchuk/go-monobank-sdk/money"
+	"github.com/OlexiyOdarchuk/go-monobank-sdk/v2/acquiring"
+	"github.com/OlexiyOdarchuk/go-monobank-sdk/v2/money"
 )
 
 func TestNewBasketItem_ok(t *testing.T) {

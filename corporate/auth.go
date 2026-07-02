@@ -8,7 +8,7 @@ import (
 	"net/http"
 	"net/url"
 
-	"github.com/OlexiyOdarchuk/go-monobank-sdk/auth"
+	"github.com/OlexiyOdarchuk/go-monobank-sdk/v2/auth"
 )
 
 // ErrInsecureCallback is returned by [Client.Auth] when the

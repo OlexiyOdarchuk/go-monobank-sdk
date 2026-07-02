@@ -14,6 +14,10 @@ import (
 // example "spf" means Statements, PersonalInfo, and FOP). Webhook is
 // the currently configured URL (nil when none is set).
 type Settings struct {
+	// ID is the company/registration identifier. The spec lists it as
+	// required but ships no property schema; omitempty so an absent
+	// value decodes cleanly rather than forcing a zero string.
+	ID         string  `json:"id,omitempty"`
 	Pubkey     string  `json:"pubkey"`
 	Name       string  `json:"name"`
 	Permission string  `json:"permission"`

@@ -3,7 +3,7 @@ package money
 import (
 	"testing"
 
-	"github.com/OlexiyOdarchuk/go-monobank-sdk/currency"
+	"github.com/OlexiyOdarchuk/go-monobank-sdk/v2/currency"
 )
 
 func BenchmarkAdd(b *testing.B) {

@@ -5,8 +5,8 @@ import (
 	"iter"
 	"time"
 
-	"github.com/OlexiyOdarchuk/go-monobank-sdk/auth"
-	"github.com/OlexiyOdarchuk/go-monobank-sdk/bank"
+	"github.com/OlexiyOdarchuk/go-monobank-sdk/v2/auth"
+	"github.com/OlexiyOdarchuk/go-monobank-sdk/v2/bank"
 )
 
 // API is the interface of the Corporate Open API client (including

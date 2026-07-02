@@ -7,7 +7,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/OlexiyOdarchuk/go-monobank-sdk/currency"
+	"github.com/OlexiyOdarchuk/go-monobank-sdk/v2/currency"
 )
 
 // Custom UnmarshalJSON на Account/Jar/Transaction має проставити Code у
@@ -50,7 +50,7 @@ func TestAccount_UnmarshalJSON_preservesOtherFields(t *testing.T) {
 
 	assert.Equal(t, "acc-1", a.AccountID)
 	assert.Equal(t, "snd-1", a.SendID)
-	assert.Equal(t, "UAH", a.CashbackType)
+	assert.Equal(t, CashbackUAH, a.CashbackType)
 	assert.Equal(t, []string{"4141**1111", "5555**2222"}, a.CardMasks)
 	assert.Equal(t, White, a.Type)
 	assert.Equal(t, "UA293220010000026", a.IBAN)

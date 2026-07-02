@@ -15,7 +15,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/OlexiyOdarchuk/go-monobank-sdk/acquiring"
+	"github.com/OlexiyOdarchuk/go-monobank-sdk/v2/acquiring"
 )
 
 func sanitizeLogValue(s string) string {

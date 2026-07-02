@@ -18,7 +18,7 @@ import (
 	"math"
 	"math/bits"
 
-	"github.com/OlexiyOdarchuk/go-monobank-sdk/currency"
+	"github.com/OlexiyOdarchuk/go-monobank-sdk/v2/currency"
 )
 
 // ErrOverflow is returned by [Money.Add], [Money.Sub] and

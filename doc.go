@@ -15,28 +15,28 @@
 // Application code usually does not pull in this package directly,
 // but rather the topical sub-packages built on top of it:
 //
-//   - github.com/OlexiyOdarchuk/go-monobank-sdk/auth — the Authorizer
+//   - github.com/OlexiyOdarchuk/go-monobank-sdk/v2/auth — the Authorizer
 //     interface plus implementations for the personal token and the
 //     corporate ECDSA signature.
-//   - github.com/OlexiyOdarchuk/go-monobank-sdk/bank — the bank's
+//   - github.com/OlexiyOdarchuk/go-monobank-sdk/v2/bank — the bank's
 //     public endpoints (currency rates, server key) and the shared
 //     data model (ClientInfo, Account, Jar, Transaction).
-//   - github.com/OlexiyOdarchuk/go-monobank-sdk/personal — Personal
+//   - github.com/OlexiyOdarchuk/go-monobank-sdk/v2/personal — Personal
 //     Open API (authorization via X-Token).
-//   - github.com/OlexiyOdarchuk/go-monobank-sdk/corporate — Corporate
+//   - github.com/OlexiyOdarchuk/go-monobank-sdk/v2/corporate — Corporate
 //     Open API (ECDSA signatures), including monoKEP.
-//   - github.com/OlexiyOdarchuk/go-monobank-sdk/business — corp-api
+//   - github.com/OlexiyOdarchuk/go-monobank-sdk/v2/business — corp-api
 //     (legal entities): payroll contacts and rosters, payments,
 //     payslips.
-//   - github.com/OlexiyOdarchuk/go-monobank-sdk/acquiring — acquiring
+//   - github.com/OlexiyOdarchuk/go-monobank-sdk/v2/acquiring — acquiring
 //     (/api/merchant/*): invoices, holds, QR cash desks, tokenized
 //     cards.
-//   - github.com/OlexiyOdarchuk/go-monobank-sdk/webhook — the server
+//   - github.com/OlexiyOdarchuk/go-monobank-sdk/v2/webhook — the server
 //     side: signature verification, payload parser, a ready
 //     http.Handler, and an in-memory deduper.
-//   - github.com/OlexiyOdarchuk/go-monobank-sdk/mcc — a typed ISO 18245
+//   - github.com/OlexiyOdarchuk/go-monobank-sdk/v2/mcc — a typed ISO 18245
 //     MCC enum with grouping into categories ([mcc.Code.Category]).
-//   - github.com/OlexiyOdarchuk/go-monobank-sdk/currency — a typed
+//   - github.com/OlexiyOdarchuk/go-monobank-sdk/v2/currency — a typed
 //     ISO 4217 numeric currency code with its alpha-3 name.
 //
 // The base client ([Client]) is already embedded in each sub-package:

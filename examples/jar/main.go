@@ -23,7 +23,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/OlexiyOdarchuk/go-monobank-sdk/jar"
+	"github.com/OlexiyOdarchuk/go-monobank-sdk/v2/jar"
 )
 
 func main() {

@@ -6,8 +6,8 @@ import (
 	"log"
 	"os"
 
-	"github.com/OlexiyOdarchuk/go-monobank-sdk/auth"
-	"github.com/OlexiyOdarchuk/go-monobank-sdk/corporate"
+	"github.com/OlexiyOdarchuk/go-monobank-sdk/v2/auth"
+	"github.com/OlexiyOdarchuk/go-monobank-sdk/v2/corporate"
 )
 
 func ExampleCorpAuthMaker_PublicKeyPEM() {

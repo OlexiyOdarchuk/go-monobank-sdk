@@ -7,7 +7,7 @@
 // tracing:
 //
 //	import (
-//	    "github.com/OlexiyOdarchuk/go-monobank-sdk/personal"
+//	    "github.com/OlexiyOdarchuk/go-monobank-sdk/v2/personal"
 //	    "github.com/OlexiyOdarchuk/go-monobank-sdk/otelmonobank"
 //	    "go.opentelemetry.io/otel"
 //	)
@@ -28,7 +28,7 @@ import (
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
 
-	monobank "github.com/OlexiyOdarchuk/go-monobank-sdk"
+	monobank "github.com/OlexiyOdarchuk/go-monobank-sdk/v2"
 )
 
 // WithTracer returns a [monobank.Option] that instruments the client

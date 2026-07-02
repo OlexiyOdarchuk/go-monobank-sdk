@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"net/http"
 
-	monobank "github.com/OlexiyOdarchuk/go-monobank-sdk"
+	monobank "github.com/OlexiyOdarchuk/go-monobank-sdk/v2"
 )
 
 // ErrCode is the machine-readable error identifier the acquiring API

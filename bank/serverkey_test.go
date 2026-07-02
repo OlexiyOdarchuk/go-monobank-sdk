@@ -12,7 +12,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	monobank "github.com/OlexiyOdarchuk/go-monobank-sdk"
+	monobank "github.com/OlexiyOdarchuk/go-monobank-sdk/v2"
 )
 
 // Real /bank/sync response captured against mono — exposes the bank's

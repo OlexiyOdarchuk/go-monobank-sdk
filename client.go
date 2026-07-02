@@ -12,7 +12,7 @@ import (
 	"slices"
 	"time"
 
-	"github.com/OlexiyOdarchuk/go-monobank-sdk/auth"
+	"github.com/OlexiyOdarchuk/go-monobank-sdk/v2/auth"
 )
 
 // Client-level errors.

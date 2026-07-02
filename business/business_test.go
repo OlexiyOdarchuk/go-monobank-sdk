@@ -14,7 +14,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	monobank "github.com/OlexiyOdarchuk/go-monobank-sdk"
+	monobank "github.com/OlexiyOdarchuk/go-monobank-sdk/v2"
 )
 
 func newTestClient(t *testing.T, h http.HandlerFunc) (*Client, *httptest.Server) {

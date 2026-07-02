@@ -3,8 +3,8 @@ package acquiring
 import (
 	"encoding/json"
 
-	"github.com/OlexiyOdarchuk/go-monobank-sdk/currency"
-	"github.com/OlexiyOdarchuk/go-monobank-sdk/money"
+	"github.com/OlexiyOdarchuk/go-monobank-sdk/v2/currency"
+	"github.com/OlexiyOdarchuk/go-monobank-sdk/v2/money"
 )
 
 // MerchantDetails is the response to GET /api/merchant/details.
@@ -103,6 +103,10 @@ type Adjustment struct {
 	Type  AdjustmentType `json:"type"`
 	Mode  AdjustmentMode `json:"mode"`
 	Value float64        `json:"value"`
+	// Tax is the list of tax-group codes for this line, matching
+	// [BasketItem.Tax]. The spec leaves the element type unspecified;
+	// []int mirrors the sibling basket tax array.
+	Tax []int `json:"tax,omitempty"`
 }
 
 // BasketItem is one line in a basket order.
@@ -120,6 +124,9 @@ type BasketItem struct {
 	Tax       []int        `json:"tax,omitempty"`
 	UKTZED    string       `json:"uktzed,omitempty"`
 	Discounts []Adjustment `json:"discounts,omitempty"`
+	// SplitReceiverID routes this line's funds to a registered split
+	// receiver (see GET /api/merchant/split-receiver/list).
+	SplitReceiverID string `json:"splitReceiverId,omitempty"`
 }
 
 // CancelItem is one line in a cancel/finalize request — a slimmer variant
@@ -144,15 +151,32 @@ type MerchantPaymInfo struct {
 	CustomerEmails []string     `json:"customerEmails,omitempty"`
 	Discounts      []Adjustment `json:"discounts,omitempty"`
 	BasketOrder    []BasketItem `json:"basketOrder,omitempty"`
+	// Metadata is an arbitrary key→value object echoed back on the
+	// invoice status and statement. Use it to carry your own
+	// correlation data through the payment.
+	Metadata map[string]any `json:"metadata,omitempty"`
 }
 
-// PaymentType — debit (capture immediately) or hold (capture later via finalize).
+// PaymentType — debit (capture immediately), hold (capture later via
+// finalize), or verification (a zero/near-zero auth that only tokenizes
+// the card without moving funds).
 type PaymentType string
 
 // Possible PaymentType values.
 const (
-	PaymentDebit PaymentType = "debit"
-	PaymentHold  PaymentType = "hold"
+	PaymentDebit        PaymentType = "debit"
+	PaymentHold         PaymentType = "hold"
+	PaymentVerification PaymentType = "verification"
+)
+
+// DisplayType controls how the checkout page is rendered. The only
+// value the API currently defines is "iframe" (embeddable checkout);
+// an empty value yields the default full-page checkout.
+type DisplayType string
+
+// Possible DisplayType values.
+const (
+	DisplayIframe DisplayType = "iframe"
 )
 
 // SaveCardData asks the bank to tokenize the card for future wallet payments.
@@ -166,21 +190,40 @@ type CreateInvoiceRequest struct {
 	Amount           int64             `json:"amount"`
 	Currency         currency.Code     `json:"ccy,omitempty"`
 	MerchantPaymInfo *MerchantPaymInfo `json:"merchantPaymInfo,omitempty"`
-	RedirectURL      string            `json:"redirectUrl,omitempty"`
-	WebHookURL       string            `json:"webHookUrl,omitempty"`
-	Validity         int64             `json:"validity,omitempty"`
-	PaymentType      PaymentType       `json:"paymentType,omitempty"`
-	QrID             string            `json:"qrId,omitempty"`
-	Code             string            `json:"code,omitempty"`
-	SaveCardData     *SaveCardData     `json:"saveCardData,omitempty"`
-	AgentFeePercent  float64           `json:"agentFeePercent,omitempty"`
-	TipsEmployeeID   string            `json:"tipsEmployeeId,omitempty"`
+	// RedirectURL is the single return address used for both success
+	// and failure when SuccessURL/FailURL are not set. When either of
+	// those is present, it takes precedence for that outcome.
+	RedirectURL string `json:"redirectUrl,omitempty"`
+	// SuccessURL overrides RedirectURL for a successful payment.
+	SuccessURL string `json:"successUrl,omitempty"`
+	// FailURL overrides RedirectURL for a failed payment.
+	FailURL         string        `json:"failUrl,omitempty"`
+	WebHookURL      string        `json:"webHookUrl,omitempty"`
+	Validity        int64         `json:"validity,omitempty"`
+	PaymentType     PaymentType   `json:"paymentType,omitempty"`
+	QrID            string        `json:"qrId,omitempty"`
+	Code            string        `json:"code,omitempty"`
+	SaveCardData    *SaveCardData `json:"saveCardData,omitempty"`
+	AgentFeePercent float64       `json:"agentFeePercent,omitempty"`
+	TipsEmployeeID  string        `json:"tipsEmployeeId,omitempty"`
+	// DisplayType selects the checkout rendering (see [DisplayType]);
+	// empty means the default full-page checkout.
+	DisplayType DisplayType `json:"displayType,omitempty"`
+	// WithAppURL asks the API to also return AppURL — a universal link
+	// that opens the payment inside the monobank app.
+	WithAppURL bool `json:"withAppUrl,omitempty"`
 }
 
 // CreateInvoiceResponse is the response to POST /api/merchant/invoice/create.
 type CreateInvoiceResponse struct {
 	InvoiceID string `json:"invoiceId"`
 	PageURL   string `json:"pageUrl"`
+	// AppURL is a universal link ("https://mbnk.app/or/...") that opens
+	// the payment inside the monobank app. (The official docs call it a
+	// "monobank://" deep link, but both test and production tokens
+	// return the mbnk.app form.) Only returned when the request set
+	// WithAppURL.
+	AppURL string `json:"appUrl,omitempty"`
 }
 
 // InvoiceStatus is the lifecycle state of an invoice.
@@ -399,8 +442,9 @@ type FiscalizationSource string
 
 // Possible FiscalizationSource values.
 const (
-	SourceCheckbox FiscalizationSource = "checkbox"
-	SourceMonopay  FiscalizationSource = "monopay"
+	SourceCheckbox    FiscalizationSource = "checkbox"
+	SourceMonopay     FiscalizationSource = "monopay"
+	SourceVchasnoKasa FiscalizationSource = "vchasnokasa"
 )
 
 // FiscalCheck is one fiscalised check tied to an invoice.
@@ -537,13 +581,24 @@ type ResetAmountRequest struct {
 	QrID string `json:"qrId"`
 }
 
+// PaymentScheme is how a paid invoice was funded — a single upfront
+// payment or one of the "Pay in parts" (BNPL) schemes.
+type PaymentScheme string
+
+// Possible PaymentScheme values.
+const (
+	SchemeFull        PaymentScheme = "full"          // single upfront payment
+	SchemeBNPLParts4  PaymentScheme = "bnpl_parts_4"  // split into 4 parts
+	SchemeBNPLLater30 PaymentScheme = "bnpl_later_30" // deferred 30 days
+)
+
 // StatementInvoice is one row in /api/merchant/statement.
 type StatementInvoice struct {
 	InvoiceID     string            `json:"invoiceId"`
 	Status        ProcessingStatus  `json:"status"`
 	MaskedPan     string            `json:"maskedPan"`
 	Date          string            `json:"date"`
-	PaymentScheme string            `json:"paymentScheme"`
+	PaymentScheme PaymentScheme     `json:"paymentScheme"`
 	Amount        money.Money       `json:"amount"`
 	ProfitAmount  money.Money       `json:"profitAmount,omitempty"`
 	Currency      currency.Code     `json:"ccy"`
@@ -553,6 +608,9 @@ type StatementInvoice struct {
 	ShortQrID     string            `json:"shortQrId,omitempty"`
 	Destination   string            `json:"destination,omitempty"`
 	CancelList    []StatementRefund `json:"cancelList,omitempty"`
+	// Metadata echoes back the key→value object sent in
+	// MerchantPaymInfo.Metadata when the invoice was created.
+	Metadata map[string]any `json:"metadata,omitempty"`
 }
 
 // UnmarshalJSON attaches Currency to Amount and ProfitAmount.Code.
@@ -610,12 +668,16 @@ type WalletResponse struct {
 
 // WalletPaymentRequest is the body of POST /api/merchant/wallet/payment.
 type WalletPaymentRequest struct {
-	CardToken        string            `json:"cardToken"`
-	Amount           int64             `json:"amount"`
-	Currency         currency.Code     `json:"ccy"`
-	RedirectURL      string            `json:"redirectUrl,omitempty"`
-	WebHookURL       string            `json:"webHookUrl,omitempty"`
-	InitiationKind   InitiationKind    `json:"initiationKind,omitempty"`
+	CardToken   string        `json:"cardToken"`
+	Amount      int64         `json:"amount"`
+	Currency    currency.Code `json:"ccy"`
+	RedirectURL string        `json:"redirectUrl,omitempty"`
+	WebHookURL  string        `json:"webHookUrl,omitempty"`
+	// InitiationKind is required by /api/merchant/wallet/payment: it
+	// tells the API whether the client is present (client) or the
+	// charge is merchant-initiated (merchant). No omitempty — the API
+	// rejects the request when it is absent.
+	InitiationKind   InitiationKind    `json:"initiationKind"`
 	MerchantPaymInfo *MerchantPaymInfo `json:"merchantPaymInfo,omitempty"`
 	PaymentType      PaymentType       `json:"paymentType,omitempty"`
 }

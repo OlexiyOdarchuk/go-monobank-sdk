@@ -9,8 +9,8 @@ import (
 	"os"
 	"time"
 
-	monobank "github.com/OlexiyOdarchuk/go-monobank-sdk"
-	"github.com/OlexiyOdarchuk/go-monobank-sdk/personal"
+	monobank "github.com/OlexiyOdarchuk/go-monobank-sdk/v2"
+	"github.com/OlexiyOdarchuk/go-monobank-sdk/v2/personal"
 )
 
 // Token-bucket: 1 запит на 60 секунд (типовий ліміт /personal/client-info).

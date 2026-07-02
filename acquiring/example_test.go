@@ -8,9 +8,9 @@ import (
 	"os"
 	"time"
 
-	"github.com/OlexiyOdarchuk/go-monobank-sdk/acquiring"
-	"github.com/OlexiyOdarchuk/go-monobank-sdk/currency"
-	"github.com/OlexiyOdarchuk/go-monobank-sdk/money"
+	"github.com/OlexiyOdarchuk/go-monobank-sdk/v2/acquiring"
+	"github.com/OlexiyOdarchuk/go-monobank-sdk/v2/currency"
+	"github.com/OlexiyOdarchuk/go-monobank-sdk/v2/money"
 )
 
 func ExampleNew() {

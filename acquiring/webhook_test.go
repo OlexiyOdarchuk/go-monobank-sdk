@@ -15,7 +15,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/OlexiyOdarchuk/go-monobank-sdk/acquiring"
+	"github.com/OlexiyOdarchuk/go-monobank-sdk/v2/acquiring"
 )
 
 // genKey генерує тестовий ECDSA P-256 keypair і повертає приватний ключ

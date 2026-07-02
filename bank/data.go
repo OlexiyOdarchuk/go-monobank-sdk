@@ -25,9 +25,9 @@ import (
 
 	"github.com/vtopc/epoch"
 
-	"github.com/OlexiyOdarchuk/go-monobank-sdk/currency"
-	"github.com/OlexiyOdarchuk/go-monobank-sdk/mcc"
-	"github.com/OlexiyOdarchuk/go-monobank-sdk/money"
+	"github.com/OlexiyOdarchuk/go-monobank-sdk/v2/currency"
+	"github.com/OlexiyOdarchuk/go-monobank-sdk/v2/mcc"
+	"github.com/OlexiyOdarchuk/go-monobank-sdk/v2/money"
 )
 
 // MaxStatementWindow is the largest interval /personal/statement
@@ -40,11 +40,28 @@ const MaxStatementWindow = 31 * 24 * time.Hour
 // knows about the current client (name, accounts, jars, current
 // webhook subscription).
 type ClientInfo struct {
-	ID         string   `json:"clientId"`
-	Name       string   `json:"name"`
-	WebHookURL string   `json:"webHookUrl"`
-	Accounts   Accounts `json:"accounts"`
-	Jars       Jars     `json:"jars"`
+	ID         string `json:"clientId"`
+	Name       string `json:"name"`
+	WebHookURL string `json:"webHookUrl"`
+	// Permissions is the set of granted scopes, one letter per
+	// permission (for example "psfj"): p — statements/personal info,
+	// s — settings/webhook, f — FOP, j — jars. Reflects what the token
+	// actually carries.
+	Permissions string   `json:"permissions,omitempty"`
+	Accounts    Accounts `json:"accounts"`
+	Jars        Jars     `json:"jars"`
+}
+
+// Account returns the client's account by id (shorthand for
+// ClientInfo.Accounts.ByID).
+func (c ClientInfo) Account(id string) (*Account, bool) {
+	return c.Accounts.ByID(id)
+}
+
+// Jar returns the client's jar by id (shorthand for
+// ClientInfo.Jars.ByID).
+func (c ClientInfo) Jar(id string) (*Jar, bool) {
+	return c.Jars.ByID(id)
 }
 
 // LogValue implements [slog.LogValuer] so that logging a ClientInfo
@@ -149,8 +166,8 @@ type Account struct {
 	Balance      money.Money   `json:"balance"`
 	CreditLimit  money.Money   `json:"creditLimit"`
 	Currency     currency.Code `json:"currencyCode"`
-	CashbackType string        `json:"cashbackType"` // enum: None, UAH, Miles
-	CardMasks    []string      `json:"maskedPan"`    // masked card numbers
+	CashbackType CashbackType  `json:"cashbackType"`
+	CardMasks    []string      `json:"maskedPan"` // masked card numbers
 	Type         CardType      `json:"type"`
 	IBAN         string        `json:"iban"`
 }
@@ -210,11 +227,69 @@ const (
 	Diia     CardType = "diia" // Дія.Картка
 )
 
+// CashbackType is the cashback programme an account accrues in. An
+// empty value means the account has no cashback.
+type CashbackType string
+
+// Possible values of CashbackType.
+const (
+	CashbackNone  CashbackType = "None"
+	CashbackUAH   CashbackType = "UAH"   // hryvnia cashback
+	CashbackMiles CashbackType = "Miles" // "mili" bonus miles
+)
+
 // Accounts is a slice of [Account].
 type Accounts []Account
 
+// ByID returns the account with the given id (the "black"/"fop" card
+// id, not the IBAN). ok=false when no account matches. The pointer
+// aliases the slice element, so mutating it mutates the slice.
+func (as Accounts) ByID(id string) (*Account, bool) {
+	for i := range as {
+		if as[i].AccountID == id {
+			return &as[i], true
+		}
+	}
+	return nil, false
+}
+
+// ByIBAN returns the account with the given IBAN. ok=false when no
+// account matches.
+func (as Accounts) ByIBAN(iban string) (*Account, bool) {
+	for i := range as {
+		if as[i].IBAN == iban {
+			return &as[i], true
+		}
+	}
+	return nil, false
+}
+
+// ByCurrency returns every account held in the given currency (a
+// client may have several — for example a UAH black card and a UAH
+// FOP account). The result is empty when none match.
+func (as Accounts) ByCurrency(code currency.Code) Accounts {
+	var out Accounts
+	for i := range as {
+		if as[i].Currency == code {
+			out = append(out, as[i])
+		}
+	}
+	return out
+}
+
 // Jars is a slice of [Jar].
 type Jars []Jar
+
+// ByID returns the jar with the given id. ok=false when none matches.
+// The pointer aliases the slice element.
+func (js Jars) ByID(id string) (*Jar, bool) {
+	for i := range js {
+		if js[i].ID == id {
+			return &js[i], true
+		}
+	}
+	return nil, false
+}
 
 // Transaction is one statement entry. The monetary fields are typed
 // [money.Money]. Currency is the operation's currency (for
@@ -250,6 +325,8 @@ type Transaction struct {
 	EDRPOU string `json:"counterEdrpou"`
 	// FOP accounts only.
 	IBAN string `json:"counterIban"`
+	// CounterName is the counterparty's name (FOP accounts only).
+	CounterName string `json:"counterName"`
 }
 
 // UnmarshalJSON decodes Transaction and attaches Currency to every

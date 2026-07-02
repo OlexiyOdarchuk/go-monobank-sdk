@@ -2,10 +2,10 @@
 
 [🇺🇦 Українська](README.md) · 🇬🇧 English
 
-[![Go Reference](https://pkg.go.dev/badge/github.com/OlexiyOdarchuk/go-monobank-sdk.svg)](https://pkg.go.dev/github.com/OlexiyOdarchuk/go-monobank-sdk)
-[![CI](https://github.com/OlexiyOdarchuk/go-monobank-sdk/actions/workflows/ci.yaml/badge.svg)](https://github.com/OlexiyOdarchuk/go-monobank-sdk/actions/workflows/ci.yaml)
+[![Go Reference](https://pkg.go.dev/badge/github.com/OlexiyOdarchuk/go-monobank-sdk/v2.svg)](https://pkg.go.dev/github.com/OlexiyOdarchuk/go-monobank-sdk/v2)
+[![CI](https://github.com/OlexiyOdarchuk/go-monobank-sdk/v2/actions/workflows/ci.yaml/badge.svg)](https://github.com/OlexiyOdarchuk/go-monobank-sdk/v2/actions/workflows/ci.yaml)
 [![codecov](https://codecov.io/gh/OlexiyOdarchuk/go-monobank-sdk/branch/main/graph/badge.svg)](https://codecov.io/gh/OlexiyOdarchuk/go-monobank-sdk)
-[![Go Report Card](https://goreportcard.com/badge/github.com/OlexiyOdarchuk/go-monobank-sdk)](https://goreportcard.com/report/github.com/OlexiyOdarchuk/go-monobank-sdk)
+[![Go Report Card](https://goreportcard.com/badge/github.com/OlexiyOdarchuk/go-monobank-sdk/v2)](https://goreportcard.com/report/github.com/OlexiyOdarchuk/go-monobank-sdk/v2)
 [![MIT License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 Full-featured Go SDK for every public monobank API: **personal**, **corporate**
@@ -24,7 +24,7 @@ MCC and currency codes, and a fake server for tests.
 ## Installation
 
 ```bash
-go get github.com/OlexiyOdarchuk/go-monobank-sdk
+go get github.com/OlexiyOdarchuk/go-monobank-sdk/v2
 ```
 
 Requires Go 1.25+ (`iter.Seq2` for paginators; the workspace is pinned to
@@ -83,7 +83,7 @@ import (
     "os"
     "time"
 
-    "github.com/OlexiyOdarchuk/go-monobank-sdk/personal"
+    "github.com/OlexiyOdarchuk/go-monobank-sdk/v2/personal"
 )
 
 func main() {
@@ -123,8 +123,8 @@ import (
     "log"
     "net/http"
 
-    "github.com/OlexiyOdarchuk/go-monobank-sdk/bank"
-    "github.com/OlexiyOdarchuk/go-monobank-sdk/webhook"
+    "github.com/OlexiyOdarchuk/go-monobank-sdk/v2/bank"
+    "github.com/OlexiyOdarchuk/go-monobank-sdk/v2/webhook"
 )
 
 func main() {
@@ -168,8 +168,8 @@ import (
     "context"
     "os"
 
-    "github.com/OlexiyOdarchuk/go-monobank-sdk/auth"
-    "github.com/OlexiyOdarchuk/go-monobank-sdk/corporate"
+    "github.com/OlexiyOdarchuk/go-monobank-sdk/v2/auth"
+    "github.com/OlexiyOdarchuk/go-monobank-sdk/v2/corporate"
 )
 
 func main() {
@@ -190,7 +190,7 @@ in the mobile app: `cli.SignatureCreate / SignatureStatus / SignatureCancel`.
 ## Quick start: Business API (legal entities)
 
 ```go
-import "github.com/OlexiyOdarchuk/go-monobank-sdk/business"
+import "github.com/OlexiyOdarchuk/go-monobank-sdk/v2/business"
 
 cli := business.New(os.Getenv("MONO_BUSINESS_TOKEN"))
 accs, _ := cli.Accounts(ctx)
@@ -210,7 +210,7 @@ duplicating the operation. An empty key is refused locally with
 ## Quick start: Acquiring
 
 ```go
-import "github.com/OlexiyOdarchuk/go-monobank-sdk/acquiring"
+import "github.com/OlexiyOdarchuk/go-monobank-sdk/v2/acquiring"
 
 cli := acquiring.New(os.Getenv("MONO_ACQUIRING_TOKEN"))
 
@@ -254,7 +254,7 @@ T2P terminals (`Terminals`).
 ## Quick start: Installment ("Покупка частинами")
 
 ```go
-import "github.com/OlexiyOdarchuk/go-monobank-sdk/installment"
+import "github.com/OlexiyOdarchuk/go-monobank-sdk/v2/installment"
 
 cli, err := installment.New(
     os.Getenv("CHAST_STORE_ID"),
@@ -295,7 +295,7 @@ no float64 in the hot path). `0.10`/`0.20`/`0.30` round-trip exactly.
 ## Quick start: Jar
 
 ```go
-import "github.com/OlexiyOdarchuk/go-monobank-sdk/jar"
+import "github.com/OlexiyOdarchuk/go-monobank-sdk/v2/jar"
 
 cli, err := jar.New()
 if err != nil { return err }
@@ -412,8 +412,8 @@ To avoid hitting `429` from the start, add `WithRateLimiter`:
 import (
     "time"
 
-    monobank "github.com/OlexiyOdarchuk/go-monobank-sdk"
-    "github.com/OlexiyOdarchuk/go-monobank-sdk/personal"
+    monobank "github.com/OlexiyOdarchuk/go-monobank-sdk/v2"
+    "github.com/OlexiyOdarchuk/go-monobank-sdk/v2/personal"
 )
 
 lim := monobank.NewLimiter(time.Minute, 1) // 1 request / 60s
@@ -690,7 +690,7 @@ h.ServeHTTP(rec, req)                              // signature verifies against
 import (
     "go.opentelemetry.io/otel"
     "github.com/OlexiyOdarchuk/go-monobank-sdk/otelmonobank"
-    "github.com/OlexiyOdarchuk/go-monobank-sdk/personal"
+    "github.com/OlexiyOdarchuk/go-monobank-sdk/v2/personal"
 )
 
 cli := personal.New(token, otelmonobank.WithTracer(otel.Tracer("my-app")))
@@ -721,7 +721,7 @@ Each one runs as `go run ./examples/<name>` with the matching env
 ## Documentation
 
 Full godoc per package, type, and function at
-<https://pkg.go.dev/github.com/OlexiyOdarchuk/go-monobank-sdk>.
+<https://pkg.go.dev/github.com/OlexiyOdarchuk/go-monobank-sdk/v2>.
 
 Wire identifiers (HTTP headers, JSON keys) stay in English — exactly as
 the API itself uses them.

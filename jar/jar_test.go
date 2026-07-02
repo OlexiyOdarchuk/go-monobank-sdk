@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/OlexiyOdarchuk/go-monobank-sdk/jar"
+	"github.com/OlexiyOdarchuk/go-monobank-sdk/v2/jar"
 )
 
 func TestByLongID_success(t *testing.T) {

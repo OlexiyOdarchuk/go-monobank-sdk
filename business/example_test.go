@@ -7,8 +7,8 @@ import (
 	"os"
 	"time"
 
-	"github.com/OlexiyOdarchuk/go-monobank-sdk/business"
-	"github.com/OlexiyOdarchuk/go-monobank-sdk/currency"
+	"github.com/OlexiyOdarchuk/go-monobank-sdk/v2/business"
+	"github.com/OlexiyOdarchuk/go-monobank-sdk/v2/currency"
 )
 
 func ExampleNew() {
@@ -65,6 +65,6 @@ func ExampleClient_Statement() {
 	for _, op := range items {
 		fmt.Printf("%s · %+d %s · %s\n",
 			time.Unix(op.Time.Unix(), 0).Format(time.RFC3339),
-			op.Amount, op.CurrencyAlpha3, op.Description)
+			op.Amount, op.CurrencyCode, op.Description)
 	}
 }

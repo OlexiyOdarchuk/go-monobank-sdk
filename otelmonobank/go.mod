@@ -3,7 +3,7 @@ module github.com/OlexiyOdarchuk/go-monobank-sdk/otelmonobank
 go 1.25.0
 
 require (
-	github.com/OlexiyOdarchuk/go-monobank-sdk v0.1.0
+	github.com/OlexiyOdarchuk/go-monobank-sdk/v2 v2.0.0
 	github.com/stretchr/testify v1.11.1
 	go.opentelemetry.io/otel v1.44.0
 	go.opentelemetry.io/otel/trace v1.44.0
@@ -20,4 +20,4 @@ require (
 // Локальний replace для розробки в одному репо. Споживачі цього
 // sub-модуля його НЕ бачать (Go ігнорує replace у не-main модулях),
 // тому require вище визначає реальну версію.
-replace github.com/OlexiyOdarchuk/go-monobank-sdk => ../
+replace github.com/OlexiyOdarchuk/go-monobank-sdk/v2 => ../

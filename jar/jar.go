@@ -28,6 +28,9 @@ import (
 	"net/http"
 	"net/url"
 	"time"
+
+	"github.com/OlexiyOdarchuk/go-monobank-sdk/v2/currency"
+	"github.com/OlexiyOdarchuk/go-monobank-sdk/v2/money"
 )
 
 // Default endpoints — override via [WithAPIBaseURL] /
@@ -84,6 +87,19 @@ type Info struct {
 	Amount    int64  `json:"amount"`
 	Goal      int64  `json:"goal"`
 	Currency  int    `json:"currency"`
+}
+
+// Money returns the jar's collected Amount as a typed [money.Money]
+// with the currency attached — mirroring [bank.Jar] so the standalone
+// jar package participates in the same typed-money model.
+func (i Info) Money() money.Money {
+	return money.New(i.Amount, currency.Code(i.Currency))
+}
+
+// GoalMoney returns the jar's Goal as a typed [money.Money]. A zero
+// Goal means the jar has no target set.
+func (i Info) GoalMoney() money.Money {
+	return money.New(i.Goal, currency.Code(i.Currency))
 }
 
 // SendInfo is the subset of fields from send.monobank.ua/api/handler

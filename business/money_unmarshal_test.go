@@ -7,8 +7,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/OlexiyOdarchuk/go-monobank-sdk/business"
-	"github.com/OlexiyOdarchuk/go-monobank-sdk/currency"
+	"github.com/OlexiyOdarchuk/go-monobank-sdk/v2/business"
+	"github.com/OlexiyOdarchuk/go-monobank-sdk/v2/currency"
 )
 
 func TestStatementItem_propagatesCurrencyString(t *testing.T) {

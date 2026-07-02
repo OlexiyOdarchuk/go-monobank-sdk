@@ -11,7 +11,8 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/OlexiyOdarchuk/go-monobank-sdk/currency"
+	"github.com/OlexiyOdarchuk/go-monobank-sdk/v2/currency"
+	"github.com/OlexiyOdarchuk/go-monobank-sdk/v2/money"
 )
 
 // SubscriptionStatus is the state of a recurring payment.
@@ -132,6 +133,14 @@ type SubscriptionStatusResponse struct {
 	WalletData       SubscriptionWalletData `json:"walletData"`
 }
 
+// AmountMoney returns Amount as a typed [money.Money] with Currency
+// attached — consistent with the money.Money used elsewhere in the
+// SDK, since the wire ships subscription amounts as a bare minor-unit
+// int64 alongside a separate ccy.
+func (s SubscriptionStatusResponse) AmountMoney() money.Money {
+	return money.New(s.Amount, s.Currency)
+}
+
 // Pagination is the standard page wrapper for subscription and
 // payment lists.
 type Pagination struct {
@@ -148,6 +157,12 @@ type SubscriptionPayment struct {
 	Currency  currency.Code             `json:"ccy"`
 	Status    SubscriptionPaymentStatus `json:"status"`
 	ChargedAt string                    `json:"chargedAt"`
+}
+
+// AmountMoney returns Amount as a typed [money.Money] with Currency
+// attached.
+func (p SubscriptionPayment) AmountMoney() money.Money {
+	return money.New(p.Amount, p.Currency)
 }
 
 // SubscriptionPaymentsResponse is the response of
@@ -167,6 +182,14 @@ type SubscriptionListItem struct {
 	NextChargeDate string             `json:"nextChargeDate,omitempty"`
 	EndDate        string             `json:"endDate,omitempty"`
 	Status         SubscriptionStatus `json:"status"`
+}
+
+// AmountMoney returns Amount as a typed [money.Money]. The list
+// endpoint does not ship a per-row currency, so Code is left unset
+// (zero); the amount's Minor value is still exact. Fetch the
+// subscription's status for the currency-qualified amount.
+func (i SubscriptionListItem) AmountMoney() money.Money {
+	return money.New(i.Amount, 0)
 }
 
 // SubscriptionsListResponse is the response of

@@ -7,7 +7,7 @@ import (
 	"sort"
 	"time"
 
-	"github.com/OlexiyOdarchuk/go-monobank-sdk/money"
+	"github.com/OlexiyOdarchuk/go-monobank-sdk/v2/money"
 )
 
 // IsTerminal reports whether the status is a final invoice state —

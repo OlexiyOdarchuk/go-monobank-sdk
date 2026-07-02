@@ -15,8 +15,8 @@ import (
 	"go.opentelemetry.io/otel/trace/embedded"
 	"go.opentelemetry.io/otel/trace/noop"
 
-	monobank "github.com/OlexiyOdarchuk/go-monobank-sdk"
 	"github.com/OlexiyOdarchuk/go-monobank-sdk/otelmonobank"
+	monobank "github.com/OlexiyOdarchuk/go-monobank-sdk/v2"
 )
 
 // --- recording tracer (мінімальна імплементація trace.Tracer для тестів) ---

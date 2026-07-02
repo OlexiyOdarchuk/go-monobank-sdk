@@ -8,7 +8,7 @@ import (
 	"net/url"
 	"time"
 
-	"github.com/OlexiyOdarchuk/go-monobank-sdk/auth"
+	"github.com/OlexiyOdarchuk/go-monobank-sdk/v2/auth"
 )
 
 const defaultBaseURL = "https://api.monobank.ua"

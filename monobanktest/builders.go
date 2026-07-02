@@ -3,7 +3,7 @@ package monobanktest
 import (
 	"net/http"
 
-	"github.com/OlexiyOdarchuk/go-monobank-sdk/bank"
+	"github.com/OlexiyOdarchuk/go-monobank-sdk/v2/bank"
 )
 
 // Builders are preset scenarios so you do not have to write .Handle

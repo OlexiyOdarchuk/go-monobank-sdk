@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/OlexiyOdarchuk/go-monobank-sdk/jar"
+	"github.com/OlexiyOdarchuk/go-monobank-sdk/v2/jar"
 )
 
 func ExampleClient_ByLongID() {

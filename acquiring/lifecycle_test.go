@@ -5,7 +5,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/OlexiyOdarchuk/go-monobank-sdk/acquiring"
+	"github.com/OlexiyOdarchuk/go-monobank-sdk/v2/acquiring"
 )
 
 func TestClassifySubscription(t *testing.T) {

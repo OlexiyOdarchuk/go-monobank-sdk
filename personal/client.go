@@ -26,9 +26,9 @@ import (
 	"strconv"
 	"time"
 
-	monobank "github.com/OlexiyOdarchuk/go-monobank-sdk"
-	"github.com/OlexiyOdarchuk/go-monobank-sdk/auth"
-	"github.com/OlexiyOdarchuk/go-monobank-sdk/bank"
+	monobank "github.com/OlexiyOdarchuk/go-monobank-sdk/v2"
+	"github.com/OlexiyOdarchuk/go-monobank-sdk/v2/auth"
+	"github.com/OlexiyOdarchuk/go-monobank-sdk/v2/bank"
 )
 
 // Client is the Open API client with a personal token.

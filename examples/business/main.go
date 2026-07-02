@@ -17,8 +17,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/OlexiyOdarchuk/go-monobank-sdk/business"
-	"github.com/OlexiyOdarchuk/go-monobank-sdk/currency"
+	"github.com/OlexiyOdarchuk/go-monobank-sdk/v2/business"
+	"github.com/OlexiyOdarchuk/go-monobank-sdk/v2/currency"
 )
 
 func main() {

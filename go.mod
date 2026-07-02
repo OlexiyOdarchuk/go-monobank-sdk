@@ -1,17 +1,6 @@
-module github.com/OlexiyOdarchuk/go-monobank-sdk
+module github.com/OlexiyOdarchuk/go-monobank-sdk/v2
 
 go 1.25.0
-
-// v1.1.0 транзитивно тягнув golang.org/x/sync v0.20.0, що вимагає Go
-// 1.25.0 — модуль не збирався на CI-матриці 1.23/1.24, заявлених як
-// підтримувані. v1.1.1 фіксує депенденсі, але README/документація
-// лишалися застарілими (зламані приклади Ccy/NewKeyedLimiter,
-// відсутні нові фічі). v1.1.2 — перша версія з повністю узгодженою
-// документацією.
-retract (
-	v1.1.1
-	v1.1.0
-)
 
 require (
 	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.4.1

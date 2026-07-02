@@ -32,8 +32,8 @@ import (
 	"errors"
 	"net/http"
 
-	monobank "github.com/OlexiyOdarchuk/go-monobank-sdk"
-	"github.com/OlexiyOdarchuk/go-monobank-sdk/auth"
+	monobank "github.com/OlexiyOdarchuk/go-monobank-sdk/v2"
+	"github.com/OlexiyOdarchuk/go-monobank-sdk/v2/auth"
 )
 
 // ErrEmptyAuthMaker is returned from [New] when authMaker is nil.

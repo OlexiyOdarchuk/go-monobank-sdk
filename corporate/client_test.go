@@ -11,8 +11,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	monobank "github.com/OlexiyOdarchuk/go-monobank-sdk"
-	"github.com/OlexiyOdarchuk/go-monobank-sdk/auth"
+	monobank "github.com/OlexiyOdarchuk/go-monobank-sdk/v2"
+	"github.com/OlexiyOdarchuk/go-monobank-sdk/v2/auth"
 )
 
 // stubAuth is a no-op authorizer used by tests that don't care about

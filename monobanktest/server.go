@@ -28,7 +28,7 @@ import (
 	"sync"
 	"testing"
 
-	monobank "github.com/OlexiyOdarchuk/go-monobank-sdk"
+	monobank "github.com/OlexiyOdarchuk/go-monobank-sdk/v2"
 )
 
 // Server is a fake monobank HTTP server. It wraps [httptest.Server]

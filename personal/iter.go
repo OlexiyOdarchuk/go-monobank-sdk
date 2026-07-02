@@ -5,7 +5,7 @@ import (
 	"iter"
 	"time"
 
-	"github.com/OlexiyOdarchuk/go-monobank-sdk/bank"
+	"github.com/OlexiyOdarchuk/go-monobank-sdk/v2/bank"
 )
 
 // TransactionsRangeIter is the streaming variant of

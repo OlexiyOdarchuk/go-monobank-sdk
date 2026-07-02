@@ -82,6 +82,27 @@ func FromAlpha3(s string) (Code, bool) {
 	return c, ok
 }
 
+// Parse resolves a currency shipped as a string, accepting either the
+// alpha-3 name ("UAH") or the ISO 4217 numeric code as a string
+// ("980"). It exists because monobank is inconsistent about the wire
+// format of the corp-api statement's `currencyCode`: the code has
+// observed "UAH" in the wild while the published spec documents "980".
+// Parse copes with both so callers get a typed [Code] regardless.
+//
+// ok=false when the string is neither a known alpha-3 name nor a
+// syntactically valid numeric code. A numeric code that is
+// syntactically valid but unknown to the SDK still returns ok=true —
+// the [Code] round-trips even if the SDK carries no alpha-3 for it.
+func Parse(s string) (Code, bool) {
+	if c, ok := fromAlpha3[s]; ok {
+		return c, true
+	}
+	if n, err := strconv.Atoi(s); err == nil && n > 0 {
+		return Code(n), true
+	}
+	return 0, false
+}
+
 // String returns the alpha-3 code (for example "UAH") when the
 // currency is known, or the decimal form of the numeric code as a
 // fallback for unknown currencies. That makes the type fmt-printable

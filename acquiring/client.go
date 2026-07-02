@@ -69,7 +69,7 @@ import (
 	"log/slog"
 	"net/http"
 
-	monobank "github.com/OlexiyOdarchuk/go-monobank-sdk"
+	monobank "github.com/OlexiyOdarchuk/go-monobank-sdk/v2"
 )
 
 // ErrEmptyID is returned by methods that take a path-parameter

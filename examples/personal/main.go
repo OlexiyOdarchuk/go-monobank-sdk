@@ -21,7 +21,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/OlexiyOdarchuk/go-monobank-sdk/personal"
+	"github.com/OlexiyOdarchuk/go-monobank-sdk/v2/personal"
 )
 
 func main() {

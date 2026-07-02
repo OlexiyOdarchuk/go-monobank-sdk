@@ -271,6 +271,19 @@ func (c *Client) VerifyCallback(body []byte, signatureHeader string) error {
 	return nil
 }
 
+// ParseCallback decodes an installment callback body into an
+// [OrderStateInfo] ({order_id, state, order_sub_state}). It is the
+// typed counterpart to [Client.VerifyCallback] — verify the signature
+// first, then parse. Kept a free function (no client state needed) so
+// it composes with any transport.
+func ParseCallback(body []byte) (*OrderStateInfo, error) {
+	var info OrderStateInfo
+	if err := json.Unmarshal(body, &info); err != nil {
+		return nil, fmt.Errorf("installment: parse callback: %w", err)
+	}
+	return &info, nil
+}
+
 // doJSON performs a POST with a JSON body, signs it, checks the
 // expected status, and decodes the response into out (when
 // out != nil).

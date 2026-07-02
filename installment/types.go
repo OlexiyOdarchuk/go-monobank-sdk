@@ -13,6 +13,17 @@ const (
 	StateInProcess OrderState = "IN_PROCESS"
 )
 
+// IsTerminal reports whether the order has reached a final overall
+// state — SUCCESS or FAIL — and will not change further. IN_PROCESS
+// (and any unrecognized future state) is treated as non-terminal, so
+// callers keep polling rather than declaring a result prematurely.
+func (s OrderState) IsTerminal() bool {
+	return s == StateSuccess || s == StateFail
+}
+
+// IsSuccess reports whether the order completed successfully.
+func (s OrderState) IsSuccess() bool { return s == StateSuccess }
+
 // OrderSubState is the detailed state of an order.
 type OrderSubState string
 
@@ -44,10 +55,14 @@ const (
 // InvoiceSource is the sales channel for CreateOrderRequest.Invoice.
 type InvoiceSource string
 
-// Possible InvoiceSource values.
+// Possible InvoiceSource values. On a create request only Internet and
+// Store are valid; Checkout and Marketplace appear only on the
+// response side (OrderShortInfo.Source).
 const (
-	SourceInternet InvoiceSource = "INTERNET"
-	SourceStore    InvoiceSource = "STORE"
+	SourceInternet    InvoiceSource = "INTERNET"
+	SourceStore       InvoiceSource = "STORE"
+	SourceCheckout    InvoiceSource = "CHECKOUT"
+	SourceMarketplace InvoiceSource = "MARKETPLACE"
 )
 
 // CreateOrderRequest is the body of POST /api/order/create.
@@ -88,10 +103,15 @@ type Product struct {
 
 // CreateAdditionalParams holds optional parameters of the create
 // request.
+//
+// NDS and ExtInitialSum are pointers so that an unset amount is
+// omitted from the payload. A plain [Money] (a struct) cannot be
+// omitted by encoding/json even with omitempty, which would send a
+// spurious "0.00" for VAT / initial-sum the caller never provided.
 type CreateAdditionalParams struct {
 	SellerPhone   string `json:"seller_phone,omitempty"`
-	NDS           Money  `json:"nds,omitempty"`
-	ExtInitialSum Money  `json:"ext_initial_sum,omitempty"`
+	NDS           *Money `json:"nds,omitempty"`
+	ExtInitialSum *Money `json:"ext_initial_sum,omitempty"`
 }
 
 // FinancialCompanyMerchantInfo holds the merchant's details for the
@@ -158,9 +178,11 @@ type ReturnRequest struct {
 	AdditionalParams  *ReturnAdditionalParams `json:"additional_params,omitempty"`
 }
 
-// ReturnAdditionalParams holds optional return parameters.
+// ReturnAdditionalParams holds optional return parameters. NDS is a
+// pointer for the same reason as [CreateAdditionalParams.NDS]: a plain
+// [Money] struct cannot be omitted and would send a spurious "0.00".
 type ReturnAdditionalParams struct {
-	NDS Money `json:"nds,omitempty"`
+	NDS *Money `json:"nds,omitempty"`
 }
 
 // ReturnResponse is the response of /api/order/return.

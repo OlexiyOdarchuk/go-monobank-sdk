@@ -19,7 +19,7 @@ var userAgentPrefix = sync.OnceValue(func() string {
 	v := sdkVersion
 	if info, ok := debug.ReadBuildInfo(); ok {
 		for _, dep := range info.Deps {
-			if dep.Path == "github.com/OlexiyOdarchuk/go-monobank-sdk" {
+			if dep.Path == "github.com/OlexiyOdarchuk/go-monobank-sdk/v2" {
 				v = dep.Version
 				break
 			}

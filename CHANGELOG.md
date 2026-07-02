@@ -7,6 +7,95 @@
 
 ## [Unreleased]
 
+## [2.0.0] — 2026-07-02
+
+Вирівнювання SDK з чинною документацією monobank після звірки всіх
+п'яти API-секцій поле-в-поле — плюс перехід на `/v2` шлях модуля
+(вимога Go для major-версій).
+
+### ⚠️ Migration з v1.x
+
+**Шлях імпорту** тепер містить `/v2`:
+
+```bash
+go get github.com/OlexiyOdarchuk/go-monobank-sdk/v2
+```
+
+```go
+import "github.com/OlexiyOdarchuk/go-monobank-sdk/v2/acquiring"
+```
+
+**Перейменовані / змінені символи** (заміни при апгрейді):
+
+| v1.x | v2.0.0 |
+|---|---|
+| `business.StatementItem.CurrencyAlpha3` | `business.StatementItem.CurrencyCode` |
+| `installment.CreateAdditionalParams.NDS` (`Money`) | `*Money` — передавайте `&nds` |
+| `installment.CreateAdditionalParams.ExtInitialSum` (`Money`) | `*Money` |
+| `installment.ReturnAdditionalParams.NDS` (`Money`) | `*Money` |
+| `acquiring.StatementInvoice.PaymentScheme` (`string`) | typed `acquiring.PaymentScheme` |
+| `bank.Account.CashbackType` (`string`) | typed `bank.CashbackType` |
+
+Решта змін — адитивні (нижче), коду не ламають.
+
+### Changed
+
+- **`business.StatementItem`: поле `CurrencyAlpha3` → `CurrencyCode`.**
+  corp-api шле `currencyCode` непослідовно — у дикому вигляді як alpha-3
+  (`"UAH"`), а в специфікації як числовий код (`"980"`). `UnmarshalJSON`
+  тепер розбирає **обидва** формати через новий `currency.Parse`, тож
+  `Amount.Code` заповнюється незалежно від того, що віддав банк.
+- **`installment.CreateAdditionalParams.NDS` / `.ExtInitialSum` та
+  `installment.ReturnAdditionalParams.NDS`: `Money` → `*Money`.**
+  `Money` — структура, тож `omitempty` на ній не діяв і в запит завжди
+  летіло хибне `"0.00"`, якого продавець не задавав. Вказівник дозволяє
+  справді опустити незадане значення.
+- **`acquiring.WalletPaymentRequest.InitiationKind`: прибрано
+  `omitempty`.** Поле обовʼязкове для `wallet/payment` за специфікацією —
+  раніше його можна було мовчки не надіслати.
+- **`acquiring.StatementInvoice.PaymentScheme`: `string` → typed
+  `acquiring.PaymentScheme`** (`SchemeFull` / `SchemeBNPLParts4` /
+  `SchemeBNPLLater30`). За офіційною докою `paymentScheme` живе саме на
+  рядку виписки, а не в `paymentInfo` статусу.
+- **`bank.Account.CashbackType`: `string` → typed `bank.CashbackType`**
+  (`CashbackNone` / `CashbackUAH` / `CashbackMiles`).
+
+### Added
+
+- **`acquiring` `invoice/create`** — відсутні поля документації:
+  `SuccessURL` (`successUrl`) та `FailURL` (`failUrl`) — окремі адреси
+  повернення для успіху/невдачі; `DisplayType` (`displayType`) + тип
+  `DisplayType`/`DisplayIframe`; `WithAppURL` (`withAppUrl`);
+  `CreateInvoiceResponse.AppURL` (`appUrl`) — universal-link у застосунок
+  monobank (підтверджено на живому API на test- і prod-токені).
+- **`acquiring`** — `MerchantPaymInfo.Metadata` та `StatementInvoice.Metadata`
+  (`metadata`), `BasketItem.SplitReceiverID` (`splitReceiverId`).
+- **`acquiring` enum-значення** — `PaymentVerification` (`"verification"`),
+  `SourceVchasnoKasa` (`"vchasnokasa"`).
+- **`acquiring` підписки** — `AmountMoney()` на `SubscriptionStatusResponse`,
+  `SubscriptionPayment` і `SubscriptionListItem` (типізована `money.Money`
+  замість голого `int64`).
+- **`bank`** — `ClientInfo.Permissions` (`permissions`),
+  `Transaction.CounterName` (`counterName`); зручні пошуки в графі
+  client-info: `Accounts.ByID` / `ByIBAN` / `ByCurrency`, `Jars.ByID`,
+  `ClientInfo.Account` / `Jar`.
+- **`currency.Parse`** — резолвить валюту-рядок як alpha-3 (`"UAH"`) або
+  числовий код (`"980"`).
+- **`installment`** — `OrderState.IsTerminal()` / `IsSuccess()`,
+  `ParseCallback` (типізований розбір тіла колбека в пару до
+  `VerifyCallback`); enum `SourceCheckout` / `SourceMarketplace`.
+- **`jar`** — `Info.Money()` / `GoalMoney()` (типізована `money.Money`,
+  як у `bank.Jar`).
+- **`acquiring.Adjustment.Tax`** (`tax`) — вирівняно з `BasketItem.Tax`.
+- **`corporate.Settings.ID`** (`id`) — ідентифікатор компанії з
+  `/personal/corp/settings`.
+
+### Fixed
+
+- **installment: хибне `"0.00"` для `nds` / `ext_initial_sum`** більше не
+  потрапляє в тіло запиту `order/create` та `order/return` (див. `*Money`
+  вище).
+
 ## [1.4.1] — 2026-06-25
 
 Багфікс виписки: вікна з понад 500 транзакцій більше не губляться.
@@ -615,7 +704,8 @@ defer klim.Stop()
 - `monobanktest` — мок-сервер на `httptest.Server` із fluent-builder-ами.
 - Пагінатори через `iter.Seq2` (Go 1.23+).
 
-[Unreleased]: https://github.com/OlexiyOdarchuk/go-monobank-sdk/compare/v1.4.1...HEAD
+[Unreleased]: https://github.com/OlexiyOdarchuk/go-monobank-sdk/compare/v2.0.0...HEAD
+[2.0.0]: https://github.com/OlexiyOdarchuk/go-monobank-sdk/compare/v1.4.1...v2.0.0
 [1.4.1]: https://github.com/OlexiyOdarchuk/go-monobank-sdk/compare/v1.4.0...v1.4.1
 [1.4.0]: https://github.com/OlexiyOdarchuk/go-monobank-sdk/compare/v1.3.1...v1.4.0
 [1.3.1]: https://github.com/OlexiyOdarchuk/go-monobank-sdk/compare/v1.3.0...v1.3.1

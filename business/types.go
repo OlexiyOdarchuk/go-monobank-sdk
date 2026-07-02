@@ -6,8 +6,8 @@ import (
 
 	"github.com/vtopc/epoch"
 
-	"github.com/OlexiyOdarchuk/go-monobank-sdk/currency"
-	"github.com/OlexiyOdarchuk/go-monobank-sdk/money"
+	"github.com/OlexiyOdarchuk/go-monobank-sdk/v2/currency"
+	"github.com/OlexiyOdarchuk/go-monobank-sdk/v2/money"
 )
 
 // DocumentType is the kind of ID document a salary contact / recipient can
@@ -166,26 +166,28 @@ type StatementItem struct {
 	CompletedTime     epoch.Seconds `json:"completedTime,omitempty"`
 	Description       string        `json:"description"`
 	Amount            money.Money   `json:"amount"`
-	// CurrencyAlpha3 is the operation's currency in ISO-4217 alpha-3
-	// form (for example, "UAH"). Unlike [bank.Account.Currency] or
-	// [acquiring.InvoiceStatusResponse.Currency], the wire format
-	// here is a string — that is how corp-api ships currencyCode in
-	// statements. For typed comparison, convert via
-	// [currency.FromAlpha3] (UnmarshalJSON does this automatically
-	// for Amount.Code).
-	CurrencyAlpha3 string          `json:"currencyCode"`
-	ReceiptID      string          `json:"receiptId,omitempty"`
-	CounterEdrpou  string          `json:"counterEdrpou,omitempty"`
-	CounterIBAN    string          `json:"counterIban,omitempty"`
-	CounterName    string          `json:"counterName,omitempty"`
-	Reverse        bool            `json:"reverse,omitempty"`
-	Status         OperationStatus `json:"status"`
+	// CurrencyCode is the operation's currency as corp-api ships it in
+	// the statement: a string. Unlike [bank.Account.Currency] or
+	// [acquiring.InvoiceStatusResponse.Currency] (numeric on the wire),
+	// this field is a string whose format monobank is inconsistent
+	// about — observed as alpha-3 ("UAH") in the wild, documented as
+	// the numeric code ("980") in the published spec. For a typed
+	// value use [currency.Parse], which accepts both (UnmarshalJSON
+	// does this automatically for Amount.Code).
+	CurrencyCode  string          `json:"currencyCode"`
+	ReceiptID     string          `json:"receiptId,omitempty"`
+	CounterEdrpou string          `json:"counterEdrpou,omitempty"`
+	CounterIBAN   string          `json:"counterIban,omitempty"`
+	CounterName   string          `json:"counterName,omitempty"`
+	Reverse       bool            `json:"reverse,omitempty"`
+	Status        OperationStatus `json:"status"`
 }
 
-// UnmarshalJSON attaches a currency.Code to Amount by converting
-// the alpha-3 string (`"UAH"`) to the numeric code. For unknown
-// currencies Code stays zero (Amount.Minor is still parsed
-// correctly).
+// UnmarshalJSON attaches a currency.Code to Amount by resolving the
+// wire string, which corp-api ships either as an alpha-3 name ("UAH")
+// or as the numeric code ("980"); [currency.Parse] handles both. For
+// unrecognized currencies Code stays zero (Amount.Minor is still
+// parsed correctly).
 func (s *StatementItem) UnmarshalJSON(data []byte) error {
 	type raw StatementItem
 	var r raw
@@ -193,7 +195,7 @@ func (s *StatementItem) UnmarshalJSON(data []byte) error {
 		return err
 	}
 	*s = StatementItem(r)
-	if c, ok := currency.FromAlpha3(s.CurrencyAlpha3); ok {
+	if c, ok := currency.Parse(s.CurrencyCode); ok {
 		s.Amount.Code = c
 	}
 	return nil

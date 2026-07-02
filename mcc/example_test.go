@@ -3,7 +3,7 @@ package mcc_test
 import (
 	"fmt"
 
-	"github.com/OlexiyOdarchuk/go-monobank-sdk/mcc"
+	"github.com/OlexiyOdarchuk/go-monobank-sdk/v2/mcc"
 )
 
 func ExampleCode_Category() {

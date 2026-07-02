@@ -9,8 +9,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/OlexiyOdarchuk/go-monobank-sdk/monobanktest"
-	"github.com/OlexiyOdarchuk/go-monobank-sdk/personal"
+	"github.com/OlexiyOdarchuk/go-monobank-sdk/v2/monobanktest"
+	"github.com/OlexiyOdarchuk/go-monobank-sdk/v2/personal"
 )
 
 func TestServer_URL_andClose(t *testing.T) {

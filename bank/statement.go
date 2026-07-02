@@ -29,7 +29,7 @@ type StatementFetcher func(from, to time.Time) (Transactions, error)
 // oldest second it just saw and fetches again, deduplicating by
 // transaction id so the overlap on that boundary second is not
 // re-yielded. This mirrors the same-second-safe strategy
-// [github.com/OlexiyOdarchuk/go-monobank-sdk/business.Client.StatementAll]
+// [github.com/OlexiyOdarchuk/go-monobank-sdk/v2/business.Client.StatementAll]
 // uses — shifting `to` by a whole second instead would drop any rows
 // sharing the boundary second past the cut.
 //

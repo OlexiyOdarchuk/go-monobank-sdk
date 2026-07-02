@@ -2,10 +2,10 @@
 
 🇺🇦 Українська · [🇬🇧 English](README.en.md)
 
-[![Go Reference](https://pkg.go.dev/badge/github.com/OlexiyOdarchuk/go-monobank-sdk.svg)](https://pkg.go.dev/github.com/OlexiyOdarchuk/go-monobank-sdk)
-[![CI](https://github.com/OlexiyOdarchuk/go-monobank-sdk/actions/workflows/ci.yaml/badge.svg)](https://github.com/OlexiyOdarchuk/go-monobank-sdk/actions/workflows/ci.yaml)
+[![Go Reference](https://pkg.go.dev/badge/github.com/OlexiyOdarchuk/go-monobank-sdk/v2.svg)](https://pkg.go.dev/github.com/OlexiyOdarchuk/go-monobank-sdk/v2)
+[![CI](https://github.com/OlexiyOdarchuk/go-monobank-sdk/v2/actions/workflows/ci.yaml/badge.svg)](https://github.com/OlexiyOdarchuk/go-monobank-sdk/v2/actions/workflows/ci.yaml)
 [![codecov](https://codecov.io/gh/OlexiyOdarchuk/go-monobank-sdk/branch/main/graph/badge.svg)](https://codecov.io/gh/OlexiyOdarchuk/go-monobank-sdk)
-[![Go Report Card](https://goreportcard.com/badge/github.com/OlexiyOdarchuk/go-monobank-sdk)](https://goreportcard.com/report/github.com/OlexiyOdarchuk/go-monobank-sdk)
+[![Go Report Card](https://goreportcard.com/badge/github.com/OlexiyOdarchuk/go-monobank-sdk/v2)](https://goreportcard.com/report/github.com/OlexiyOdarchuk/go-monobank-sdk/v2)
 [![MIT License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 Повноцінний Go SDK для всіх публічних API monobank: **personal**, **corporate**
@@ -24,7 +24,7 @@ subscriptions / monopay-keys / split-receivers / T2P), **installment** (Поку
 ## Встановлення
 
 ```bash
-go get github.com/OlexiyOdarchuk/go-monobank-sdk
+go get github.com/OlexiyOdarchuk/go-monobank-sdk/v2
 ```
 
 Потрібен Go 1.25+ (пагінатори використовують `iter.Seq2`; весь воркспейс
@@ -84,7 +84,7 @@ import (
     "os"
     "time"
 
-    "github.com/OlexiyOdarchuk/go-monobank-sdk/personal"
+    "github.com/OlexiyOdarchuk/go-monobank-sdk/v2/personal"
 )
 
 func main() {
@@ -124,8 +124,8 @@ import (
     "log"
     "net/http"
 
-    "github.com/OlexiyOdarchuk/go-monobank-sdk/bank"
-    "github.com/OlexiyOdarchuk/go-monobank-sdk/webhook"
+    "github.com/OlexiyOdarchuk/go-monobank-sdk/v2/bank"
+    "github.com/OlexiyOdarchuk/go-monobank-sdk/v2/webhook"
 )
 
 func main() {
@@ -169,8 +169,8 @@ import (
     "context"
     "os"
 
-    "github.com/OlexiyOdarchuk/go-monobank-sdk/auth"
-    "github.com/OlexiyOdarchuk/go-monobank-sdk/corporate"
+    "github.com/OlexiyOdarchuk/go-monobank-sdk/v2/auth"
+    "github.com/OlexiyOdarchuk/go-monobank-sdk/v2/corporate"
 )
 
 func main() {
@@ -191,7 +191,7 @@ func main() {
 ## Швидкий старт: Business API (юр. особи)
 
 ```go
-import "github.com/OlexiyOdarchuk/go-monobank-sdk/business"
+import "github.com/OlexiyOdarchuk/go-monobank-sdk/v2/business"
 
 cli := business.New(os.Getenv("MONO_BUSINESS_TOKEN"))
 accs, _ := cli.Accounts(ctx)
@@ -210,7 +210,7 @@ out, _ := cli.PreparePayment(ctx, key, &business.PaymentRequest{...})
 ## Швидкий старт: Acquiring (еквайринг)
 
 ```go
-import "github.com/OlexiyOdarchuk/go-monobank-sdk/acquiring"
+import "github.com/OlexiyOdarchuk/go-monobank-sdk/v2/acquiring"
 
 cli := acquiring.New(os.Getenv("MONO_ACQUIRING_TOKEN"))
 
@@ -253,7 +253,7 @@ finalize), рекурент через токенізовані картки, р
 ## Швидкий старт: Installment («Покупка частинами»)
 
 ```go
-import "github.com/OlexiyOdarchuk/go-monobank-sdk/installment"
+import "github.com/OlexiyOdarchuk/go-monobank-sdk/v2/installment"
 
 cli, err := installment.New(
     os.Getenv("CHAST_STORE_ID"),
@@ -294,7 +294,7 @@ round-trip точно.
 ## Швидкий старт: Jar (банки)
 
 ```go
-import "github.com/OlexiyOdarchuk/go-monobank-sdk/jar"
+import "github.com/OlexiyOdarchuk/go-monobank-sdk/v2/jar"
 
 cli, err := jar.New()
 if err != nil { return err }
@@ -408,8 +408,8 @@ Mono обмежує більшість endpoint-ів — наприклад, `/p
 import (
     "time"
 
-    monobank "github.com/OlexiyOdarchuk/go-monobank-sdk"
-    "github.com/OlexiyOdarchuk/go-monobank-sdk/personal"
+    monobank "github.com/OlexiyOdarchuk/go-monobank-sdk/v2"
+    "github.com/OlexiyOdarchuk/go-monobank-sdk/v2/personal"
 )
 
 lim := monobank.NewLimiter(time.Minute, 1) // 1 запит / 60 с
@@ -684,7 +684,7 @@ h.ServeHTTP(rec, req)                              // підпис верифі�
 import (
     "go.opentelemetry.io/otel"
     "github.com/OlexiyOdarchuk/go-monobank-sdk/otelmonobank"
-    "github.com/OlexiyOdarchuk/go-monobank-sdk/personal"
+    "github.com/OlexiyOdarchuk/go-monobank-sdk/v2/personal"
 )
 
 cli := personal.New(token, otelmonobank.WithTracer(otel.Tracer("my-app")))
@@ -714,7 +714,7 @@ sub-module, щоб OTel не тягнувся у проєкти, які його
 ## Документація
 
 Повна godoc-документація на кожен пакет, тип, функцію:
-<https://pkg.go.dev/github.com/OlexiyOdarchuk/go-monobank-sdk>.
+<https://pkg.go.dev/github.com/OlexiyOdarchuk/go-monobank-sdk/v2>.
 
 Wire-ідентифікатори (HTTP-заголовки, JSON-ключі) лишаються англійською —
 як це бачить власне API.
