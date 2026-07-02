@@ -1,5 +1,5 @@
 // Package otelmonobank is the OpenTelemetry integration for
-// monobank-sdk.
+// go-monobank-sdk.
 //
 // It lives in a separate sub-module so that callers who do not use
 // OpenTelemetry are not forced to depend on

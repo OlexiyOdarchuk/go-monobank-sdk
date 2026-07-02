@@ -48,7 +48,7 @@ func main() {
 		Currency: 980,
 		MerchantPaymInfo: &acquiring.MerchantPaymInfo{
 			Reference:   fmt.Sprintf("demo-%d", time.Now().Unix()),
-			Destination: "monobank-sdk example invoice",
+			Destination: "go-monobank-sdk example invoice",
 		},
 		Validity:    600, // 10 minutes
 		PaymentType: acquiring.PaymentDebit,

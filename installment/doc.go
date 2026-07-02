@@ -43,6 +43,6 @@
 //     [Client.ReturnOrder].
 //
 // Every monetary field is hryvnias-with-kopecks as a `number`
-// (float64). Unlike the other monobank-sdk APIs, the installment API
+// (float64). Unlike the other go-monobank-sdk APIs, the installment API
 // does not use minor units; pass 2499.99, not 249999.
 package installment

@@ -1,4 +1,4 @@
-# monobank-sdk
+# go-monobank-sdk
 
 🇺🇦 Українська · [🇬🇧 English](README.en.md)
 
@@ -48,7 +48,7 @@ go get github.com/OlexiyOdarchuk/go-monobank-sdk/v2
 ## Структура пакетів
 
 ```
-monobank-sdk/
+go-monobank-sdk/
 ├── (root)          базовий HTTP-транспорт: Client, Option, retry, hooks
 ├── auth/           Authorizer + Personal/Corporate/Public + monoКЕП хелпери
 ├── bank/           публічні endpoint-и (Rates, ServerKey) + спільні типи

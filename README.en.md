@@ -1,4 +1,4 @@
-# monobank-sdk
+# go-monobank-sdk
 
 [🇺🇦 Українська](README.md) · 🇬🇧 English
 
@@ -47,7 +47,7 @@ The internal mobile API has no public spec — out of scope.
 ## Package layout
 
 ```
-monobank-sdk/
+go-monobank-sdk/
 ├── (root)          base HTTP transport: Client, Option, retry, hooks
 ├── auth/           Authorizer + Personal/Corporate/Public + monoКЕП helpers
 ├── bank/           public endpoints (Rates, ServerKey) + shared types

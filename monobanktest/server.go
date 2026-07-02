@@ -1,5 +1,5 @@
 // Package monobanktest provides helpers for testing code that uses
-// monobank-sdk: a fake HTTP server with routing and ready builders
+// go-monobank-sdk: a fake HTTP server with routing and ready builders
 // for common scenarios, plus contract interfaces for each client
 // (see the matching sub-package docs).
 //
