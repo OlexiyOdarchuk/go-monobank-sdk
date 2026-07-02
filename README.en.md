@@ -99,6 +99,10 @@ func main() {
         fmt.Println(a.IBAN, a.Balance)
     }
 
+    // Convenience lookups over the client-info graph: info.Account(id),
+    // info.Accounts.ByIBAN(iban), info.Accounts.ByCurrency(currency.UAH),
+    // info.Jar(id) — instead of looping the slices by hand.
+
     // A statement window > 31 days is paginated transparently.
     to := time.Now()
     from := to.Add(-90 * 24 * time.Hour)
@@ -223,8 +227,14 @@ inv, _ := cli.CreateInvoice(ctx, &acquiring.CreateInvoiceRequest{
     },
     Validity:    600,
     PaymentType: acquiring.PaymentDebit,
+    SuccessURL:  "https://shop.example/pay/ok",   // separate success/failure return
+    FailURL:     "https://shop.example/pay/fail", // URLs (redirect is enabled by
+                                                  // monobank support on request)
+    WithAppURL:  true,                            // ← also ask for an in-app deep link
 })
-// → hand inv.PageURL to the customer; track status via webhook or InvoiceStatus.
+// → hand inv.PageURL (web) or inv.AppURL (monobank app) to the customer; track
+//   status via webhook or InvoiceStatus. Redirect is an unreliable payment
+//   signal — treat webHookUrl as the source of truth.
 
 // Verify acquiring webhook (ECDSA-SHA256, ASN.1 DER).
 // /api/merchant/pubkey returns base64(PEM(SPKI)).
@@ -285,7 +295,9 @@ Body signing is automatic (HMAC-SHA256 with your store secret). For
 incoming bank callbacks: `cli.VerifyCallback(body, signatureHeader)`.
 Wrong-length signature → `ErrCallbackBadLength`; wrong MAC →
 `ErrCallbackSignatureMismatch` — separate sentinels for security
-telemetry.
+telemetry. Parse the callback body with `installment.ParseCallback(body)`
+→ `*OrderStateInfo`; `state.IsTerminal()` / `state.IsSuccess()` report
+whether the state is final.
 
 Every money field in installment (`TotalSum`, `Sum`, `Reverse.Sum`,
 `Commission`, `CreditAmount`, …) is `installment.Money` — int64 kopecks
@@ -628,6 +640,8 @@ amt = installment.MoneyFromMajor(2499.99) // rounds half away from zero
 ### `currency`, `mcc` — enums
 
 - `currency.Code(980).String()` → `"UAH"`; `currency.FromAlpha3("USD")` → `840`.
+- `currency.Parse("UAH")` and `currency.Parse("980")` both → `980` — accepts
+  alpha-3 or the numeric code as a string (corp-api ships either).
 - `currency.UAH.Decimals()` → `2`; `currency.JPY.Decimals()` → `0`;
   `currency.BHD.Decimals()` → `3`.
 - `mcc.Code(5411).Category()` → `mcc.CategoryGroceries`.

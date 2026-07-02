@@ -100,6 +100,10 @@ func main() {
         fmt.Println(a.IBAN, a.Balance)
     }
 
+    // Зручні пошуки в графі client-info: info.Account(id),
+    // info.Accounts.ByIBAN(iban), info.Accounts.ByCurrency(currency.UAH),
+    // info.Jar(id) — замість ручного циклу по зрізах.
+
     // Виписка за період > 31 дня автоматично розбивається на сторінки.
     to := time.Now()
     from := to.Add(-90 * 24 * time.Hour)
@@ -223,8 +227,14 @@ inv, _ := cli.CreateInvoice(ctx, &acquiring.CreateInvoiceRequest{
     },
     Validity:    600,
     PaymentType: acquiring.PaymentDebit,
+    SuccessURL:  "https://shop.example/pay/ok",   // окремі адреси повернення для
+    FailURL:     "https://shop.example/pay/fail", // успіху/невдачі (редірект вмикає
+                                                  // підтримка monobank за запитом)
+    WithAppURL:  true,                            // ← попросити ще й deep link у застосунок
 })
-// → клієнту віддаєте inv.PageURL; статус — через webhook або InvoiceStatus.
+// → клієнту віддаєте inv.PageURL (веб) або inv.AppURL (застосунок monobank);
+//   статус — через webhook або InvoiceStatus. Редірект — ненадійний індикатор
+//   оплати; істину беріть з webHookUrl.
 
 // Верифікація acquiring webhook (ECDSA-SHA256, ASN.1 DER).
 // Поле `key` із /api/merchant/pubkey — це base64(PEM(SPKI)).
@@ -284,6 +294,9 @@ order, _ := cli.CreateOrder(ctx, &installment.CreateOrderRequest{
 Для вхідного callback від банку — `cli.VerifyCallback(body, signatureHeader)`.
 Невалідна довжина підпису → `ErrCallbackBadLength`; невалідний MAC →
 `ErrCallbackSignatureMismatch` — окремі sentinel-и для security-телеметрії.
+Тіло callback розбирається типізовано: `installment.ParseCallback(body)` →
+`*OrderStateInfo`, а `state.IsTerminal()` / `state.IsSuccess()` кажуть, чи
+стан фінальний.
 
 Усі money-поля installment (`TotalSum`, `Sum`, `Reverse.Sum`, `Commission`,
 `CreditAmount` тощо) — це `installment.Money` із exact-decimal JSON
@@ -622,6 +635,8 @@ amt = installment.MoneyFromMajor(2499.99) // round half away from zero
 ### `currency`, `mcc` — enum-и
 
 - `currency.Code(980).String()` → `"UAH"`; `currency.FromAlpha3("USD")` → `840`.
+- `currency.Parse("UAH")` і `currency.Parse("980")` обидва → `980` — приймає
+  alpha-3 або числовий код рядком (corp-api шле формат непослідовно).
 - `currency.UAH.Decimals()` → `2`; `currency.JPY.Decimals()` → `0`;
   `currency.BHD.Decimals()` → `3`.
 - `mcc.Code(5411).Category()` → `mcc.CategoryGroceries`.
