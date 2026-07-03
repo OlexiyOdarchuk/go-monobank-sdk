@@ -7,6 +7,18 @@
 
 ## [Unreleased]
 
+## [2.0.1] — 2026-07-03
+
+### Fixed
+
+- **`MerchantPaymInfo.Metadata` та `StatementInvoice.Metadata`: `map[string]any`
+  → `map[string]string`.** monobank приймає в `merchantPaymInfo.metadata` ЛИШЕ
+  рядкові значення; будь-яке число чи bool API відхиляв із
+  `INVALID_MERCHANT_PAYM_INFO` («cannot unmarshal number into … metadata of type
+  string»), тобто `invoice/create` з непорожнім `Metadata` падав **ЗАВЖДИ**.
+  Тип виправлено на `map[string]string` (запит і відповідь). Міграція: числові
+  кореляційні id приводьте до рядка (`strconv.Itoa`/`FormatInt`) перед додаванням.
+
 ## [2.0.0] — 2026-07-02
 
 Вирівнювання SDK з чинною документацією monobank після звірки всіх

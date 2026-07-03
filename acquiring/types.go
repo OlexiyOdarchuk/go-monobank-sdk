@@ -151,10 +151,12 @@ type MerchantPaymInfo struct {
 	CustomerEmails []string     `json:"customerEmails,omitempty"`
 	Discounts      []Adjustment `json:"discounts,omitempty"`
 	BasketOrder    []BasketItem `json:"basketOrder,omitempty"`
-	// Metadata is an arbitrary key→value object echoed back on the
-	// invoice status and statement. Use it to carry your own
-	// correlation data through the payment.
-	Metadata map[string]any `json:"metadata,omitempty"`
+	// Metadata is an arbitrary key→value map (STRING values only) echoed
+	// back on the invoice status and statement. Use it to carry your own
+	// correlation data through the payment. The monobank API rejects
+	// non-string values (INVALID_MERCHANT_PAYM_INFO), so numbers/bools
+	// must be sent as their string form.
+	Metadata map[string]string `json:"metadata,omitempty"`
 }
 
 // PaymentType — debit (capture immediately), hold (capture later via
@@ -608,9 +610,9 @@ type StatementInvoice struct {
 	ShortQrID     string            `json:"shortQrId,omitempty"`
 	Destination   string            `json:"destination,omitempty"`
 	CancelList    []StatementRefund `json:"cancelList,omitempty"`
-	// Metadata echoes back the key→value object sent in
+	// Metadata echoes back the key→value map (string values) sent in
 	// MerchantPaymInfo.Metadata when the invoice was created.
-	Metadata map[string]any `json:"metadata,omitempty"`
+	Metadata map[string]string `json:"metadata,omitempty"`
 }
 
 // UnmarshalJSON attaches Currency to Amount and ProfitAmount.Code.

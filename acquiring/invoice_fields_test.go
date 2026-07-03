@@ -23,7 +23,7 @@ func TestCreateInvoiceRequest_newFields(t *testing.T) {
 		WithAppURL:  true,
 		MerchantPaymInfo: &acquiring.MerchantPaymInfo{
 			Reference: "r-1",
-			Metadata:  map[string]any{"orderId": "42"},
+			Metadata:  map[string]string{"orderId": "42"},
 		},
 	})
 	require.NoError(t, err)
