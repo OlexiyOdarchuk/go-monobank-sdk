@@ -4,8 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -25,6 +27,12 @@ func TestParseRetryAfter(t *testing.T) {
 		"negative":      {"-3", noRetryAfter},
 		"garbage":       {"soon", noRetryAfter},
 		"http-date now": {"Sun, 06 Nov 1994 08:49:37 GMT", 0}, // past → immediate
+		"clamped":       {"172800", maxRetryAfter},            // 48h → 24h ceiling
+		// Regression: seconds large enough that secs * time.Second
+		// overflows int64. Must still hit the ceiling, not wrap into a
+		// negative duration that reads as noRetryAfter.
+		"overflow":     {"9227000000", maxRetryAfter},
+		"overflow max": {strconv.Itoa(math.MaxInt64), maxRetryAfter},
 	}
 	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {

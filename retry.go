@@ -178,11 +178,15 @@ func parseRetryAfter(h http.Header) time.Duration {
 		return noRetryAfter
 	}
 	if secs, err := strconv.Atoi(v); err == nil && secs >= 0 {
-		d := time.Duration(secs) * time.Second
-		if d > maxRetryAfter {
-			d = maxRetryAfter
+		// Clamp in seconds, before the multiply. time.Duration(secs) *
+		// time.Second overflows int64 past ~9.2e9 seconds and wraps
+		// negative, which a post-multiply ceiling check silently misses:
+		// the wrapped value then reads as noRetryAfter and the server's
+		// hint is dropped instead of being capped.
+		if secs > int(maxRetryAfter/time.Second) {
+			return maxRetryAfter
 		}
-		return d
+		return time.Duration(secs) * time.Second
 	}
 	if t, err := http.ParseTime(v); err == nil {
 		if d := time.Until(t); d > 0 {

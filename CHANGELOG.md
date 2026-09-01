@@ -7,6 +7,65 @@
 
 ## [Unreleased]
 
+## [2.0.2] — 2026-09-01
+
+Патч обслуговування: переповнення int64 у розборі `Retry-After`,
+оновлення залежностей і CI-екшенів, виправлення security-політики,
+яка відстала від реальних версій. Публічний API незмінний щодо `2.0.1`.
+
+### Fixed
+
+- **`Retry-After` з великим значенням у секундах переповнював int64 і
+  мовчки скасовував 24-годинну стелю.** `time.Duration(secs) *
+  time.Second` для `secs` більших за ~9.2e9 (`Retry-After: 9227000000`)
+  загортався в **відʼємну** тривалість, і перевірка стелі
+  `d > maxRetryAfter` її не ловила. Відʼємне значення далі читалося
+  як `noRetryAfter`, тобто підказка сервера просто зникала — замість
+  обіцяного в документації клампу до 24 годин застосовувався звичайний
+  експоненційний backoff. Тепер клампимо **до** множення.
+
+  Помилка не «залипала» у тісний цикл ретраїв (відкат був на backoff,
+  а не на нульову затримку), але контракт `parseRetryAfter` порушувався
+  на вході, який повністю контролює сервер або проксі. Знайдено
+  `FuzzParseRetryAfter`; вхід додано в seed-корпус
+  (`testdata/fuzz/FuzzParseRetryAfter/`), плюс табличні кейси на стелю
+  і на переповнення — раніше 24-годинний кламп не покривався жодним
+  тестом.
+
+- **`otelmonobank/go.mod` тягнув кореневий модуль `v2.0.0`** — версію з
+  поламаним `Metadata` (див.
+  [2.0.1](https://github.com/OlexiyOdarchuk/go-monobank-sdk/releases/tag/v2.0.1)).
+  Споживачі submodule, які не вимагали SDK явно, отримували саме її.
+  Оновлено до `v2.0.2` і випущено як `otelmonobank/v1.0.1` — без окремого
+  тега submodule це виправлення до споживачів не доходить.
+
+- **`CHANGELOG.md`: посилання-дифф на `[2.0.1]` було відсутнє**, а
+  `[Unreleased]` вказував на `v2.0.0...HEAD`. Обидва виправлено.
+
+### Security
+
+- **`SECURITY.md`: таблиця підтримуваних версій була застаріла.**
+  Вона вказувала `0.1.x` ✅ / `< 0.1` ❌ — тобто після `v1.0.0` і `v2.0.0`
+  політика формально не покривала **жодної** реально випущеної версії.
+  Виправлено на `2.0.x`; додано явні рядки про `1.x` і `< 1.0`.
+- **Залежності оновлено**: `golang.org/x/sync` `0.21.0 → 0.22.0`,
+  `github.com/stretchr/testify` `1.11.1 → 1.12.1` (тягне
+  `go.yaml.in/yaml/v3 v3.0.5` замість `gopkg.in/yaml.v3 v3.0.1`),
+  `go.opentelemetry.io/otel` і `otel/trace` `1.44.0 → 1.46.0`
+  (в `otelmonobank`). `govulncheck` не показує **жодної** відомої
+  вразливості в дереві залежностей SDK — ні в кореневому модулі, ні в
+  submodule.
+- **CI-екшени перепінено**: `actions/checkout` `v7.0.0 → v7.0.1`,
+  `actions/setup-go` `v6.5.0 → v7.0.0`. Пін по commit-SHA збережено —
+  захист від перезапису тегів у сторонніх екшенах.
+
+> **Про CVE стандартної бібліотеки.** Усі знахідки `govulncheck` для цього
+> репозиторію — вразливості **stdlib Go**, а не залежностей SDK. Вони
+> закриваються оновленням тулчейна на боці споживача (на момент релізу —
+> Go `1.26.6`+ або свіжий патч гілки `1.25`), і жоден реліз SDK їх
+> закрити не може. `go.mod` навмисно лишає `go 1.25.0` — підняття
+> мінімального тулчейна в патч-релізі зламало б збірки на Go 1.25.
+
 ## [2.0.1] — 2026-07-03
 
 ### Fixed
@@ -716,7 +775,9 @@ defer klim.Stop()
 - `monobanktest` — мок-сервер на `httptest.Server` із fluent-builder-ами.
 - Пагінатори через `iter.Seq2` (Go 1.23+).
 
-[Unreleased]: https://github.com/OlexiyOdarchuk/go-monobank-sdk/compare/v2.0.0...HEAD
+[Unreleased]: https://github.com/OlexiyOdarchuk/go-monobank-sdk/compare/v2.0.2...HEAD
+[2.0.2]: https://github.com/OlexiyOdarchuk/go-monobank-sdk/compare/v2.0.1...v2.0.2
+[2.0.1]: https://github.com/OlexiyOdarchuk/go-monobank-sdk/compare/v2.0.0...v2.0.1
 [2.0.0]: https://github.com/OlexiyOdarchuk/go-monobank-sdk/compare/v1.4.1...v2.0.0
 [1.4.1]: https://github.com/OlexiyOdarchuk/go-monobank-sdk/compare/v1.4.0...v1.4.1
 [1.4.0]: https://github.com/OlexiyOdarchuk/go-monobank-sdk/compare/v1.3.1...v1.4.0
