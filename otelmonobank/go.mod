@@ -1,6 +1,6 @@
 module github.com/OlexiyOdarchuk/go-monobank-sdk/otelmonobank
 
-go 1.25.0
+go 1.26.0
 
 require (
 	github.com/OlexiyOdarchuk/go-monobank-sdk/v2 v2.0.2
