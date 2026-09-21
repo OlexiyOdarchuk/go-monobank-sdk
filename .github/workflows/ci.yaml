@@ -18,11 +18,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        go: ['1.25.x', '1.26.x']
+        go: ['1.26.x']
     runs-on: ubuntu-latest
-    # go.work pins the workspace at Go 1.25 (otelmonobank requires it),
-    # but the test matrix exercises older toolchains too. CI tests each
-    # module in isolation, so disable workspace mode here.
+    # CI tests each module in isolation, so disable workspace mode here
+    # and let every go.mod stand on its own.
     env:
       GOWORK: 'off'
     steps:
@@ -51,7 +50,7 @@ jobs:
           cd otelmonobank
           go vet ./...
           go test -race ./...
-      - if: matrix.go == '1.25.x'
+      - if: matrix.go == '1.26.x'
         uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
         with:
           files: ./coverage.txt

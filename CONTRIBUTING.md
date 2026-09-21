@@ -20,7 +20,8 @@ go mod download
 make ci          # fmt-check + vet + test-race
 ```
 
-Потрібен Go 1.23+. Для `otelmonobank` (окремий submodule) — Go 1.25+.
+Потрібен Go 1.26+ — для кореневого модуля і для `otelmonobank`
+(окремий submodule).
 
 `make help` (або просто `make`) — список усіх dev-таргетів: `test`,
 `test-race`, `cover`, `cover-html`, `lint`, `fmt`, `vet`, `bench`,

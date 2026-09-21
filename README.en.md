@@ -27,8 +27,8 @@ MCC and currency codes, and a fake server for tests.
 go get github.com/OlexiyOdarchuk/go-monobank-sdk/v2
 ```
 
-Requires Go 1.25+ (`iter.Seq2` for paginators; the workspace is pinned to
-1.25 by `otelmonobank`'s OpenTelemetry dependency).
+Requires Go 1.26+ (`iter.Seq2` for paginators; the 1.26 floor comes from
+`golang.org/x/sync`).
 
 ## API coverage
 

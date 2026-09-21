@@ -27,8 +27,8 @@ subscriptions / monopay-keys / split-receivers / T2P), **installment** (Поку
 go get github.com/OlexiyOdarchuk/go-monobank-sdk/v2
 ```
 
-Потрібен Go 1.25+ (пагінатори використовують `iter.Seq2`; весь воркспейс
-пінить 1.25 через залежність `otelmonobank` від OpenTelemetry).
+Потрібен Go 1.26+ (пагінатори використовують `iter.Seq2`; мінімум підняв
+до 1.26 `golang.org/x/sync`).
 
 ## Покриття API
 
