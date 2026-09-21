@@ -3,11 +3,11 @@
 // keeps its own go.mod authoritative for external consumers; this file
 // only affects local development.
 //
-// Pinned at 1.25 because otelmonobank requires it (OpenTelemetry
-// dependency); workspace mode unifies on the highest. Devs on
-// Go 1.23/1.24 who only need the root module can `GOWORK=off`.
+// Pinned at 1.26 because golang.org/x/sync requires it; workspace
+// mode unifies on the highest. Devs on an older toolchain who only
+// need the root module can `GOWORK=off`.
 
-go 1.25.0
+go 1.26.0
 
 use (
 	.
