@@ -167,3 +167,55 @@ func TestClientInfo_endToEnd(t *testing.T) {
 	require.Len(t, info.Jars, 1)
 	assert.Equal(t, currency.EUR, info.Jars[0].Balance.Code)
 }
+
+// managedClients reuses Account, so the per-account currency must be
+// attached to the money fields exactly as it is for own accounts.
+func TestClientInfo_UnmarshalJSON_managedClients(t *testing.T) {
+	in := []byte(`{
+		"clientId":"acct-1",
+		"name":"Бухгалтер",
+		"accounts":[],
+		"jars":[],
+		"managedClients":[
+			{
+				"clientId":"mc-1",
+				"tin":"1234567890",
+				"name":"Іван Петренко",
+				"accounts":[
+					{"id":"fop-uah","balance":10000,"creditLimit":0,"currencyCode":980,"type":"fop","iban":"UA111"},
+					{"id":"fop-usd","balance":250,"creditLimit":100,"currencyCode":840,"type":"fop","iban":"UA222"}
+				]
+			}
+		]
+	}`)
+
+	var info ClientInfo
+	require.NoError(t, json.Unmarshal(in, &info))
+
+	require.Len(t, info.ManagedClients, 1)
+	mc := info.ManagedClients[0]
+	assert.Equal(t, "mc-1", mc.ID)
+	assert.Equal(t, "1234567890", mc.TIN)
+	assert.Equal(t, "Іван Петренко", mc.Name)
+
+	require.Len(t, mc.Accounts, 2)
+	assert.Equal(t, int64(10000), mc.Accounts[0].Balance.Minor)
+	assert.Equal(t, currency.UAH, mc.Accounts[0].Balance.Code)
+	assert.Equal(t, currency.UAH, mc.Accounts[0].CreditLimit.Code)
+	assert.Equal(t, currency.USD, mc.Accounts[1].Balance.Code)
+	assert.Equal(t, int64(100), mc.Accounts[1].CreditLimit.Minor)
+	assert.Equal(t, currency.USD, mc.Accounts[1].CreditLimit.Code)
+	assert.Equal(t, FOP, mc.Accounts[1].Type)
+
+	// Fields absent from the managedClients subset stay zero.
+	assert.Empty(t, mc.Accounts[0].SendID)
+	assert.Empty(t, mc.Accounts[0].CashbackType)
+	assert.Empty(t, mc.Accounts[0].CardMasks)
+}
+
+// Absent managedClients is a valid payload (the field is optional).
+func TestClientInfo_UnmarshalJSON_managedClientsAbsent(t *testing.T) {
+	var info ClientInfo
+	require.NoError(t, json.Unmarshal([]byte(`{"clientId":"c1","accounts":[],"jars":[]}`), &info))
+	assert.Nil(t, info.ManagedClients)
+}

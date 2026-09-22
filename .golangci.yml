@@ -79,8 +79,19 @@ linters:
       # "cancelled" is Mono's wire value (acquiring subscription status)
       # and the SDK's public identifier (SubscriptionCancelled); it must
       # not be "corrected" to the US "canceled".
+      #
+      # The rest are Berlin Group spellings baked into the Open Banking
+      # API: the /authorisations path segment, the authorisationId
+      # parameter and the "finalised" scaStatus value. Renaming them
+      # would break the wire contract.
       ignore-rules:
         - cancelled
+        - authorisation
+        - authorisations
+        - authorised
+        - authorises
+        - finalised
+        - organisation
     nolintlint:
       allow-unused: false # report any unused nolint directives
       require-explanation: false # don't require an explanation for nolint directives

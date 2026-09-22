@@ -32,7 +32,7 @@ Requires Go 1.26+ (`iter.Seq2` for paginators; the 1.26 floor comes from
 
 ## API coverage
 
-All five public monobank APIs plus two community-documented jar endpoints.
+All six public monobank APIs plus two community-documented jar endpoints.
 The internal mobile API has no public spec — out of scope.
 
 | API | Spec | Subpackage | Endpoints |
@@ -40,8 +40,9 @@ The internal mobile API has no public spec — out of scope.
 | Open API — personal (X-Token) | [api.monobank.ua/docs](https://api.monobank.ua/docs/) | `personal` | 4 |
 | Open API — corporate (ECDSA) + monoКЕП | [api-docs/providers](https://monobank.ua/api-docs/providers) | `corporate` | 11 |
 | corp-api for legal entities | [corp-api.monobank.ua](https://corp-api.monobank.ua/) | `business` | 23 |
-| Acquiring (`/api/merchant/*`) | [api-docs/acquiring](https://monobank.ua/api-docs/acquiring) | `acquiring` | 31 |
-| Installment (HMAC-SHA256) | [api-docs/chast](https://monobank.ua/api-docs/chast) | `installment` | 14 |
+| Acquiring (`/api/merchant/*`) | [api-docs/acquiring](https://monobank.ua/api-docs/acquiring) | `acquiring` | 33 |
+| Installment (HMAC-SHA256) | [api-docs/chast](https://monobank.ua/api-docs/chast) | `installment` | 16 |
+| Open Banking (PSD2, mTLS) | [ob.mono.bank](https://ob.mono.bank/) | `openbanking` | 17 |
 | JAR / public jars (community) | [community docs](https://github.com/andrew-demb/monobank-api-community-docs) | `jar` | 2 |
 
 ## Package layout
@@ -55,11 +56,13 @@ go-monobank-sdk/
 ├── personal/       Personal Open API (X-Token)
 ├── corporate/      Corporate Open API (ECDSA) + monoКЕП
 ├── business/       corp-api.monobank.ua — 23 endpoints
-├── acquiring/      /api/merchant/* — 31 endpoints (invoices, QR, wallet,
-│                   subscriptions, monopay-keys, split, T2P) +
+├── acquiring/      /api/merchant/* — 33 endpoints (invoices, QR, wallet,
+│                   subscriptions, monopay-keys, split, T2P, POS) +
 │                   ECDSA webhook verification
-├── installment/    "Покупка частинами" (u2.monobank.com.ua) — 14 endpoints,
+├── installment/    "Покупка частинами" (u2.monobank.com.ua) — 16 endpoints,
 │                   HMAC-SHA256 body signing, VerifyCallback
+├── openbanking/    Open Banking PSD2 (openbanking.mono.bank) — 17 endpoints:
+│                   consents, accounts, payments; mTLS-only auth (QWAC)
 ├── jar/            public jars: /bank/jar/{id} + send.monobank.ua/api/handler
 ├── webhook/        Verify, Parse, http.Handler, Deduper for personal webhook
 ├── monobanktest/   fake monobank server + builders for testing
@@ -259,7 +262,8 @@ recurrent payments via tokenized cards, scheduled subscriptions
 refunds, fiscal receipts, statement export for reconciliation, direct PAN
 flows (for merchants in PCI DSS scope), monopay button
 (`MonoPayKeyImport/Delete/List`), split payments (`SplitReceivers`),
-T2P terminals (`Terminals`).
+T2P terminals (`Terminals`, `T2PPaymentStatus`), POS transaction
+refunds (`POSTransactionCancel`).
 
 ## Quick start: Installment ("Покупка частинами")
 
@@ -725,6 +729,7 @@ Runnable programs in [`examples/`](examples/):
 | `examples/business` | Account list + paginated statement |
 | `examples/acquiring` | Create invoice, poll to a final state |
 | `examples/installment` | Sandbox flow: create → state → confirm |
+| `examples/openbanking` | PSD2: consent → authorisation → accounts and balances (mTLS) |
 | `examples/jar` | Lookup a jar by longJarId or short clientId |
 | `examples/webhook` | HTTP server with ECDSA verification + dedup |
 

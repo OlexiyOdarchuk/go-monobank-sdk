@@ -10,12 +10,12 @@ import (
 // Accounts returns every account of the company (UAH, USD, EUR etc.
 // — one row per currency).
 // https://corp-api.monobank.ua/docs/#operation/get-all-accounts
-func (c *Client) Accounts(ctx context.Context) ([]Account, error) {
+func (c *Client) Accounts(ctx context.Context) (Accounts, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "/ext/v1/accounts", http.NoBody)
 	if err != nil {
 		return nil, fmt.Errorf("create request: %w", err)
 	}
-	var out []Account
+	var out Accounts
 	if err := c.c.Do(req, &out, http.StatusOK); err != nil {
 		return nil, err
 	}

@@ -34,21 +34,34 @@ const (
 	DocExpired DocumentStatus = "expired"
 )
 
+// HashType is the algorithm [Document.Hash] was computed with.
+type HashType string
+
+// Possible HashType values.
+const (
+	// HashGost — ГОСТ 34.311-95. Mono applies it when the field is
+	// omitted, so leaving HashType unset also yields Gost.
+	HashGost HashType = "Gost"
+	// HashDstu256 — ДСТУ 7564:2014 "Купина-256".
+	HashDstu256 HashType = "Dstu256"
+)
+
 // Document describes a document to sign (on a request) or its
 // current state (on a response). Status and Signers are populated
 // only in [Client.SignatureStatus] responses; Type and Link are
 // optional on the request.
 //
-// Hash is the document hash in HEX (GOST 34.311-95). Type is one of
-// "pdf", "doc", "docx", "odt", "json", "xml", "html", "png", "jpg",
-// "jpeg", "other".
+// Hash is the document hash in HEX, computed with [Document.HashType]
+// ([HashGost] when omitted). Type is one of "pdf", "doc", "docx",
+// "odt", "json", "xml", "html", "png", "jpg", "jpeg", "other".
 type Document struct {
-	Name    string         `json:"name"`
-	Hash    string         `json:"hash"`
-	Type    string         `json:"type,omitempty"`
-	Link    string         `json:"link,omitempty"`
-	Status  DocumentStatus `json:"status,omitempty"`
-	Signers []Signer       `json:"signers,omitempty"`
+	Name     string         `json:"name"`
+	Hash     string         `json:"hash"`
+	HashType HashType       `json:"hashType,omitempty"`
+	Type     string         `json:"type,omitempty"`
+	Link     string         `json:"link,omitempty"`
+	Status   DocumentStatus `json:"status,omitempty"`
+	Signers  []Signer       `json:"signers,omitempty"`
 }
 
 // Signer is a single party that signed the document via monoKEP.

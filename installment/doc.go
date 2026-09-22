@@ -1,7 +1,9 @@
 // Package installment is the Go client for monobank's "Pay in
 // installments" API (u2.monobank.com.ua). It lets a merchant create
 // interest-free installment orders, track their status, hand over
-// the goods, issue refunds, and produce guarantee letters.
+// the goods, issue refunds, produce guarantee letters, and attach a
+// QR cart to a store QR code for the client to scan
+// ([Client.CreateQRCart] / [Client.CancelQRCart]).
 //
 // Authorization uses an HMAC-SHA256 signature of the request body
 // paired with the headers store-id (store identifier) and signature

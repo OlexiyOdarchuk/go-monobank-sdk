@@ -64,3 +64,19 @@ func TestAccounts_ByID_aliasesSlice(t *testing.T) {
 	a.SendID = "changed"
 	assert.Equal(t, "changed", c.Accounts[0].SendID)
 }
+
+func TestClientInfo_ManagedClient(t *testing.T) {
+	c := bank.ClientInfo{
+		ManagedClients: bank.ManagedClients{
+			{ID: "mc-1", Name: "A"},
+			{ID: "mc-2", Name: "B"},
+		},
+	}
+
+	mc, ok := c.ManagedClient("mc-2")
+	require.True(t, ok)
+	assert.Equal(t, "B", mc.Name)
+
+	_, ok = c.ManagedClient("nope")
+	assert.False(t, ok)
+}

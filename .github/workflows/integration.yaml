@@ -1,8 +1,14 @@
 name: Integration
 
 # Runs only on a weekly schedule and on manual dispatch — NOT on every PR.
-# These tests hit the live api.monobank.ua. /bank/currency is rate-limited
+# These tests hit the live monobank APIs. /bank/currency is rate-limited
 # at ~1 req per 5 min per IP, so we keep cadence low.
+#
+# Every test outside bank/ skips unless its credentials are in the repo
+# secrets, so this job is green-but-idle until someone adds them. The
+# calls that move money or delete data need a second, explicit opt-in
+# on top of the credentials — see the package docs. Do not put those
+# opt-ins in CI secrets; run them by hand.
 on:
   schedule:
     - cron: '17 6 * * 1'  # every Monday 06:17 UTC
@@ -19,3 +25,15 @@ jobs:
           cache: true
       - name: bank — live smoke
         run: go test -tags=integration -race -timeout=2m -run Integration ./bank/...
+      - name: the rest — skips without credentials
+        env:
+          MONO_ACQUIRING_TOKEN: ${{ secrets.MONO_ACQUIRING_TOKEN }}
+          MONO_BUSINESS_TOKEN: ${{ secrets.MONO_BUSINESS_TOKEN }}
+          MONO_BUSINESS_IBAN: ${{ secrets.MONO_BUSINESS_IBAN }}
+          MONO_T2P_EXTERNAL_PAYMENT_ID: ${{ secrets.MONO_T2P_EXTERNAL_PAYMENT_ID }}
+          CHAST_STORE_ID: ${{ secrets.CHAST_STORE_ID }}
+          CHAST_SECRET: ${{ secrets.CHAST_SECRET }}
+          MONO_QR_ID: ${{ secrets.MONO_QR_ID }}
+        run: |
+          go test -tags=integration -race -timeout=5m -run Integration \
+            ./acquiring/... ./installment/... ./business/... ./openbanking/...

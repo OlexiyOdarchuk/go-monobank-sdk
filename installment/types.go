@@ -101,6 +101,28 @@ type Product struct {
 	Sum   Money  `json:"sum"`
 }
 
+// CreateQRCartRequest is the body of POST /api/v1/qr/cart. The cart
+// is attached to a QR code that already belongs to the store, so
+// there is no phone number and no program list — the client picks
+// the installment terms in the app after scanning.
+//
+// Products reuses [Product]. The docs render this field as an
+// untyped "array of object" and never expand the element, so the
+// shape is taken from [CreateOrderRequest.Products] by analogy with
+// /api/order/create — a decision, not something monobank documents.
+// A mismatch would surface as a 400.
+type CreateQRCartRequest struct {
+	QRID           string    `json:"qr_id"`
+	StoreOrderID   string    `json:"store_order_id"`
+	Products       []Product `json:"products"`
+	ResultCallback string    `json:"result_callback"`
+}
+
+// CancelQRCartRequest is the body of POST /api/v1/qr/cart/cancel.
+type CancelQRCartRequest struct {
+	QRID string `json:"qr_id"`
+}
+
 // CreateAdditionalParams holds optional parameters of the create
 // request.
 //

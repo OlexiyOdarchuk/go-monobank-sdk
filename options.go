@@ -292,6 +292,12 @@ func WithUserAgent(ua string) Option {
 // [business.Client.CreateSalaryRegistry]). For the remaining POST
 // methods, if you are sure the endpoint is idempotent on Mono's side
 // or are happy to live with duplicates, set WithUnsafeRetries(true).
+//
+// Weigh that per client, not per application: a duplicated invoice is
+// an annoyance, but the same switch also covers
+// [acquiring.Client.POSTransactionCancel], which moves money outward
+// and for which Mono documents no idempotency key at all — there a
+// retry can pay the customer twice.
 func WithUnsafeRetries(enabled bool) Option {
 	return func(c *Client) {
 		c.unsafeRetries = enabled

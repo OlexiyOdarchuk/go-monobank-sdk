@@ -75,8 +75,8 @@ type Contact struct {
 
 // ContactsPage is a paginated result of [Client.Contacts] / [Client.SearchContacts].
 type ContactsPage struct {
-	HasMore  bool      `json:"hasMore"`
-	Contacts []Contact `json:"contacts"`
+	HasMore  bool     `json:"hasMore"`
+	Contacts Contacts `json:"contacts"`
 }
 
 // CreateContactRequest is the body of POST /ext/v1/salary-contacts.
@@ -107,12 +107,12 @@ type SalaryRecipient struct {
 
 // CreateSalaryRegistryRequest is the body of POST /ext/v1/payments/salary/registries.
 type CreateSalaryRegistryRequest struct {
-	RegistryName       string            `json:"registryName"`
-	SenderIBAN         string            `json:"senderIban"`
-	SalaryRegistryType string            `json:"salaryRegistryType"`
-	From               string            `json:"from"` // YYYY-MM-DD
-	To                 string            `json:"to"`   // YYYY-MM-DD
-	Recipients         []SalaryRecipient `json:"recipients"`
+	RegistryName       string           `json:"registryName"`
+	SenderIBAN         string           `json:"senderIban"`
+	SalaryRegistryType string           `json:"salaryRegistryType"`
+	From               string           `json:"from"` // YYYY-MM-DD
+	To                 string           `json:"to"`   // YYYY-MM-DD
+	Recipients         SalaryRecipients `json:"recipients"`
 }
 
 // SalaryRegistryCreated is the response to POST /ext/v1/payments/salary/registries.
@@ -181,6 +181,9 @@ type StatementItem struct {
 	CounterName   string          `json:"counterName,omitempty"`
 	Reverse       bool            `json:"reverse,omitempty"`
 	Status        OperationStatus `json:"status"`
+	// UltimateDebit is present on budget payments, where the party
+	// the money is owed by differs from the account it came from.
+	UltimateDebit *StatementUltimateDebit `json:"ultimateDebit,omitempty"`
 }
 
 // UnmarshalJSON attaches a currency.Code to Amount by resolving the
@@ -218,6 +221,29 @@ type PaymentReceiver struct {
 	Name   string `json:"name"`
 }
 
+// UltimateDebit names the party the money is actually owed by, as
+// opposed to the account holder sending it. monobank uses it only for
+// budget payments (бюджетні платежі) and ignores it on any other
+// payment.
+//
+// Both fields are mandatory once the struct is present: ID is the
+// ЄДРПОУ, ІПН or identity-document number of that party, and Name
+// their name (3–240 characters). The statement side reports the same
+// party through [StatementUltimateDebit], which spells the code
+// differently — hence two types rather than one.
+type UltimateDebit struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+}
+
+// StatementUltimateDebit is the actual payer as it comes back in a
+// statement entry. It carries the same pair as [UltimateDebit] but
+// names the code idCode, and both fields are optional here.
+type StatementUltimateDebit struct {
+	Name   string `json:"name,omitempty"`
+	IDCode string `json:"idCode,omitempty"`
+}
+
 // PaymentRequest is the body of POST /ext/v1/payment/prepare.
 type PaymentRequest struct {
 	SenderIBAN        string          `json:"senderIban"`
@@ -228,6 +254,11 @@ type PaymentRequest struct {
 	PayCode           string          `json:"payCode,omitempty"`
 	AdditionalInfo    string          `json:"additionalInfo,omitempty"`
 	ExternalReference string          `json:"externalReference,omitempty"`
+	// UltimateDebit is required for budget payments and ignored for
+	// every other kind. A pointer so that an unset value stays out of
+	// the payload — the bank requires both of its fields whenever the
+	// object is present.
+	UltimateDebit *UltimateDebit `json:"ultimateDebit,omitempty"`
 }
 
 // PaymentPrepared is the response to POST /ext/v1/payment/prepare.
@@ -262,14 +293,14 @@ type BatchAttribute struct {
 
 // BatchEmployee is one employee in a payslip batch.
 type BatchEmployee struct {
-	Identification string           `json:"identification"`
-	Attributes     []BatchAttribute `json:"attributes"`
+	Identification string          `json:"identification"`
+	Attributes     BatchAttributes `json:"attributes"`
 }
 
 // BatchPayslipRequest is the body of POST /ext/v1/payslips/batch.
 type BatchPayslipRequest struct {
-	Period    string          `json:"period"` // YYYY-MM
-	Employees []BatchEmployee `json:"employees"`
+	Period    string         `json:"period"` // YYYY-MM
+	Employees BatchEmployees `json:"employees"`
 }
 
 // DeletePayslipsRequest is the body of DELETE /ext/v1/payslips/batch.
@@ -309,13 +340,13 @@ type FailedEmployee struct {
 // BatchPayslipResponse is the inner result of POST /ext/v1/payslips/batch.
 // Mono wraps it in `{"result": ...}` on the wire; methods on Client unwrap it.
 type BatchPayslipResponse struct {
-	Period          string           `json:"period"`
-	Status          string           `json:"status"` // always "LOADED"
-	BatchStats      BatchStats       `json:"batchStats"`
-	OverallStats    OverallStats     `json:"overallStats"`
-	FailedEmployees []FailedEmployee `json:"failedEmployees"`
-	CreatedAt       string           `json:"createdAt"`
-	UpdatedAt       string           `json:"updatedAt"`
+	Period          string          `json:"period"`
+	Status          string          `json:"status"` // always "LOADED"
+	BatchStats      BatchStats      `json:"batchStats"`
+	OverallStats    OverallStats    `json:"overallStats"`
+	FailedEmployees FailedEmployees `json:"failedEmployees"`
+	CreatedAt       string          `json:"createdAt"`
+	UpdatedAt       string          `json:"updatedAt"`
 }
 
 // ImportStatus is the lifecycle state of a payslip import for a period.
@@ -332,14 +363,14 @@ const (
 
 // ImportStatusResponse is the inner result of GET /ext/v1/payslip-imports/status.
 type ImportStatusResponse struct {
-	Period                string           `json:"period"`
-	Status                ImportStatus     `json:"status"`
-	TotalEmployees        int              `json:"totalEmployees"`
-	TotalSuccessEmployees int              `json:"totalSuccessEmployees"`
-	TotalFailedEmployees  int              `json:"totalFailedEmployees"`
-	FailedEmployees       []FailedEmployee `json:"failedEmployees"`
-	CreatedAt             string           `json:"createdAt"`
-	UpdatedAt             string           `json:"updatedAt"`
+	Period                string          `json:"period"`
+	Status                ImportStatus    `json:"status"`
+	TotalEmployees        int             `json:"totalEmployees"`
+	TotalSuccessEmployees int             `json:"totalSuccessEmployees"`
+	TotalFailedEmployees  int             `json:"totalFailedEmployees"`
+	FailedEmployees       FailedEmployees `json:"failedEmployees"`
+	CreatedAt             string          `json:"createdAt"`
+	UpdatedAt             string          `json:"updatedAt"`
 }
 
 // SendResult is the inner result of POST /ext/v1/payslip-imports/send.

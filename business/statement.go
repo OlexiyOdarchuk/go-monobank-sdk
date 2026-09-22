@@ -19,7 +19,7 @@ import (
 // limit.
 // https://corp-api.monobank.ua/docs/#operation/get-statement
 func (c *Client) Statement(ctx context.Context, account string, from, to time.Time,
-	direction StatementDirection, limit int) ([]StatementItem, error) {
+	direction StatementDirection, limit int) (StatementItems, error) {
 
 	// Refuse to construct a URL with the zero value of time.Time,
 	// which encodes to Unix=-6795364578 and silently asks the bank for
@@ -51,7 +51,7 @@ func (c *Client) Statement(ctx context.Context, account string, from, to time.Ti
 	if err != nil {
 		return nil, fmt.Errorf("create request: %w", err)
 	}
-	var out []StatementItem
+	var out StatementItems
 	if err := c.c.Do(req, &out, http.StatusOK); err != nil {
 		return nil, err
 	}
