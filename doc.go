@@ -31,6 +31,10 @@
 //   - github.com/OlexiyOdarchuk/go-monobank-sdk/v2/acquiring — acquiring
 //     (/api/merchant/*): invoices, holds, QR cash desks, tokenized
 //     cards.
+//   - github.com/OlexiyOdarchuk/go-monobank-sdk/v2/openbanking — Open
+//     Banking (PSD2): account-access consents, account information and
+//     payment initiation. Authenticated by a QWAC client certificate
+//     (mTLS), not by a token.
 //   - github.com/OlexiyOdarchuk/go-monobank-sdk/v2/webhook — the server
 //     side: signature verification, payload parser, a ready
 //     http.Handler, and an in-memory deduper.
