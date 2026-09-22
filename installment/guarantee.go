@@ -22,6 +22,8 @@ func (c *Client) GuaranteeLetterPDF(ctx context.Context, in *OrderDataRequest) (
 // side).
 //
 // POST /api/order/data/for/guarantee/letter  (200 → OrderData)
+//
+// Deprecated: use [Client.GuaranteeLetterDataV2].
 func (c *Client) GuaranteeLetterData(ctx context.Context, in *OrderDataRequest) (*OrderData, error) {
 	if in == nil {
 		return nil, ErrNilRequest

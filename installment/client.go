@@ -62,6 +62,11 @@ var ErrEmptyPhone = errors.New("installment: phone is empty")
 // digits afterwards).
 var ErrInvalidPhone = errors.New("installment: phone must start with + and contain only digits")
 
+// ErrEmptyQRID is returned when a QR-code identifier argument is
+// empty. The API requires at least one character, and an empty
+// qr_id would otherwise come back as an opaque 400.
+var ErrEmptyQRID = errors.New("installment: QR ID is empty")
+
 // ErrEmptyStoreID is returned by [New] when storeID == "".
 var ErrEmptyStoreID = errors.New("installment: storeID is empty")
 
