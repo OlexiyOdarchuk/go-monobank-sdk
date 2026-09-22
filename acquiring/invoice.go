@@ -18,7 +18,7 @@ var ErrNilRequest = errors.New("request body is nil")
 // to show the client (Mono's checkout page). PaymentType selects the
 // scenario: PaymentDebit captures immediately, PaymentHold
 // authorizes followed by [Client.FinalizeInvoice].
-// https://api.monobank.ua/docs/acquiring.html#tag/Merchant-account/paths/~1api~1merchant~1invoice~1create/post
+// https://monobank.ua/api-docs/acquiring/methods/ia/post--api--merchant--invoice--create
 func (c *Client) CreateInvoice(ctx context.Context, in *CreateInvoiceRequest) (*CreateInvoiceResponse, error) {
 	if in == nil {
 		return nil, ErrNilRequest
@@ -43,7 +43,7 @@ func (c *Client) CreateInvoice(ctx context.Context, in *CreateInvoiceRequest) (*
 // / processing / hold / success / failure / reversed / expired),
 // card and payment-system details, and the refund history. Use it
 // for polling when WebHookURL is not configured.
-// https://api.monobank.ua/docs/acquiring.html#tag/Merchant-account/paths/~1api~1merchant~1invoice~1status/get
+// https://monobank.ua/api-docs/acquiring/methods/ia/get--api--merchant--invoice--status
 func (c *Client) InvoiceStatus(ctx context.Context, invoiceID string) (*InvoiceStatusResponse, error) {
 	if invoiceID == "" {
 		return nil, ErrEmptyID
@@ -66,7 +66,7 @@ func (c *Client) InvoiceStatus(ctx context.Context, invoiceID string) (*InvoiceS
 // Amount < the original amount for a partial refund; an empty
 // Amount is a full refund. ExtRef is an optional identifier in your
 // system (it ends up in the operation status).
-// https://api.monobank.ua/docs/acquiring.html#tag/Merchant-account/paths/~1api~1merchant~1invoice~1cancel/post
+// https://monobank.ua/api-docs/acquiring/methods/ia/post--api--merchant--invoice--cancel
 func (c *Client) CancelInvoice(ctx context.Context, in *CancelRequest) (*CancelResponse, error) {
 	if in == nil {
 		return nil, ErrNilRequest
@@ -92,7 +92,7 @@ func (c *Client) CancelInvoice(ctx context.Context, in *CancelRequest) (*CancelR
 // original — only that amount is then captured from the card, the
 // remainder of the authorized funds is released (partial
 // finalization).
-// https://api.monobank.ua/docs/acquiring.html#tag/Holds/paths/~1api~1merchant~1invoice~1finalize/post
+// https://monobank.ua/api-docs/acquiring/methods/ia/post--api--merchant--invoice--finalize
 func (c *Client) FinalizeInvoice(ctx context.Context, in *FinalizeRequest) (*FinalizeResponse, error) {
 	if in == nil {
 		return nil, ErrNilRequest
@@ -116,7 +116,7 @@ func (c *Client) FinalizeInvoice(ctx context.Context, in *FinalizeRequest) (*Fin
 // RemoveInvoice invalidates an unpaid invoice. After that the
 // checkout page stops working. To cancel an ALREADY paid invoice
 // use [Client.CancelInvoice] (refund).
-// https://api.monobank.ua/docs/acquiring.html#tag/Merchant-account/paths/~1api~1merchant~1invoice~1remove/post
+// https://monobank.ua/api-docs/acquiring/methods/ia/post--api--merchant--invoice--remove
 func (c *Client) RemoveInvoice(ctx context.Context, invoiceID string) error {
 	if invoiceID == "" {
 		return ErrEmptyID
@@ -136,7 +136,7 @@ func (c *Client) RemoveInvoice(ctx context.Context, invoiceID string) error {
 // FiscalChecks returns the fiscal checks attached to an invoice (via
 // Checkbox or Monopay). One invoice may have multiple checks: a sale
 // and a return.
-// https://api.monobank.ua/docs/acquiring.html#tag/Merchant-account/paths/~1api~1merchant~1invoice~1fiscal-checks/get
+// https://monobank.ua/api-docs/acquiring/extras/prro/get--api--merchant--invoice--fiscal-checks
 func (c *Client) FiscalChecks(ctx context.Context, invoiceID string) ([]FiscalCheck, error) {
 	if invoiceID == "" {
 		return nil, ErrEmptyID
@@ -160,7 +160,7 @@ func (c *Client) FiscalChecks(ctx context.Context, invoiceID string) ([]FiscalCh
 
 // Receipt returns the base64-encoded PDF receipt for an invoice. If
 // email is non-empty, the bank also sends a copy by email.
-// https://api.monobank.ua/docs/acquiring.html#tag/Merchant-account/paths/~1api~1merchant~1invoice~1receipt/get
+// https://monobank.ua/api-docs/acquiring/methods/ia/get--api--merchant--invoice--receipt
 func (c *Client) Receipt(ctx context.Context, invoiceID, email string) (*ReceiptResponse, error) {
 	if invoiceID == "" {
 		return nil, ErrEmptyID
@@ -186,7 +186,7 @@ func (c *Client) Receipt(ctx context.Context, invoiceID, email string) (*Receipt
 // CAUTION: requires PCI DSS certification — your environment must
 // be allowed to handle card data. If not, use [Client.CreateInvoice]
 // (where Mono collects the card data for you).
-// https://api.monobank.ua/docs/acquiring.html#tag/Vyklyki-dlya-mercha-z-rozshyrenym-dostupom/paths/~1api~1merchant~1invoice~1payment-direct/post
+// https://monobank.ua/api-docs/acquiring/methods/ia/post--api--merchant--invoice--payment-direct
 func (c *Client) PaymentDirect(ctx context.Context, in *PaymentDirectRequest) (*PaymentDirectResponse, error) {
 	if in == nil {
 		return nil, ErrNilRequest
@@ -211,6 +211,8 @@ func (c *Client) PaymentDirect(ctx context.Context, in *PaymentDirectRequest) (*
 // tokenized PAN flows. Requires extended merchant scope (PCI DSS).
 // Unlike [Client.PaymentDirect] (raw PAN+CVV), here the payload is
 // tokens that come straight from the Apple Pay / Google Pay SDK.
+// Still linked to the older ReDoc mirror: monobank.ua/api-docs has
+// no page for this endpoint.
 // https://api.monobank.ua/docs/acquiring.html#tag/Vyklyki-dlya-mercha-z-rozshyrenym-dostupom/paths/~1api~1merchant~1invoice~1sync-payment/post
 func (c *Client) SyncPayment(ctx context.Context, in *SyncPaymentRequest) (*SyncPaymentResponse, error) {
 	if in == nil {

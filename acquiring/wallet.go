@@ -12,7 +12,7 @@ import (
 // Wallet returns the list of cards stored under the given walletID.
 // Pass "" to receive every merchant card. WalletID is usually your
 // user-ID (one person — one wallet with their cards).
-// https://api.monobank.ua/docs/acquiring.html#tag/Tokenization/paths/~1api~1merchant~1wallet/get
+// https://monobank.ua/api-docs/acquiring/extras/tokens/get--api--merchant--wallet
 func (c *Client) Wallet(ctx context.Context, walletID string) ([]WalletCard, error) {
 	q := url.Values{}
 	if walletID != "" {
@@ -35,7 +35,7 @@ func (c *Client) Wallet(ctx context.Context, walletID string) ([]WalletCard, err
 
 // DeleteCard removes a tokenized card from a wallet. Afterwards its
 // CardToken becomes invalid for [Client.WalletPayment].
-// https://api.monobank.ua/docs/acquiring.html#tag/Tokenization/paths/~1api~1merchant~1wallet~1card/delete
+// https://monobank.ua/api-docs/acquiring/extras/tokens/delete--api--merchant--wallet--card
 func (c *Client) DeleteCard(ctx context.Context, cardToken string) error {
 	if cardToken == "" {
 		return ErrEmptyID
@@ -54,7 +54,7 @@ func (c *Client) DeleteCard(ctx context.Context, cardToken string) error {
 // InitiationKind ("merchant" or "client") matters for compliance:
 // "merchant" — a repeat charge initiated by you (recurring),
 // "client" — the client explicitly consented here and now.
-// https://api.monobank.ua/docs/acquiring.html#tag/Tokenization/paths/~1api~1merchant~1wallet~1payment/post
+// https://monobank.ua/api-docs/acquiring/extras/tokens/post--api--merchant--wallet--payment
 func (c *Client) WalletPayment(ctx context.Context, in *WalletPaymentRequest) (*WalletPaymentResponse, error) {
 	if in == nil {
 		return nil, ErrNilRequest

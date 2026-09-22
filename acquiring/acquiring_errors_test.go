@@ -122,6 +122,14 @@ func TestAcquiring_errorPaths(t *testing.T) {
 		_, err := errorClient(t).Terminals(ctx)
 		assertAPIError(t, err)
 	})
+	t.Run("T2PPaymentStatus", func(t *testing.T) {
+		_, err := errorClient(t).T2PPaymentStatus(ctx, "ext-1")
+		assertAPIError(t, err)
+	})
+	t.Run("POSTransactionCancel", func(t *testing.T) {
+		err := errorClient(t).POSTransactionCancel(ctx, &POSTransactionCancelRequest{RRN: "r", Amount: 1})
+		assertAPIError(t, err)
+	})
 	t.Run("SubscriptionCreate", func(t *testing.T) {
 		_, err := errorClient(t).SubscriptionCreate(ctx, &SubscriptionCreateRequest{Interval: "1m"})
 		assertAPIError(t, err)

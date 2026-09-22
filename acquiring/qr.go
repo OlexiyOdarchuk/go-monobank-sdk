@@ -13,7 +13,7 @@ import (
 // the amount-entry mode: "merchant" (the merchant sets it via
 // QRSetAmount), "client" (the client enters it in the Mono mobile
 // app), "fix" (a fixed amount).
-// https://api.monobank.ua/docs/acquiring.html#tag/QR-kasy/paths/~1api~1merchant~1qr~1list/get
+// https://monobank.ua/api-docs/acquiring/methods/qr/get--api--merchant--qr--list
 func (c *Client) QRList(ctx context.Context) ([]QR, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "/api/merchant/qr/list", http.NoBody)
 	if err != nil {
@@ -28,7 +28,7 @@ func (c *Client) QRList(ctx context.Context) ([]QR, error) {
 
 // QRDetails returns the details of a single QR cash desk (current
 // invoice, amount, currency — if a payment is pending).
-// https://api.monobank.ua/docs/acquiring.html#tag/QR-kasy/paths/~1api~1merchant~1qr~1details/get
+// https://monobank.ua/api-docs/acquiring/methods/qr/get--api--merchant--qr--details
 func (c *Client) QRDetails(ctx context.Context, qrID string) (*QRDetails, error) {
 	if qrID == "" {
 		return nil, ErrEmptyID
@@ -51,7 +51,7 @@ func (c *Client) QRDetails(ctx context.Context, qrID string) (*QRDetails, error)
 // AmountType is "merchant" or "client". Handy when the merchant set
 // the amount by mistake, or the client did not pay and the terminal
 // needs to be "released".
-// https://api.monobank.ua/docs/acquiring.html#tag/QR-kasy/paths/~1api~1merchant~1qr~1reset-amount/post
+// https://monobank.ua/api-docs/acquiring/methods/qr/post--api--merchant--qr--reset-amount
 func (c *Client) QRResetAmount(ctx context.Context, qrID string) error {
 	if qrID == "" {
 		return ErrEmptyID

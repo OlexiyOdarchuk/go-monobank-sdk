@@ -6,7 +6,10 @@
 //     status/list/payments);
 //   - the monopay button: importing/removing/listing merchant keys;
 //   - payment splitting (split receivers) and T2P terminals
-//     (terminal-on-a-smartphone);
+//     (terminal-on-a-smartphone), including the status of a single
+//     T2P payment by the integrator's own id;
+//   - refunds on physical POS terminals (by the RRN of the original
+//     transaction);
 //   - periodic statements, fiscal checks, receipts, submerchants.
 //
 // Authorization is a single X-Token issued for a specific merchant.
@@ -38,7 +41,12 @@
 //     on WebHookURLs.ChargeURL / StatusURL.
 //   - QR cash desks: [Client.QRList] / [Client.QRDetails] /
 //     [Client.QRResetAmount] for terminal-like scenarios.
-//   - Refunds: [Client.CancelInvoice] (full or partial).
+//   - Refunds: [Client.CancelInvoice] (full or partial); for a sale
+//     made on a physical POS terminal there is no invoiceId, so the
+//     refund goes through [Client.POSTransactionCancel] by RRN.
+//   - T2P payments: the callbackSuccess/callbackFail webhook is the
+//     main channel; [Client.T2PPaymentStatus] is the fallback when it
+//     is missed.
 //   - Reconciliation: [Client.Statement] for a period; CancelList
 //     in each row carries the refund history.
 //
@@ -72,11 +80,17 @@ import (
 	monobank "github.com/OlexiyOdarchuk/go-monobank-sdk/v2"
 )
 
-// ErrEmptyID is returned by methods that take a path-parameter
-// identifier (invoiceID, subscriptionID, qrID, cardToken, keyID,
-// walletID) when the supplied string is empty. Catching it locally
-// saves an HTTP round-trip and prevents a malformed URL like
+// ErrEmptyID is returned when an identifier the request cannot do
+// without is empty: a path or query parameter (invoiceID,
+// subscriptionID, qrID, cardToken, keyID, walletID), or a required
+// identifier in a request body (the RRN of
+// [Client.POSTransactionCancel]). Catching it locally saves an HTTP
+// round-trip that is certain to fail, and for the URL-borne ones it
+// also prevents a malformed URL like
 // "/api/merchant/invoice/status/?invoiceId=" from going on the wire.
+//
+// Non-identifier body fields are left to the bank to validate — the
+// SDK does not second-guess amounts or dates.
 var ErrEmptyID = errors.New("acquiring: empty identifier")
 
 // BaseURL is the acquiring API host. Override via

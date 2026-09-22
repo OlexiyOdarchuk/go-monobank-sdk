@@ -12,7 +12,7 @@ import (
 // MerchantDetails returns the merchant profile: id, name, EDRPOU
 // (Ukrainian business registration code). Handy for smoke-testing
 // the token.
-// https://api.monobank.ua/docs/acquiring.html#tag/Vyklyki-dlya-mercha/paths/~1api~1merchant~1details/get
+// https://monobank.ua/api-docs/acquiring/methods/ia/get--api--merchant--details
 func (c *Client) MerchantDetails(ctx context.Context) (*MerchantDetails, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "/api/merchant/details", http.NoBody)
 	if err != nil {
@@ -28,6 +28,8 @@ func (c *Client) MerchantDetails(ctx context.Context) (*MerchantDetails, error) 
 // Employees lists the merchant's active employees (for example,
 // tip recipients). IDs from this list go into
 // CreateInvoiceRequest.TipsEmployeeID.
+// Still linked to the older ReDoc mirror: monobank.ua/api-docs has
+// no page for this endpoint.
 // https://api.monobank.ua/docs/acquiring.html#tag/Vyklyki-dlya-mercha/paths/~1api~1merchant~1employee~1list/get
 func (c *Client) Employees(ctx context.Context) ([]Employee, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "/api/merchant/employee/list", http.NoBody)
@@ -47,7 +49,7 @@ func (c *Client) Employees(ctx context.Context) ([]Employee, error) {
 // [ParsePubKey] and cache it — the bank rotates the key rarely, but
 // it can change. Unlike /bank/sync, this is a separate key for the
 // acquiring webhooks.
-// https://api.monobank.ua/docs/acquiring.html#tag/Vyklyki-dlya-mercha/paths/~1api~1merchant~1pubkey/get
+// https://monobank.ua/api-docs/acquiring/dev/webhooks/get--api--merchant--pubkey
 func (c *Client) PubKey(ctx context.Context) (*ServerKey, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "/api/merchant/pubkey", http.NoBody)
 	if err != nil {
@@ -63,7 +65,7 @@ func (c *Client) PubKey(ctx context.Context) (*ServerKey, error) {
 // Submerchants lists the submerchants configured under this
 // merchant. Subm-Code is used in the Statement filter and in
 // CreateInvoice.Code.
-// https://api.monobank.ua/docs/acquiring.html#tag/Vyklyki-dlya-mercha/paths/~1api~1merchant~1submerchant~1list/get
+// https://monobank.ua/api-docs/acquiring/integrations/marketplace-and-agents/get--api--merchant--submerchant--list
 func (c *Client) Submerchants(ctx context.Context) ([]Submerchant, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "/api/merchant/submerchant/list", http.NoBody)
 	if err != nil {
@@ -80,7 +82,7 @@ func (c *Client) Submerchants(ctx context.Context) ([]Submerchant, error) {
 // A zero to means "up to now". code (optional) filters by submerchant.
 // Each row carries CancelList — the refund history for a specific
 // invoice.
-// https://api.monobank.ua/docs/acquiring.html#tag/Vyplaty-ta-zvirky/paths/~1api~1merchant~1statement/get
+// https://monobank.ua/api-docs/acquiring/methods/split/get--api--merchant--statement
 func (c *Client) Statement(ctx context.Context, from, to time.Time, code string) ([]StatementInvoice, error) {
 	q := url.Values{}
 	q.Set("from", strconv.FormatInt(from.Unix(), 10))
