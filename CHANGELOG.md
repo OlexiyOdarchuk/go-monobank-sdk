@@ -7,9 +7,21 @@
 
 ## [Unreleased]
 
-Актуалізація покриття API за офіційними доками monobank (звірено
-2026-09-22 з ReDoc-специфікаціями personal `v250818`, acquiring `v2410`,
-corporate `v260831` і сайтом `monobank.ua/api-docs`).
+## [2.1.0] — 2026-09-22
+
+Актуалізація покриття API за офіційними доками monobank і новий пакет
+`openbanking`. Публічний API лише розширено: жодного експортованого
+символу не видалено й не перейменовано.
+
+Звірено 2026-09-22 з ReDoc-специфікаціями personal `v250818`,
+acquiring `v2410`, corporate `v260831`, Open Banking `2026.09.18`,
+corp-api `1.0.2` і сайтом `monobank.ua/api-docs`. Усі пʼять
+машинночитаних специфікацій тепер запінено за вмістом — див. розділ
+про перевірку дрейфу. Сайт доків не пінимо: схем відповідей він не
+рендерить на сервері, тож звіряти там нічого.
+
+> **Оновіть тулчейн до Go 1.26** перед оновленням SDK — мінімальна
+> версія піднята (деталі в розділі Changed).
 
 ### Added
 
@@ -921,7 +933,8 @@ defer klim.Stop()
 - `monobanktest` — мок-сервер на `httptest.Server` із fluent-builder-ами.
 - Пагінатори через `iter.Seq2` (Go 1.23+).
 
-[Unreleased]: https://github.com/OlexiyOdarchuk/go-monobank-sdk/compare/v2.0.2...HEAD
+[Unreleased]: https://github.com/OlexiyOdarchuk/go-monobank-sdk/compare/v2.1.0...HEAD
+[2.1.0]: https://github.com/OlexiyOdarchuk/go-monobank-sdk/compare/v2.0.2...v2.1.0
 [2.0.2]: https://github.com/OlexiyOdarchuk/go-monobank-sdk/compare/v2.0.1...v2.0.2
 [2.0.1]: https://github.com/OlexiyOdarchuk/go-monobank-sdk/compare/v2.0.0...v2.0.1
 [2.0.0]: https://github.com/OlexiyOdarchuk/go-monobank-sdk/compare/v1.4.1...v2.0.0
