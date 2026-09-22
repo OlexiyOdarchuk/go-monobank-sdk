@@ -52,7 +52,10 @@ func (c *Client) DeletePayslips(ctx context.Context, in *DeletePayslipsRequest) 
 	if err != nil {
 		return fmt.Errorf("create request: %w", err)
 	}
-	return c.c.Do(req, nil, http.StatusOK)
+	// The spec documents 204 here, not 200. StatusOK is accepted too:
+	// this endpoint returns no body either way, so a server that
+	// answers 200 is still a success and there is nothing to decode.
+	return c.c.Do(req, nil, http.StatusNoContent, http.StatusOK)
 }
 
 // ImportStatus returns the cumulative state of the payslip import
@@ -86,7 +89,9 @@ func (c *Client) DeleteImport(ctx context.Context, period string) error {
 	if err != nil {
 		return fmt.Errorf("create request: %w", err)
 	}
-	return c.c.Do(req, nil, http.StatusOK)
+	// 204 per the spec; see [Client.DeletePayslips] on why 200 is
+	// accepted as well.
+	return c.c.Do(req, nil, http.StatusNoContent, http.StatusOK)
 }
 
 // SendPayslipsToMobile sends payslips for the period to employees'

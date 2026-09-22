@@ -14,7 +14,7 @@ import (
 // Grouped by topic for convenience.
 type API interface {
 	// Accounts.
-	Accounts(ctx context.Context) ([]Account, error)
+	Accounts(ctx context.Context) (Accounts, error)
 	Account(ctx context.Context, iban string) (*Account, error)
 	AccountBalances(ctx context.Context, iban, dateFrom, dateTo string) ([]BalancePoint, error)
 
@@ -30,7 +30,7 @@ type API interface {
 
 	// Statement and operations.
 	Statement(ctx context.Context, account string, from, to time.Time,
-		direction StatementDirection, limit int) ([]StatementItem, error)
+		direction StatementDirection, limit int) (StatementItems, error)
 	Operation(ctx context.Context, id, externalReference string) (*StatementItem, error)
 
 	// Payments.
