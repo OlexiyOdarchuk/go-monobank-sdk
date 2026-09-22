@@ -24,11 +24,21 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strings"
 	"time"
 
 	monobank "github.com/OlexiyOdarchuk/go-monobank-sdk/v2"
 	"github.com/OlexiyOdarchuk/go-monobank-sdk/v2/openbanking"
 )
+
+// sanitizeLogValue strips the line breaks out of anything that came
+// back from the bank before it reaches the log. Without it a value
+// carrying a newline could forge a log entry of its own.
+func sanitizeLogValue(s string) string {
+	s = strings.ReplaceAll(s, "\n", "")
+	s = strings.ReplaceAll(s, "\r", "")
+	return s
+}
 
 // psuIP is the customer's IP address. The bank requires it on every
 // call the customer is present for; a hard-coded value is fine for a
@@ -44,7 +54,7 @@ func main() {
 	// OB_CA is optional: leave it unset to trust the system roots.
 	httpClient, err := openbanking.NewMTLSHTTPClientFromFiles(certFile, keyFile, os.Getenv("OB_CA"))
 	if err != nil {
-		log.Fatalf("build mTLS client: %v", err)
+		log.Fatalf("build mTLS client: %s", sanitizeLogValue(err.Error()))
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
@@ -58,16 +68,16 @@ func main() {
 
 	consentID, err := createConsent(ctx, cli, iban)
 	if err != nil {
-		log.Fatalf("create consent: %v", err)
+		log.Fatalf("create consent: %s", sanitizeLogValue(err.Error()))
 	}
-	fmt.Println("consent:", consentID)
+	fmt.Println("consent:", sanitizeLogValue(consentID))
 
 	if err := authorise(ctx, cli, consentID); err != nil {
-		log.Fatalf("authorise consent: %v", err)
+		log.Fatalf("authorise consent: %s", sanitizeLogValue(err.Error()))
 	}
 
 	if err := readAccounts(ctx, cli, consentID); err != nil {
-		log.Fatalf("read accounts: %v", err)
+		log.Fatalf("read accounts: %s", sanitizeLogValue(err.Error()))
 	}
 }
 
@@ -112,7 +122,7 @@ func authorise(ctx context.Context, cli *openbanking.Client, consentID string) e
 		return err
 	}
 	if auth.Links.SCARedirect != nil {
-		fmt.Println("send the customer to:", auth.Links.SCARedirect.Href)
+		fmt.Println("send the customer to:", sanitizeLogValue(auth.Links.SCARedirect.Href))
 	} else {
 		fmt.Println("the customer approves in their monobank app")
 	}
@@ -126,12 +136,13 @@ func authorise(ctx context.Context, cli *openbanking.Client, consentID string) e
 		if err != nil {
 			return err
 		}
-		fmt.Println("consent status:", status.ConsentStatus)
+		fmt.Println("consent status:", sanitizeLogValue(string(status.ConsentStatus)))
 		if status.ConsentStatus == openbanking.ConsentValid {
 			return nil
 		}
 		if status.ConsentStatus != openbanking.ConsentReceived {
-			return fmt.Errorf("consent did not become valid: %s", status.ConsentStatus)
+			return fmt.Errorf("consent did not become valid: %s",
+				sanitizeLogValue(string(status.ConsentStatus)))
 		}
 		select {
 		case <-ctx.Done():
@@ -163,7 +174,8 @@ func readAccounts(ctx context.Context, cli *openbanking.Client, consentID string
 	}
 
 	for _, acc := range accounts {
-		fmt.Printf("\n%s  %s  %s\n", acc.ResourceID, acc.Currency, acc.IBAN)
+		fmt.Printf("\n%s  %s  %s\n", sanitizeLogValue(acc.ResourceID),
+			sanitizeLogValue(acc.Currency), sanitizeLogValue(acc.IBAN))
 
 		balances := acc.Balances
 		if len(balances) == 0 {
@@ -180,7 +192,9 @@ func readAccounts(ctx context.Context, cli *openbanking.Client, consentID string
 			balances = out.Balances
 		}
 		for _, b := range balances {
-			fmt.Printf("  %-12s %s %s\n", b.BalanceType, b.BalanceAmount.Value, b.BalanceAmount.Currency)
+			fmt.Printf("  %-12s %s %s\n", sanitizeLogValue(string(b.BalanceType)),
+				sanitizeLogValue(b.BalanceAmount.Value),
+				sanitizeLogValue(b.BalanceAmount.Currency))
 		}
 	}
 	return nil
