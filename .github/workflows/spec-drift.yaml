@@ -1,0 +1,25 @@
+name: Spec drift
+
+# Watches the published monobank specifications for changes. The SDK is
+# written against them, so when one moves the code silently stops
+# matching the API — that is how the payslip delete endpoints came to
+# expect HTTP 200 for an operation documented as 204.
+#
+# Weekly, not per-PR: these are third-party documents that change on
+# monobank's schedule, not ours, and a red PR would say nothing about
+# the PR. Manual dispatch is there for release preparation.
+on:
+  schedule:
+    - cron: '41 6 * * 1'  # every Monday 06:41 UTC, after Integration
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  spec-drift:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: compare published specs against the pinned checksums
+        run: python3 scripts/check-spec-drift.py

@@ -1,0 +1,22 @@
+{
+  "corp-api": {
+    "sha256": "bd6eb265774111995d8f62546d9bdb6024f7395252d24835d930b2e64a8f074c",
+    "version": ""
+  },
+  "personal": {
+    "sha256": "de2087c1a3df0c0e04d65840ca38231b25ecc02822257df007dbc5afedd04cd7",
+    "version": "v250818"
+  },
+  "acquiring": {
+    "sha256": "2ded6f9c962350488762d423645293d03b9cab04f98afeff6420c2069a5d2926",
+    "version": "v2410"
+  },
+  "corporate": {
+    "sha256": "28c3a19ab5c548f111e22396dc4083bc547deac335fc2d50dc62ab743e889bd7",
+    "version": "v260831"
+  },
+  "openbanking": {
+    "sha256": "fa78c51e42f13825fbca95448a0f79b218767889e0614806263f55efe87eecef",
+    "version": "2026.09.18"
+  }
+}
