@@ -50,6 +50,33 @@ golangci-lint, gh, jq).
 - Інтеграційні тести проти sandbox — позначайте build tag-ом
   `//go:build integration` і не запускайте у CI за замовчуванням.
 
+### Інтеграційні тести
+
+Ганяються окремо і кожен скіпається, якщо його змінних немає:
+
+```bash
+MONO_ACQUIRING_TOKEN=… go test -tags=integration -run Integration ./acquiring/...
+```
+
+| Пакет | Змінні |
+|---|---|
+| `bank` | — (публічні ендпоінти) |
+| `acquiring` | `MONO_ACQUIRING_TOKEN`; опційно `MONO_T2P_EXTERNAL_PAYMENT_ID` |
+| `installment` | `CHAST_STORE_ID`, `CHAST_SECRET`, `MONO_QR_ID`; `CHAST_BASE_URL` (дефолт — sandbox) |
+| `business` | `MONO_BUSINESS_TOKEN`; опційно `MONO_BUSINESS_IBAN` |
+| `openbanking` | `OB_CERT`, `OB_KEY`; опційно `OB_CA`, `OB_IBAN`, `OB_CONSENT_ID`, `OB_BASE_URL` |
+
+Три виклики рухають гроші або видаляють дані, тож самих креденшалів
+їм мало — потрібен ще явний опт-ін:
+
+| Тест | Опт-ін | Що робить |
+|---|---|---|
+| `POSTransactionCancel` | `MONO_ALLOW_REFUND=yes-refund-real-money` + `MONO_POS_RRN`, `MONO_POS_AMOUNT` | справжнє повернення коштів |
+| `DeleteImport` | `MONO_ALLOW_PAYSLIP_DELETE=yes-delete-payslips` + `MONO_BUSINESS_PAYSLIP_PERIOD` | видаляє імпорт розрахункових листів за період |
+| `RequestTestCertificate` | `OB_ALLOW_CERT_REQUEST=yes-request-certificate` | подає заявку, яку обробляє людина |
+
+Ці опт-іни **не** кладіть у секрети CI — запускайте руками, свідомо.
+
 ## Коміти й PR
 
 - Один логічний коміт = одна зміна. Refactor + feature + fix в одному
