@@ -50,6 +50,14 @@ type ClientInfo struct {
 	Permissions string   `json:"permissions,omitempty"`
 	Accounts    Accounts `json:"accounts"`
 	Jars        Jars     `json:"jars"`
+	// ManagedClients lists the clients that granted this client (an
+	// accountant) access to their FOP accounts. Absent for a token
+	// without such access.
+	//
+	// Note: Mono does not deliver events for the FOP accounts shared
+	// this way, so their state has to be read rather than awaited. The
+	// spec does not say which read path covers them.
+	ManagedClients ManagedClients `json:"managedClients,omitempty"`
 }
 
 // Account returns the client's account by id (shorthand for
@@ -62,6 +70,12 @@ func (c ClientInfo) Account(id string) (*Account, bool) {
 // ClientInfo.Jars.ByID).
 func (c ClientInfo) Jar(id string) (*Jar, bool) {
 	return c.Jars.ByID(id)
+}
+
+// ManagedClient returns the managed client by its clientId (shorthand
+// for ClientInfo.ManagedClients.ByID).
+func (c ClientInfo) ManagedClient(id string) (*ManagedClient, bool) {
+	return c.ManagedClients.ByID(id)
 }
 
 // LogValue implements [slog.LogValuer] so that logging a ClientInfo
@@ -82,6 +96,21 @@ func (c ClientInfo) LogValue() slog.Value {
 		slog.String("webHookUrl", redactURL(c.WebHookURL)),
 		slog.Int("accounts", len(c.Accounts)),
 		slog.Int("jars", len(c.Jars)),
+		// Managed clients carry somebody else's name, TIN and IBANs —
+		// the same reason Accounts/Jars are reduced to a count.
+		slog.Int("managedClients", len(c.ManagedClients)),
+	)
+}
+
+// LogValue implements [slog.LogValuer] for a single ManagedClient.
+// The struct is pure PII of a third party (name, РНОКПП, the IBANs of
+// their FOP accounts), so only the clientId stays readable.
+func (m ManagedClient) LogValue() slog.Value {
+	return slog.GroupValue(
+		slog.String("clientId", m.ID),
+		slog.String("name", maskName(m.Name)),
+		slog.String("tin", redactTIN(m.TIN)),
+		slog.Int("accounts", len(m.Accounts)),
 	)
 }
 
@@ -142,6 +171,17 @@ func redactIBAN(iban string) string {
 		return "***"
 	}
 	return iban[:2] + "***" + iban[len(iban)-4:]
+}
+
+// redactTIN drops a РНОКПП entirely, keeping only the fact that one
+// was present. Unlike an IBAN or a card mask, a TIN is a bare 10-digit
+// personal identifier: any digits kept would narrow the search space
+// enough to re-identify the person, so nothing is kept.
+func redactTIN(tin string) string {
+	if tin == "" {
+		return ""
+	}
+	return "***"
 }
 
 // redactCardMask keeps the last 4 digits of a card mask. Mono's mask
@@ -212,6 +252,105 @@ func (j *Jar) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
+// ManagedClient is a client that shared their FOP accounts with the
+// current client (an accountant). TIN is the РНОКПП (a personal
+// taxpayer ID).
+//
+// Accounts reuses [Account]: Mono sends a subset of the usual account
+// fields here (no sendId, cashbackType or maskedPan), so those stay
+// zero while the currency-aware decoding of the money fields is
+// shared. Events are not delivered for these accounts — see the note
+// on [ClientInfo.ManagedClients].
+type ManagedClient struct {
+	ID       string   `json:"clientId"`
+	TIN      string   `json:"tin"`
+	Name     string   `json:"name"`
+	Accounts Accounts `json:"accounts"`
+}
+
+// ManagedClients is a slice of [ManagedClient].
+type ManagedClients []ManagedClient
+
+// ByID returns the managed client with the given clientId. ok=false
+// when none matches. The pointer aliases the slice element.
+func (ms ManagedClients) ByID(id string) (*ManagedClient, bool) {
+	for i := range ms {
+		if ms[i].ID == id {
+			return &ms[i], true
+		}
+	}
+	return nil, false
+}
+
+// LogValue implements [slog.LogValuer] for the slice. Without it,
+// slog.Any("clients", info.ManagedClients) renders the raw structs —
+// [ManagedClient.LogValue] is never consulted for the elements, so a
+// third party's name, РНОКПП and account IBANs land in the log
+// verbatim. Delegating to the element keeps the redaction.
+func (ms ManagedClients) LogValue() slog.Value {
+	vals := make([]slog.Value, len(ms))
+	for i := range ms {
+		vals[i] = ms[i].LogValue()
+	}
+	return slog.AnyValue(vals)
+}
+
+// LogValue implements [slog.LogValuer]. A statement entry is the
+// densest personal data the SDK handles: Description and Comment are
+// free text that routinely names people and purposes, and the counter*
+// fields identify the other side of the payment. Only the amounts and
+// the opaque handles stay readable — they are what makes a log entry
+// useful without telling the reader who paid whom for what.
+func (t Transaction) LogValue() slog.Value {
+	return slog.GroupValue(
+		slog.String("id", t.ID),
+		slog.Time("time", t.Time.Time),
+		slog.String("amount", t.Amount.String()),
+		slog.String("currency", t.Currency.String()),
+		slog.Int("mcc", int(t.MCC)),
+		slog.Bool("hold", t.Hold),
+		slog.Bool("descriptionSet", t.Description != ""),
+		slog.Bool("commentSet", t.Comment != ""),
+		slog.String("counterIban", redactIBAN(t.IBAN)),
+		slog.String("counterEdrpou", redactTIN(t.EDRPOU)),
+		slog.String("counterName", maskName(t.CounterName)),
+	)
+}
+
+// LogValue implements [slog.LogValuer] for the slice — see
+// [ManagedClients.LogValue] on why the element's method is not enough.
+func (ts Transactions) LogValue() slog.Value {
+	vals := make([]slog.Value, len(ts))
+	for i := range ts {
+		vals[i] = ts[i].LogValue()
+	}
+	return slog.AnyValue(vals)
+}
+
+// LogValue implements [slog.LogValuer]. A jar's title and description
+// are user-written and often carry a name or a medical purpose, so
+// they are reduced to their presence.
+func (j Jar) LogValue() slog.Value {
+	return slog.GroupValue(
+		slog.String("id", j.ID),
+		slog.String("currency", j.Currency.String()),
+		slog.String("balance", j.Balance.String()),
+		slog.String("goal", j.Goal.String()),
+		slog.Bool("titleSet", j.Title != ""),
+		slog.Bool("descriptionSet", j.Description != ""),
+	)
+}
+
+// LogValue implements [slog.LogValuer] for the slice, for the same
+// reason as [Transactions.LogValue].
+func (js Jars) LogValue() slog.Value {
+	vals := make([]slog.Value, len(js))
+	for i := range js {
+		vals[i] = js[i].LogValue()
+	}
+	return slog.AnyValue(vals)
+}
+
 // CardType is the visual / product type of a card tied to an account.
 type CardType string
 
@@ -227,7 +366,7 @@ const (
 	Diia     CardType = "diia" // Дія.Картка
 )
 
-// CashbackType is the cashback programme an account accrues in. An
+// CashbackType is the cashback program an account accrues in. An
 // empty value means the account has no cashback.
 type CashbackType string
 
@@ -251,6 +390,18 @@ func (as Accounts) ByID(id string) (*Account, bool) {
 		}
 	}
 	return nil, false
+}
+
+// LogValue implements [slog.LogValuer] for the slice, for the same
+// reason as [ManagedClients.LogValue]: slog does not reach through a
+// slice to the element's LogValuer, so logging Accounts directly
+// would print every IBAN and card mask in full.
+func (as Accounts) LogValue() slog.Value {
+	vals := make([]slog.Value, len(as))
+	for i := range as {
+		vals[i] = as[i].LogValue()
+	}
+	return slog.AnyValue(vals)
 }
 
 // ByIBAN returns the account with the given IBAN. ok=false when no
