@@ -32,7 +32,7 @@ go get github.com/OlexiyOdarchuk/go-monobank-sdk/v2
 
 ## Покриття API
 
-Покрито всі п'ять публічних API monobank плюс два community-документовані
+Покрито всі шість публічних API monobank плюс два community-документовані
 ендпоінти банок (jars). Внутрішній mobile-API публічної специфікації не
 має — поза скоупом.
 
@@ -41,8 +41,9 @@ go get github.com/OlexiyOdarchuk/go-monobank-sdk/v2
 | Open API — personal (X-Token) | [api.monobank.ua/docs](https://api.monobank.ua/docs/) | `personal` | 4 |
 | Open API — corporate (ECDSA) + monoКЕП | [api-docs/providers](https://monobank.ua/api-docs/providers) | `corporate` | 11 |
 | corp-api для юр. осіб | [corp-api.monobank.ua](https://corp-api.monobank.ua/) | `business` | 23 |
-| Acquiring (`/api/merchant/*`) | [api-docs/acquiring](https://monobank.ua/api-docs/acquiring) | `acquiring` | 31 |
-| Покупка частинами (HMAC-SHA256) | [api-docs/chast](https://monobank.ua/api-docs/chast) | `installment` | 14 |
+| Acquiring (`/api/merchant/*`) | [api-docs/acquiring](https://monobank.ua/api-docs/acquiring) | `acquiring` | 33 |
+| Покупка частинами (HMAC-SHA256) | [api-docs/chast](https://monobank.ua/api-docs/chast) | `installment` | 16 |
+| Open Banking (PSD2, mTLS) | [ob.mono.bank](https://ob.mono.bank/) | `openbanking` | 17 |
 | JAR / банки (community) | [community docs](https://github.com/andrew-demb/monobank-api-community-docs) | `jar` | 2 |
 
 ## Структура пакетів
@@ -56,11 +57,13 @@ go-monobank-sdk/
 ├── personal/       Personal Open API (X-Token)
 ├── corporate/      Corporate Open API (ECDSA) + monoКЕП
 ├── business/       corp-api.monobank.ua — 23 endpoint-и
-├── acquiring/      /api/merchant/* — 31 endpoint (інвойси, QR, wallet,
-│                   subscriptions, monopay-keys, split, T2P) +
+├── acquiring/      /api/merchant/* — 33 endpoint-и (інвойси, QR, wallet,
+│                   subscriptions, monopay-keys, split, T2P, POS) +
 │                   ECDSA-верифікація webhook
-├── installment/    «Покупка частинами» (u2.monobank.com.ua) — 14 endpoint-ів,
+├── installment/    «Покупка частинами» (u2.monobank.com.ua) — 16 endpoint-ів,
 │                   HMAC-SHA256 підпис тіла, VerifyCallback
+├── openbanking/    Open Banking PSD2 (openbanking.mono.bank) — 17 endpoint-ів:
+│                   згоди, рахунки, платежі; автентифікація лише mTLS (QWAC)
 ├── jar/            публічні банки: /bank/jar/{id} + send.monobank.ua/api/handler
 ├── webhook/        Verify, Parse, http.Handler, Deduper для personal webhook
 ├── monobanktest/   фейковий monobank-сервер + білдери для тестування
@@ -258,7 +261,9 @@ finalize), рекурент через токенізовані картки, р
 (`SubscriptionCreate/Edit/Remove/Status/List/Payments`), QR-каси,
 повернення, фіскальні чеки, період-виписка для звірки, прямі PAN-потоки
 (для мерчантів з PCI DSS scope), monopay-кнопка (`MonoPayKeyImport/Delete/List`),
-розщеплення платежів (`SplitReceivers`), T2P-термінали (`Terminals`).
+розщеплення платежів (`SplitReceivers`), T2P-термінали (`Terminals`,
+`T2PPaymentStatus`), повернення за POS-транзакцією
+(`POSTransactionCancel`).
 
 ## Швидкий старт: Installment («Покупка частинами»)
 
@@ -720,6 +725,7 @@ sub-module, щоб OTel не тягнувся у проєкти, які його
 | `examples/business` | Список рахунків + виписка з пагінацією |
 | `examples/acquiring` | Створення інвойсу, поллінг до фінального стану |
 | `examples/installment` | Sandbox-флоу ПЧ: create → state → confirm |
+| `examples/openbanking` | PSD2: згода → авторизація → рахунки й баланси (mTLS) |
 | `examples/jar` | Lookup банки за longJarId та коротким clientId |
 | `examples/webhook` | HTTP-сервер з ECDSA-верифікацією і дедупом |
 
