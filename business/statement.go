@@ -2,6 +2,7 @@ package business
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -58,15 +59,26 @@ func (c *Client) Statement(ctx context.Context, account string, from, to time.Ti
 	return out, nil
 }
 
-// Operation returns a single operation by Mono's id and your
-// externalReference. Both must be supplied — the bank checks they
-// match. Useful for confirming that your payment really landed in
-// the statement.
+// ErrOperationRefRequired is returned by [Client.Operation] when both
+// id and externalReference are empty.
+var ErrOperationRefRequired = errors.New("business: operation id or externalReference is required")
+
+// Operation returns a single operation by Mono's id or by your
+// externalReference; either one is enough, and an empty one is not
+// sent. Useful for confirming that your payment really landed in the
+// statement.
 // https://corp-api.monobank.ua/docs/#operation/get-payment-from-statement
 func (c *Client) Operation(ctx context.Context, id, externalReference string) (*StatementItem, error) {
+	if id == "" && externalReference == "" {
+		return nil, ErrOperationRefRequired
+	}
 	q := url.Values{}
-	q.Set("id", id)
-	q.Set("externalReference", externalReference)
+	if id != "" {
+		q.Set("id", id)
+	}
+	if externalReference != "" {
+		q.Set("externalReference", externalReference)
+	}
 	uri := "/ext/v1/statement?" + q.Encode()
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, uri, http.NoBody)

@@ -196,6 +196,22 @@ func TestOperation(t *testing.T) {
 	assert.Equal(t, int64(-12345), out.Amount.Minor)
 }
 
+func TestOperation_sendsOnlyTheGivenRef(t *testing.T) {
+	c, _ := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		q := r.URL.Query()
+		assert.Equal(t, "ext-42", q.Get("externalReference"))
+		assert.False(t, q.Has("id"), "empty id must not be sent")
+		_, _ = w.Write([]byte(`{"id":"op-1","externalReference":"ext-42","status":"DONE"}`))
+	})
+
+	out, err := c.Operation(context.Background(), "", "ext-42")
+	require.NoError(t, err)
+	assert.Equal(t, "op-1", out.ID)
+
+	_, err = c.Operation(context.Background(), "", "")
+	assert.ErrorIs(t, err, ErrOperationRefRequired)
+}
+
 // --- payments: single PaymentState by id ---
 
 func TestPaymentState_byID(t *testing.T) {
