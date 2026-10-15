@@ -7,6 +7,8 @@
 
 ## [Unreleased]
 
+## [2.2.0] — 2026-10-15
+
 Специфікація corp-api (`client-specification.yaml`) змінилася після
 звірки 2026-09-22, хоча версія лишилась `1.0.2`. Стару копію ніде не
 збережено, тож пакет `business` звірено з новою повністю; pin у
@@ -996,7 +998,8 @@ defer klim.Stop()
 - `monobanktest` — мок-сервер на `httptest.Server` із fluent-builder-ами.
 - Пагінатори через `iter.Seq2` (Go 1.23+).
 
-[Unreleased]: https://github.com/OlexiyOdarchuk/go-monobank-sdk/compare/v2.1.0...HEAD
+[Unreleased]: https://github.com/OlexiyOdarchuk/go-monobank-sdk/compare/v2.2.0...HEAD
+[2.2.0]: https://github.com/OlexiyOdarchuk/go-monobank-sdk/compare/v2.1.0...v2.2.0
 [2.1.0]: https://github.com/OlexiyOdarchuk/go-monobank-sdk/compare/v2.0.2...v2.1.0
 [2.0.2]: https://github.com/OlexiyOdarchuk/go-monobank-sdk/compare/v2.0.1...v2.0.2
 [2.0.1]: https://github.com/OlexiyOdarchuk/go-monobank-sdk/compare/v2.0.0...v2.0.1
