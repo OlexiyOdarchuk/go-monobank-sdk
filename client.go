@@ -66,8 +66,9 @@ type HTTPDoer interface {
 // If the response body is JSON of the shape {"errorDescription": "..."}
 // (the standard Mono error format for the personal/corporate/business/
 // acquiring APIs), the [APIError.ErrorDescription] field holds the
-// parsed message; otherwise it is empty and the original bytes remain
-// in [APIError.Body].
+// parsed message, and [APIError.ErrorCode] the errorCode field where
+// the API sends one (corp-api does); otherwise both are empty and the
+// original bytes remain in [APIError.Body].
 type APIError struct {
 	Method              string
 	URL                 string
@@ -77,7 +78,11 @@ type APIError struct {
 	// the JSON body of the Mono response, when the body could be
 	// parsed; otherwise empty.
 	ErrorDescription string
-	Body             []byte
+	// ErrorCode is the machine-readable errorCode field from the same
+	// JSON body, when present. Of the APIs on this error format only
+	// corp-api (package business) documents it.
+	ErrorCode string
+	Body      []byte
 }
 
 func (e *APIError) Error() string {
@@ -112,19 +117,20 @@ func (e *APIError) Is(target error) bool {
 // error types.
 type errorBody struct {
 	ErrorDescription string `json:"errorDescription"`
+	ErrorCode        string `json:"errorCode"`
 }
 
-// parseErrorDescription extracts errorDescription from a JSON body.
-// Returns "" if the body is not JSON or the field is missing or empty.
-func parseErrorDescription(body []byte) string {
-	if len(body) == 0 {
-		return ""
-	}
+// parseErrorBody extracts errorDescription and errorCode from a JSON
+// body. Both are "" if the body is not JSON or a field is missing.
+func parseErrorBody(body []byte) errorBody {
 	var e errorBody
-	if err := json.Unmarshal(body, &e); err != nil {
-		return ""
+	if len(body) == 0 {
+		return e
 	}
-	return e.ErrorDescription
+	if err := json.Unmarshal(body, &e); err != nil {
+		return errorBody{}
+	}
+	return e
 }
 
 func truncate(b []byte, n int) string {
@@ -429,12 +435,14 @@ func (c Client) attempt(req *http.Request, v any, expectedStatusCodes []int) err
 
 	if !slices.Contains(expectedStatusCodes, resp.StatusCode) {
 		body, _ := io.ReadAll(resp.Body)
+		parsed := parseErrorBody(body)
 		apiErr := &APIError{
 			Method:              req.Method,
 			URL:                 req.URL.String(),
 			StatusCode:          resp.StatusCode,
 			ExpectedStatusCodes: expectedStatusCodes,
-			ErrorDescription:    parseErrorDescription(body),
+			ErrorDescription:    parsed.ErrorDescription,
+			ErrorCode:           parsed.ErrorCode,
 			Body:                body,
 		}
 		if isTransientStatus(resp.StatusCode) {

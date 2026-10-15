@@ -17,7 +17,7 @@ func newErrorClient(t *testing.T) *Client {
 	t.Helper()
 	c, _ := newTestClient(t, func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
-		_, _ = w.Write([]byte(`{"errCode":"INTERNAL","errText":"boom"}`))
+		_, _ = w.Write([]byte(`{"errorCode":"INTERNAL","errorDescription":"boom"}`))
 	})
 	return c
 }
@@ -28,6 +28,8 @@ func assertAPIError(t *testing.T, err error) {
 	var apiErr *monobank.APIError
 	require.True(t, errors.As(err, &apiErr), "want *monobank.APIError, got %T", err)
 	assert.Equal(t, http.StatusInternalServerError, apiErr.StatusCode)
+	assert.Equal(t, "INTERNAL", apiErr.ErrorCode)
+	assert.Equal(t, "boom", apiErr.ErrorDescription)
 }
 
 func TestBusiness_errorPaths(t *testing.T) {

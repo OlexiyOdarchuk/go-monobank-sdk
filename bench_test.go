@@ -36,9 +36,9 @@ func BenchmarkKeyedLimiterWait(b *testing.B) {
 
 var benchErrBody = []byte(`{"errorDescription":"Unknown 'X-Token'","traceId":"abc123"}`)
 
-func BenchmarkParseErrorDescription(b *testing.B) {
+func BenchmarkParseErrorBody(b *testing.B) {
 	b.ReportAllocs()
 	for range b.N {
-		_ = parseErrorDescription(benchErrBody)
+		_ = parseErrorBody(benchErrBody)
 	}
 }

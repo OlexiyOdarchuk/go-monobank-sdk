@@ -10,7 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestParseErrorDescription(t *testing.T) {
+func TestParseErrorBody(t *testing.T) {
 	tests := []struct {
 		name string
 		body string
@@ -25,9 +25,17 @@ func TestParseErrorDescription(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			assert.Equal(t, tc.want, parseErrorDescription([]byte(tc.body)))
+			assert.Equal(t, tc.want, parseErrorBody([]byte(tc.body)).ErrorDescription)
 		})
 	}
+}
+
+// corp-api documents an errorCode next to errorDescription.
+func TestParseErrorBody_errorCode(t *testing.T) {
+	got := parseErrorBody([]byte(`{"errorCode":"INVALID_IBAN","errorDescription":"bad iban"}`))
+	assert.Equal(t, "INVALID_IBAN", got.ErrorCode)
+	assert.Equal(t, "bad iban", got.ErrorDescription)
+	assert.Empty(t, parseErrorBody([]byte(`{"errorDescription":"x"}`)).ErrorCode)
 }
 
 func TestAPIError_PopulatesErrorDescription(t *testing.T) {

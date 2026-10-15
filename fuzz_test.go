@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-func FuzzParseErrorDescription(f *testing.F) {
+func FuzzParseErrorBody(f *testing.F) {
 	f.Add([]byte(`{"errorDescription":"Unknown 'X-Token'"}`))
 	f.Add([]byte(`{"errorDescription":""}`))
 	f.Add([]byte(`{"errorDescription":"oops","traceId":"abc"}`))
@@ -16,10 +16,10 @@ func FuzzParseErrorDescription(f *testing.F) {
 	f.Add([]byte(`{"errorDescription": 42}`))
 
 	f.Fuzz(func(t *testing.T, body []byte) {
-		// Property: never panics on arbitrary input. Result is always
-		// a string (possibly empty) — implementation MUST NOT crash on
+		// Property: never panics on arbitrary input. Fields are always
+		// strings (possibly empty) — implementation MUST NOT crash on
 		// malformed JSON, weird types, huge inputs, etc.
-		_ = parseErrorDescription(body)
+		_ = parseErrorBody(body)
 	})
 }
 
