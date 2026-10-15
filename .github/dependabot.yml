@@ -12,6 +12,11 @@ updates:
     commit-message:
       prefix: "deps"
       include: scope
+    # The root module doesn't use OpenTelemetry, but go.work makes this
+    # entry see otelmonobank's requirements too and open duplicates of
+    # the /otelmonobank PRs below.
+    ignore:
+      - dependency-name: "go.opentelemetry.io/*"
 
   - package-ecosystem: gomod
     directory: "/otelmonobank"
@@ -26,6 +31,10 @@ updates:
     commit-message:
       prefix: "deps(otelmonobank)"
       include: scope
+    groups:
+      opentelemetry:
+        patterns:
+          - "go.opentelemetry.io/*"
 
   - package-ecosystem: github-actions
     directory: "/"
