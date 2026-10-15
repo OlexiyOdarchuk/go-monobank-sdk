@@ -3,7 +3,7 @@ module github.com/OlexiyOdarchuk/go-monobank-sdk/otelmonobank
 go 1.26.0
 
 require (
-	github.com/OlexiyOdarchuk/go-monobank-sdk/v2 v2.0.2
+	github.com/OlexiyOdarchuk/go-monobank-sdk/v2 v2.2.0
 	github.com/stretchr/testify v1.12.1
 	go.opentelemetry.io/otel v1.47.0
 	go.opentelemetry.io/otel/trace v1.47.0

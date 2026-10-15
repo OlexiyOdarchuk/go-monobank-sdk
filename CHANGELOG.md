@@ -7,6 +7,13 @@
 
 ## [Unreleased]
 
+### Changed
+
+- **`otelmonobank/v1.0.2`** вимагає SDK `v2.2.0` (було `v2.0.2`) і
+  `go.opentelemetry.io/otel` `v1.47.0`. Споживачі submodule, які не
+  вимагають SDK явно, отримають виправлення з 2.1.0 і 2.2.0 лише з
+  цим тегом.
+
 ## [2.2.0] — 2026-10-15
 
 Специфікація corp-api (`client-specification.yaml`) змінилася після
