@@ -102,6 +102,15 @@ func TestBusiness_errorPaths(t *testing.T) {
 		_, err := newErrorClient(t).SalaryRegistryStatus(ctx, "reg-1")
 		assertAPIError(t, err)
 	})
+	t.Run("SubmitSalaryRegistryBatch", func(t *testing.T) {
+		_, err := newErrorClient(t).SubmitSalaryRegistryBatch(ctx, idKey,
+			&SubmitSalaryRegistryBatchRequest{Recipients: SalaryRecipients{{}}})
+		assertAPIError(t, err)
+	})
+	t.Run("FinalizeSalaryRegistry", func(t *testing.T) {
+		err := newErrorClient(t).FinalizeSalaryRegistry(ctx, "ref-1")
+		assertAPIError(t, err)
+	})
 	t.Run("UploadPayslips", func(t *testing.T) {
 		_, err := newErrorClient(t).UploadPayslips(ctx, &BatchPayslipRequest{Period: "2026-01"})
 		assertAPIError(t, err)

@@ -8,7 +8,7 @@
 // cabinet at https://web.monobank.ua/?modal=tokens. No ECDSA
 // signatures.
 //
-// The 23 endpoints group into six topics:
+// The 25 endpoints group into six topics:
 //
 //   - Accounts: [Client.Accounts], [Client.Account],
 //     [Client.AccountBalances]
@@ -20,14 +20,18 @@
 //     [Client.ContactByID], [Client.CreateContact],
 //     [Client.DeleteContact], [Client.DeleteContactsBatch]
 //   - Salary registries: [Client.CreateSalaryRegistry],
-//     [Client.SalaryRegistryTypes], [Client.SalaryRegistryStatus]
+//     [Client.SalaryRegistryTypes], [Client.SalaryRegistryStatus],
+//     and batch upload for large registries:
+//     [Client.SubmitSalaryRegistryBatch],
+//     [Client.FinalizeSalaryRegistry]
 //   - Payslips: [Client.UploadPayslips], [Client.DeletePayslips],
 //     [Client.ImportStatus], [Client.DeleteImport],
 //     [Client.SendPayslipsToMobile], [Client.PayslipPDF]
 //
 // Idempotency: mutating endpoints with Idempotency-Key
-// (PreparePayment, CreateSalaryRegistry) expect a fresh UUID v4 for
-// each logical attempt — repeating with the same key is safe.
+// (PreparePayment, CreateSalaryRegistry, SubmitSalaryRegistryBatch)
+// expect a fresh UUID v4 for each logical attempt — repeating with the
+// same key is safe.
 //
 // Rate limits: corp-api tracks quotas per company. The current
 // remaining count is in the X-Rate-Limit-Remaining header; 429

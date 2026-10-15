@@ -113,6 +113,72 @@ func TestSalaryRegistryStatus(t *testing.T) {
 	assert.Equal(t, "insufficient funds", out.DeclineReason)
 }
 
+// --- salary registries: batch upload (v2) ---
+
+func TestSubmitSalaryRegistryBatch(t *testing.T) {
+	var seenKey string
+	c, _ := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodPost, r.Method)
+		assert.Equal(t, "/ext/v2/payments/salary/registries", r.URL.Path)
+		seenKey = r.Header.Get("Idempotency-Key")
+		body, _ := io.ReadAll(r.Body)
+		var got map[string]any
+		require.NoError(t, json.Unmarshal(body, &got))
+		assert.Equal(t, "salary-2026-09-acme-001", got["registryReference"])
+		assert.NotContains(t, got, "registryName", "unset name must be omitted")
+		recipients := got["recipients"].([]any)
+		require.Len(t, recipients, 1)
+		assert.NotContains(t, recipients[0], "fullName", "fullName is optional in a batch")
+		_, _ = w.Write([]byte(`{"id":"123e4567-e89b-12d3-a456-426614174000",` +
+			`"registryReference":"salary-2026-09-acme-001","state":"API_LOADING",` +
+			`"createTimestamp":"2026-09-15T10:30:00Z"}`))
+	})
+
+	out, err := c.SubmitSalaryRegistryBatch(context.Background(), "uniq-key-7",
+		&SubmitSalaryRegistryBatchRequest{
+			RegistryReference:  "salary-2026-09-acme-001",
+			SenderIBAN:         "UA1",
+			SalaryRegistryType: "salary",
+			From:               "2026-09-01",
+			To:                 "2026-09-30",
+			Recipients:         SalaryRecipients{{INN: "2962300713", IBAN: "UA2", Amount: 50000}},
+		})
+	require.NoError(t, err)
+	assert.Equal(t, "uniq-key-7", seenKey)
+	assert.Equal(t, "salary-2026-09-acme-001", out.RegistryReference)
+	assert.Equal(t, RegistryAPILoading, out.State)
+}
+
+func TestSubmitSalaryRegistryBatch_rejectsBeforeSending(t *testing.T) {
+	c := New("x")
+	ctx := context.Background()
+	full := &SubmitSalaryRegistryBatchRequest{
+		Recipients: make(SalaryRecipients, MaxSalaryBatchRecipients+1),
+	}
+
+	_, err := c.SubmitSalaryRegistryBatch(ctx, "k", nil)
+	assert.ErrorIs(t, err, ErrNilRequest)
+	_, err = c.SubmitSalaryRegistryBatch(ctx, "", &SubmitSalaryRegistryBatchRequest{})
+	assert.ErrorIs(t, err, ErrIdempotencyKeyRequired)
+	_, err = c.SubmitSalaryRegistryBatch(ctx, "k", &SubmitSalaryRegistryBatchRequest{})
+	assert.ErrorIs(t, err, ErrBatchSize)
+	_, err = c.SubmitSalaryRegistryBatch(ctx, "k", full)
+	assert.ErrorIs(t, err, ErrBatchSize)
+}
+
+func TestFinalizeSalaryRegistry(t *testing.T) {
+	c, _ := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodPost, r.Method)
+		assert.Equal(t, "/ext/v2/payments/salary/registries/finalize", r.URL.Path)
+		body, _ := io.ReadAll(r.Body)
+		assert.JSONEq(t, `{"registryReference":"salary-2026-09-acme-001"}`, string(body))
+		w.WriteHeader(http.StatusOK)
+	})
+
+	require.NoError(t, c.FinalizeSalaryRegistry(context.Background(), "salary-2026-09-acme-001"))
+	assert.ErrorIs(t, c.FinalizeSalaryRegistry(context.Background(), ""), ErrEmptyRegistryReference)
+}
+
 // --- statement: single operation lookup ---
 
 func TestOperation(t *testing.T) {

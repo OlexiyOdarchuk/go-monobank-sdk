@@ -93,9 +93,11 @@ type CreateContactRequest struct {
 	PAN            string       `json:"pan,omitempty"`
 }
 
-// SalaryRecipient is one row in a salary registry.
+// SalaryRecipient is one row in a salary registry. FullName is
+// required by [Client.CreateSalaryRegistry] and optional in
+// [Client.SubmitSalaryRegistryBatch].
 type SalaryRecipient struct {
-	FullName       string       `json:"fullName"`
+	FullName       string       `json:"fullName,omitempty"`
 	INN            string       `json:"inn,omitempty"`
 	DocumentType   DocumentType `json:"documentType,omitempty"`
 	DocumentNumber string       `json:"documentNumber,omitempty"`
@@ -122,6 +124,37 @@ type SalaryRegistryCreated struct {
 	CreateTimestamp string `json:"createTimestamp"` // ISO-8601
 }
 
+// SubmitSalaryRegistryBatchRequest is the body of POST
+// /ext/v2/payments/salary/registries. Every batch of one registry must
+// repeat the first batch's RegistryName, SenderIBAN,
+// SalaryRegistryType, From and To, or the batch is rejected.
+type SubmitSalaryRegistryBatchRequest struct {
+	// RegistryReference is chosen by the caller and must be unique
+	// within the company; it ties consecutive batches to one registry.
+	RegistryReference  string `json:"registryReference"`
+	RegistryName       string `json:"registryName,omitempty"`
+	SenderIBAN         string `json:"senderIban"`
+	SalaryRegistryType string `json:"salaryRegistryType"`
+	From               string `json:"from"` // YYYY-MM-DD
+	To                 string `json:"to"`   // YYYY-MM-DD
+	// Recipients holds 1 to [MaxSalaryBatchRecipients] rows.
+	Recipients SalaryRecipients `json:"recipients"`
+}
+
+// MaxSalaryBatchRecipients is the most recipients one call to
+// [Client.SubmitSalaryRegistryBatch] accepts. A registry as a whole
+// holds up to 100 000.
+const MaxSalaryBatchRecipients = 1000
+
+// SalaryRegistryBatchAccepted is the response to POST
+// /ext/v2/payments/salary/registries.
+type SalaryRegistryBatchAccepted struct {
+	ID                string         `json:"id"`
+	RegistryReference string         `json:"registryReference"`
+	State             RegistryStatus `json:"state"`           // RegistryAPILoading or RegistryAdded
+	CreateTimestamp   string         `json:"createTimestamp"` // ISO-8601
+}
+
 // SalaryRegistryType is one alias from /payments/salary/registries/types.
 type SalaryRegistryType struct {
 	Alias       string `json:"alias"`
@@ -139,6 +172,12 @@ const (
 	RegistryChangeRequired RegistryStatus = "CHANGE_REQUIRED"
 	RegistryFail           RegistryStatus = "FAIL"
 	RegistryPaymentsDone   RegistryStatus = "PAYMENTS_DONE"
+
+	// RegistryAPILoading: batches are still being uploaded or
+	// processed (see [Client.SubmitSalaryRegistryBatch]).
+	RegistryAPILoading RegistryStatus = "API_LOADING"
+	// RegistryAdded: a batch-uploaded registry is finalized.
+	RegistryAdded RegistryStatus = "ADDED"
 )
 
 // SalaryRegistryStatus is the response to GET /ext/v1/payments/salary/registries/{id}/status.

@@ -66,6 +66,10 @@ func TestBusinessDTOs_LogValueRedacts(t *testing.T) {
 		{"CreateSalaryRegistryRequest", business.CreateSalaryRegistryRequest{
 			SenderIBAN: iban, Recipients: business.SalaryRecipients{recipient},
 		}, all},
+		{"SubmitSalaryRegistryBatchRequest", business.SubmitSalaryRegistryBatchRequest{
+			RegistryReference: "ref-1", SenderIBAN: iban,
+			Recipients: business.SalaryRecipients{recipient},
+		}, all},
 		{"Account", business.Account{IBAN: iban}, []string{iban}},
 		{"Accounts slice", business.Accounts{{IBAN: iban}}, []string{iban}},
 		{"StatementItem", item, all},

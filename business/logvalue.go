@@ -167,6 +167,16 @@ func (r CreateSalaryRegistryRequest) LogValue() slog.Value {
 	)
 }
 
+// LogValue implements [slog.LogValuer]. Like a whole registry, a
+// batch is logged by shape only.
+func (r SubmitSalaryRegistryBatchRequest) LogValue() slog.Value {
+	return slog.GroupValue(
+		slog.String("registryReference", r.RegistryReference),
+		slog.String("senderIban", redactIBAN(r.SenderIBAN)),
+		slog.Int("recipients", len(r.Recipients)),
+	)
+}
+
 // LogValue implements [slog.LogValuer], hiding the counterparty and
 // the free-text description.
 func (s StatementItem) LogValue() slog.Value {

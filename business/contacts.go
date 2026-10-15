@@ -15,9 +15,9 @@ import (
 // is passed.
 var ErrNilRequest = errors.New("request body is nil")
 
-// ErrIdempotencyKeyRequired is returned by [Client.PreparePayment]
-// and [Client.CreateSalaryRegistry] when the idempotencyKey
-// argument is empty. The bank treats an empty Idempotency-Key as
+// ErrIdempotencyKeyRequired is returned by [Client.PreparePayment],
+// [Client.CreateSalaryRegistry] and [Client.SubmitSalaryRegistryBatch]
+// when the idempotencyKey argument is empty. The bank treats an empty Idempotency-Key as
 // "no dedupe", so a network retry would create a duplicate payment
 // — explicit failure is safer than implicit duplication.
 var ErrIdempotencyKeyRequired = errors.New("business: Idempotency-Key is required")

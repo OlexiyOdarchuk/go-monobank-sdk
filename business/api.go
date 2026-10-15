@@ -44,6 +44,9 @@ type API interface {
 		in *CreateSalaryRegistryRequest) (*SalaryRegistryCreated, error)
 	SalaryRegistryTypes(ctx context.Context) ([]SalaryRegistryType, error)
 	SalaryRegistryStatus(ctx context.Context, id string) (*SalaryRegistryStatus, error)
+	SubmitSalaryRegistryBatch(ctx context.Context, idempotencyKey string,
+		in *SubmitSalaryRegistryBatchRequest) (*SalaryRegistryBatchAccepted, error)
+	FinalizeSalaryRegistry(ctx context.Context, registryReference string) error
 
 	// Payslips.
 	UploadPayslips(ctx context.Context, in *BatchPayslipRequest) (*BatchPayslipResponse, error)
