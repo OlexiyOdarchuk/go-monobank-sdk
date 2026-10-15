@@ -56,7 +56,7 @@ go-monobank-sdk/
 │                   (ClientInfo, Account, Jar, Transaction) + Rates.Convert
 ├── personal/       Personal Open API (X-Token)
 ├── corporate/      Corporate Open API (ECDSA) + monoКЕП
-├── business/       corp-api.monobank.ua — 23 endpoint-и
+├── business/       corp-api.monobank.ua — 25 endpoint-ів
 ├── acquiring/      /api/merchant/* — 33 endpoint-и (інвойси, QR, wallet,
 │                   subscriptions, monopay-keys, split, T2P, POS) +
 │                   ECDSA-верифікація webhook
@@ -344,7 +344,8 @@ short, _ := cli.ByShortID(ctx, "clientIdFromShareLink")
   балансера може створити дублікат операції). Вмикайте, якщо точно
   знаєте, що ваш endpoint ідемпотентний і дублі прийнятні.
 - `APIError` — типізована помилка з методом, URL, отриманим/очікуваним
-  статусом, розпарсеним `ErrorDescription` і сирим body. Реалізує
+  статусом, розпарсеними `ErrorDescription` і `ErrorCode` (його шле
+  corp-api) та сирим body. Реалізує
   `errors.Is` проти sentinel-помилок (див. нижче).
 - `WithRequestHook` / `WithResponseHook` — підключіть власні метрики чи
   трейсинг без замін транспорту. Перезаписують один одного — щоб
@@ -410,7 +411,8 @@ country+last4, card masks → `****`+last4), а також
 Mono обмежує більшість endpoint-ів — наприклад, `/personal/client-info`
 і `/personal/statement/{account}/…` дозволяють лише 1 виклик на 60 секунд
 (на токен/акаунт відповідно). Поза лімітом сервер повертає `429` з
-`Retry-After`, який `WithRetry` поважає автоматично.
+`Retry-After`, який `WithRetry` поважає автоматично. corp-api замість
+нього шле `X-Rate-Limit-Retry-After-Seconds` — його враховано так само.
 
 > При систематичному перевищенні лімітів edge Mono (AWS) може віддати
 > `403` з HTML-тілом (а не JSON `errorDescription`) і заблокувати IP

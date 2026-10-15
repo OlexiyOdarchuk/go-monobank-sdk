@@ -7,6 +7,69 @@
 
 ## [Unreleased]
 
+Специфікація corp-api (`client-specification.yaml`) змінилася після
+звірки 2026-09-22, хоча версія лишилась `1.0.2`. Стару копію ніде не
+збережено, тож пакет `business` звірено з новою повністю; pin у
+`testdata/spec-checksums.json` оновлено.
+
+### Added
+
+- **`business`: пакетне завантаження зарплатних відомостей.**
+  [Client.SubmitSalaryRegistryBatch] — `POST
+  /ext/v2/payments/salary/registries` — вантажить до 1000 одержувачів
+  за виклик (до 100 000 на відомість), пакети звʼязуються
+  `registryReference`, який обирає клієнт. Потрібен `Idempotency-Key`.
+  [Client.FinalizeSalaryRegistry] — `.../finalize` — завершує
+  відомість. Нові статуси [RegistryAPILoading] і [RegistryAdded],
+  сентинели [ErrBatchSize] і [ErrEmptyRegistryReference]. Методи додано
+  в інтерфейс [API]: власні реалізації (моки) треба доповнити.
+- **`APIError.ErrorCode`** — машинний код помилки з поля `errorCode`,
+  який документує corp-api. Раніше він був доступний лише через
+  повторний розбір `Body`.
+
+### Changed
+
+- **`business.SalaryRecipient.FullName` тепер `omitempty`.** У
+  пакетному завантаженні імʼя необовʼязкове; v1-ендпоінт порожнє імʼя
+  відхиляє так само, як і раніше.
+
+### Fixed
+
+- **`business`: [Client.Operation] шукає за будь-яким із двох
+  ідентифікаторів.** Специфікація вимагає `id` лише без
+  `externalReference` і навпаки, а SDK завжди слав обидва — пошук за
+  одним ішов із порожнім другим параметром. Тепер шлеться лише
+  заданий; якщо порожні обидва — [ErrOperationRefRequired] до запиту.
+- **Підказку corp-api про очікування на 429 ігнорували.** corp-api шле
+  `X-Rate-Limit-Retry-After-Seconds`, а не `Retry-After`, тож ретрай
+  відкочувався до сліпого експоненційного бекофу. Тепер заголовок
+  читається, коли `Retry-After` немає.
+
+### Known issues
+
+- **`business`: напрям виписки в специфікації описано навпаки.**
+  Специфікація позначає `direction` як застарілий і пише «UP — спочатку
+  нові, DOWN — спочатку старі», тоді як SDK (і [Client.StatementAll],
+  що гортає назад від `to`) розраховує, що DOWN віддає спочатку нові.
+  Поведінку не змінено: на живому API це ще не перевірено. Додано
+  інтеграційний тест `TestIntegration_Statement_directionOrder`, який
+  це покаже.
+
+### CI
+
+- `setup-go` бере найсвіжіший патч Go (`check-latest`): кешований на
+  раннері go1.26.8 валив `govulncheck` на дев'яти вразливостях stdlib,
+  виправлених у go1.26.9.
+- Dependabot більше не відкриває дублікати PR для OpenTelemetry: для
+  кореня otel ігнорується (через `go.work` він бачив вимоги
+  `otelmonobank`), у `/otelmonobank` оновлення згруповано.
+
+### Dependencies
+
+- `golang.org/x/sync` `v0.23.0 → v0.24.0`.
+- `go.opentelemetry.io/otel`, `go.opentelemetry.io/otel/trace`
+  (`otelmonobank`) `v1.46.0 → v1.47.0`.
+
 ## [2.1.0] — 2026-09-22
 
 Актуалізація покриття API за офіційними доками monobank і новий пакет

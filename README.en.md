@@ -55,7 +55,7 @@ go-monobank-sdk/
 │                   (ClientInfo, Account, Jar, Transaction) + Rates.Convert
 ├── personal/       Personal Open API (X-Token)
 ├── corporate/      Corporate Open API (ECDSA) + monoКЕП
-├── business/       corp-api.monobank.ua — 23 endpoints
+├── business/       corp-api.monobank.ua — 25 endpoints
 ├── acquiring/      /api/merchant/* — 33 endpoints (invoices, QR, wallet,
 │                   subscriptions, monopay-keys, split, T2P, POS) +
 │                   ECDSA webhook verification
@@ -345,8 +345,9 @@ recurring updates.
   a duplicate). Enable when you know your endpoint is idempotent or
   duplicates are acceptable.
 - `APIError` — typed error with method, URL, received/expected status,
-  parsed `ErrorDescription`, and the raw body. Implements `errors.Is`
-  against the package sentinels (see below).
+  parsed `ErrorDescription` and `ErrorCode` (sent by corp-api), and the
+  raw body. Implements `errors.Is` against the package sentinels (see
+  below).
 - `WithRequestHook` / `WithResponseHook` — plug in metrics or tracing
   without replacing the transport. These options overwrite each other —
   to ADD a hook on top of an existing one (e.g. application hook +
@@ -412,7 +413,8 @@ log aggregator.
 Mono throttles most endpoints — for example, `/personal/client-info` and
 `/personal/statement/{account}/…` allow only 1 call per 60 seconds (per
 token / per account respectively). Past the limit the server returns `429`
-with `Retry-After`, which `WithRetry` honors automatically.
+with `Retry-After`, which `WithRetry` honors automatically. corp-api sends
+`X-Rate-Limit-Retry-After-Seconds` instead; it is honored the same way.
 
 > Under sustained abuse Mono's edge (AWS) may return `403` with an HTML
 > body (not a JSON `errorDescription`) and block the IP for roughly a
