@@ -86,6 +86,38 @@ func TestIntegration_Statement_ultimateDebit(t *testing.T) {
 	t.Logf("%d of %d statement entries carried ultimateDebit", seen, len(items))
 }
 
+// StatementAll pages backwards from `to` and relies on DOWN returning
+// the newest operation first. The published spec (1.0.2) describes
+// `direction` the other way round — "UP: new operations first, DOWN:
+// old operations first" — and marks it deprecated. This pins down what the server actually does; the
+// window needs at least two operations at different seconds.
+func TestIntegration_Statement_directionOrder(t *testing.T) {
+	iban := envOrSkip(t, "MONO_BUSINESS_IBAN")
+	cli := liveClient(t)
+	to := time.Now()
+	from := to.AddDate(0, 0, -30)
+
+	order := func(dir business.StatementDirection) string {
+		items, err := cli.Statement(liveContext(t), iban, from, to, dir, 50)
+		require.NoError(t, err, "live statement call must succeed")
+		if len(items) < 2 || items[0].Time.Equal(items[len(items)-1].Time.Time) {
+			t.Skipf("%s: %d operations in the window, not enough to see an order", dir, len(items))
+		}
+		first, last := items[0].Time.Time, items[len(items)-1].Time.Time
+		t.Logf("%s: %d items, first %s, last %s", dir, len(items),
+			first.Format(time.RFC3339), last.Format(time.RFC3339))
+		if first.After(last) {
+			return "newest first"
+		}
+		return "oldest first"
+	}
+
+	down, up := order(business.StatementDown), order(business.StatementUp)
+	t.Logf("DOWN → %s, UP → %s", down, up)
+	assert.Equal(t, "newest first", down,
+		"StatementAll assumes DOWN is newest-first; if this fails, it skips operations")
+}
+
 // ImportStatus for a period with no import tells us how the bank
 // answers the empty case, and it is read-only.
 func TestIntegration_ImportStatus_unknownPeriod(t *testing.T) {

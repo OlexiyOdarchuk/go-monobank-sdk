@@ -245,6 +245,11 @@ func (s *StatementItem) UnmarshalJSON(data []byte) error {
 
 // StatementDirection is the iteration direction passed to [Client.Statement].
 // UP returns items chronologically newer than `from`; DOWN — older.
+//
+// The published spec marks the parameter deprecated and describes it
+// the other way round (UP: newest first, DOWN: oldest first);
+// TestIntegration_Statement_directionOrder checks which one the server
+// follows. [Client.StatementAll] relies on DOWN being newest-first.
 type StatementDirection string
 
 // Possible StatementDirection values.
