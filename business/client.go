@@ -35,7 +35,8 @@
 //
 // Rate limits: corp-api tracks quotas per company. The current
 // remaining count is in the X-Rate-Limit-Remaining header; 429
-// responses carry X-Rate-Limit-Retry-After-Seconds.
+// responses carry X-Rate-Limit-Retry-After-Seconds, which the retry
+// policy waits out the same way as a standard Retry-After.
 package business
 
 import (

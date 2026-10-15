@@ -44,6 +44,19 @@ func TestParseRetryAfter(t *testing.T) {
 		})
 	}
 
+	t.Run("corp-api header", func(t *testing.T) {
+		h := http.Header{}
+		h.Set("x-rate-Limit-retry-after-seconds", "7")
+		assert.Equal(t, 7*time.Second, parseRetryAfter(h))
+	})
+
+	t.Run("Retry-After wins over corp-api header", func(t *testing.T) {
+		h := http.Header{}
+		h.Set("Retry-After", "2")
+		h.Set("X-Rate-Limit-Retry-After-Seconds", "7")
+		assert.Equal(t, 2*time.Second, parseRetryAfter(h))
+	})
+
 	t.Run("http-date future", func(t *testing.T) {
 		future := time.Now().Add(10 * time.Second).UTC().Format(http.TimeFormat)
 		h := http.Header{"Retry-After": []string{future}}

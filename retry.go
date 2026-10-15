@@ -163,7 +163,9 @@ func (e *transientStatus) Unwrap() error { return e.cause }
 const maxRetryAfter = 24 * time.Hour
 
 // parseRetryAfter parses a Retry-After header value per RFC 7231 §7.1.3.
-// Returns the duration the client should wait. Special cases:
+// Without Retry-After it falls back to X-Rate-Limit-Retry-After-Seconds,
+// which corp-api sends on 429 instead. Returns the duration the client
+// should wait. Special cases:
 //   - header missing or unparseable → [noRetryAfter] (-1)
 //   - explicit "0" or HTTP-date in the past → 0 (retry immediately)
 //   - any positive value → that value, clamped to [maxRetryAfter]
@@ -174,6 +176,9 @@ const maxRetryAfter = 24 * time.Hour
 // malicious or misconfigured proxy returning a multi-day wait.
 func parseRetryAfter(h http.Header) time.Duration {
 	v := strings.TrimSpace(h.Get("Retry-After"))
+	if v == "" {
+		v = strings.TrimSpace(h.Get("X-Rate-Limit-Retry-After-Seconds"))
+	}
 	if v == "" {
 		return noRetryAfter
 	}
