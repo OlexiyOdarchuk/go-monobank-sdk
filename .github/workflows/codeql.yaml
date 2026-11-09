@@ -42,7 +42,7 @@ jobs:
           # security-and-quality is the broader query suite — includes
           # security-extended plus maintainability checks.
           queries: security-and-quality
-      - uses: github/codeql-action/autobuild@5e316336eb4f107009e477d4bfbfff13d7250fae # v4
+      - uses: github/codeql-action/autobuild@0911ee96d2d6c8def97122c36c5cadd93829a4b4 # v4
       - uses: github/codeql-action/analyze@5e316336eb4f107009e477d4bfbfff13d7250fae # v4
         with:
           category: '/language:${{ matrix.language }}'
