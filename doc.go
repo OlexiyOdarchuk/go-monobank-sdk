@@ -2,8 +2,8 @@
 // surface. It exposes the [Client] type, the [Option] type, and a set
 // of constructors and options ([New], [WithHTTPClient], [WithHTTPDoer],
 // [WithBaseURL], [WithRetry], [WithAuth], [WithRateLimiter],
-// [WithUnsafeRetries], [WithLogger], [WithRequestHook],
-// [WithResponseHook]), plus the shared error type [APIError] and
+// [WithStatementPacing], [WithUnsafeRetries], [WithLogger],
+// [WithRequestHook], [WithResponseHook]), plus the shared error type [APIError] and
 // sentinel errors keyed by HTTP status ([ErrUnauthorized],
 // [ErrForbidden], [ErrNotFound], [ErrTooManyRequests]).
 //

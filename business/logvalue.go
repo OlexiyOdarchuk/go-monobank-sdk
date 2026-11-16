@@ -133,7 +133,8 @@ func (r CreateContactRequest) LogValue() slog.Value {
 
 // LogValue implements [slog.LogValuer]. Amount stays readable: on its
 // own, with the person masked, it is a figure rather than a salary
-// attributable to anyone.
+// attributable to anyone. AdditionalPurpose is free text that may name
+// the person, so only its presence is logged.
 func (r SalaryRecipient) LogValue() slog.Value {
 	return slog.GroupValue(
 		slog.String("fullName", maskName(r.FullName)),
@@ -143,6 +144,7 @@ func (r SalaryRecipient) LogValue() slog.Value {
 		slog.String("documentSeries", redactID(r.DocumentSeries)),
 		slog.String("iban", redactIBAN(r.IBAN)),
 		slog.Int64("amount", r.Amount),
+		slog.Bool("additionalPurposeSet", r.AdditionalPurpose != ""),
 	)
 }
 

@@ -76,10 +76,10 @@ func TestT2PPaymentStatus_successWithoutStatementFields(t *testing.T) {
 	assert.Empty(t, out.ApprovalCode)
 }
 
-func TestT2PPaymentStatus_failed(t *testing.T) {
+func TestT2PPaymentStatus_rejected(t *testing.T) {
 	c := newTestClient(t, func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = w.Write([]byte(`{
-			"status":"failed",
+			"status":"rejected",
 			"externalPaymentId":"ext-3",
 			"responseCode":"59",
 			"errorMessage":"insufficient funds"
@@ -88,13 +88,29 @@ func TestT2PPaymentStatus_failed(t *testing.T) {
 
 	out, err := c.T2PPaymentStatus(context.Background(), "ext-3")
 	require.NoError(t, err)
-	assert.Equal(t, T2PStatusFailed, out.Status)
+	assert.Equal(t, T2PStatusRejected, out.Status)
 	assert.Equal(t, "59", out.ResponseCode)
 	assert.Equal(t, "insufficient funds", out.ErrorMessage)
 }
 
-// The status page of the docs names states the callback table does
-// not; they must survive the round-trip verbatim instead of being
+// Every documented status and payment type decodes onto its constant.
+func TestT2PPaymentStatus_documentedEnums(t *testing.T) {
+	for _, st := range []T2PStatus{T2PStatusPending, T2PStatusSuccess, T2PStatusRejected,
+		T2PStatusTxpDoesNotAnswer, T2PStatusTransactionNotCompleted} {
+		t.Run(string(st), func(t *testing.T) {
+			c := newTestClient(t, func(w http.ResponseWriter, _ *http.Request) {
+				_, _ = w.Write([]byte(`{"status":"` + string(st) + `","paymentType":"reverse"}`))
+			})
+			out, err := c.T2PPaymentStatus(context.Background(), "ext-e")
+			require.NoError(t, err)
+			assert.Equal(t, st, out.Status)
+			assert.Equal(t, T2PReverse, out.PaymentType)
+		})
+	}
+}
+
+// The docs speak of a "*_not_completed" family; a member not yet in
+// the enum must survive the round-trip verbatim instead of being
 // normalized away.
 func TestT2PPaymentStatus_unknownStatusPreserved(t *testing.T) {
 	c := newTestClient(t, func(w http.ResponseWriter, _ *http.Request) {

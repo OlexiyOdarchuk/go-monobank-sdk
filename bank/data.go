@@ -30,10 +30,11 @@ import (
 	"github.com/OlexiyOdarchuk/go-monobank-sdk/v2/money"
 )
 
-// MaxStatementWindow is the largest interval /personal/statement
-// accepts per call (31 days). For wider ranges, use TransactionsRange
-// on the personal/corporate clients — it automatically slices into
-// 31-day windows.
+// MaxStatementWindow is the per-call statement window the SDK uses:
+// 31 days. The spec allows slightly more — "31 доба + 1 година
+// (2682000 секунд)" — so this leaves an hour of margin. For wider
+// ranges, use TransactionsRange on the personal/corporate clients — it
+// automatically slices into windows of this size.
 const MaxStatementWindow = 31 * 24 * time.Hour
 
 // ClientInfo is the response of /personal/client-info: what the bank
@@ -44,9 +45,11 @@ type ClientInfo struct {
 	Name       string `json:"name"`
 	WebHookURL string `json:"webHookUrl"`
 	// Permissions is the set of granted scopes, one letter per
-	// permission (for example "psfj"): p — statements/personal info,
-	// s — settings/webhook, f — FOP, j — jars. Reflects what the token
-	// actually carries.
+	// permission (for example "psfj"). The spec says only "1 літера на
+	// 1 permission" and does not define the letters; the corporate
+	// permission constants in the auth package (PermSt, PermPI, …) are
+	// the SDK's reading of them. Reflects what the token actually
+	// carries.
 	Permissions string   `json:"permissions,omitempty"`
 	Accounts    Accounts `json:"accounts"`
 	Jars        Jars     `json:"jars"`
@@ -254,7 +257,9 @@ func (j *Jar) UnmarshalJSON(data []byte) error {
 
 // ManagedClient is a client that shared their FOP accounts with the
 // current client (an accountant). TIN is the РНОКПП (a personal
-// taxpayer ID).
+// taxpayer ID). The spec types tin as a string but its example is the
+// unquoted number 1234567890; the SDK decodes a string and has not
+// seen the field arrive as a JSON number.
 //
 // Accounts reuses [Account]: Mono sends a subset of the usual account
 // fields here (no sendId, cashbackType or maskedPan), so those stay
@@ -363,11 +368,16 @@ const (
 	FOP      CardType = "fop" // FOP (card for sole proprietors)
 	Yellow   CardType = "yellow"
 	EAid     CardType = "eAid" // єПідтримка
-	Diia     CardType = "diia" // Дія.Картка
+	// Diia (Дія.Картка) is not in the spec's account type enum
+	// (black, white, platinum, iron, fop, yellow, eAid); kept for
+	// accounts that report it.
+	Diia CardType = "diia"
 )
 
-// CashbackType is the cashback program an account accrues in. An
-// empty value means the account has no cashback.
+// CashbackType is the cashback program an account accrues in. The
+// spec's enum is None, UAH, Miles — an account without cashback
+// reports [CashbackNone]; an empty value only means the field was
+// absent.
 type CashbackType string
 
 // Possible values of CashbackType.
@@ -443,12 +453,17 @@ func (js Jars) ByID(id string) (*Jar, bool) {
 }
 
 // Transaction is one statement entry. The monetary fields are typed
-// [money.Money]. Currency is the operation's currency (for
-// OperationAmount). Amount is described as "in the account currency",
-// but Mono does not return the account currency in the transaction
-// body — Code on every money field is set from Currency. Keep this in
-// mind for cross-currency operations (Amount in a currency different
-// from Currency).
+// [money.Money], and Code on every one of them is set from Currency.
+//
+// The spec is not self-consistent about which currency that is: it
+// describes currencyCode as "Код валюти рахунку" (the account
+// currency), amount as "у валюті рахунку" and operationAmount as "у
+// валюті транзакції". The same "валюти рахунку" text is reused where
+// it plainly does not fit (CurrencyInfo.currencyCodeA/B), so the SDK
+// has not settled the question. For a cross-currency operation Amount
+// and OperationAmount are in different currencies, so at least one of
+// them carries the wrong Code; when it matters, take the account
+// currency from [Account.Currency].
 type Transaction struct {
 	ID          string        `json:"id"`
 	Time        epoch.Seconds `json:"time"`
@@ -461,22 +476,25 @@ type Transaction struct {
 	// OperationAmount is the value in the transaction currency
 	// (Currency) or after double conversion.
 	OperationAmount money.Money `json:"operationAmount"`
-	// Currency is the ISO 4217 numeric code of the transaction
-	// currency.
+	// Currency is the ISO 4217 numeric code from currencyCode (see the
+	// note on [Transaction] about which currency it denotes).
 	Currency       currency.Code `json:"currencyCode"`
 	CommissionRate money.Money   `json:"commissionRate"`
 	CashbackAmount money.Money   `json:"cashbackAmount"`
 	Balance        money.Money   `json:"balance"`
 	Comment        string        `json:"comment"`
-	// Cash withdrawals only.
+	// ReceiptID is the receipt number for check.gov.ua; the spec says
+	// the field may be absent.
 	ReceiptID string `json:"receiptId"`
-	// FOP accounts only.
+	// InvoiceID is the FOP receipt number; per the spec it is sent for
+	// operations that credit funds.
 	InvoiceID string `json:"invoiceId"`
 	// FOP accounts only.
 	EDRPOU string `json:"counterEdrpou"`
 	// FOP accounts only.
 	IBAN string `json:"counterIban"`
-	// CounterName is the counterparty's name (FOP accounts only).
+	// CounterName is the counterparty's name. Unlike counterEdrpou and
+	// counterIban, the spec does not restrict it to FOP accounts.
 	CounterName string `json:"counterName"`
 }
 

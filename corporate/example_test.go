@@ -2,13 +2,11 @@ package corporate_test
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log"
 	"os"
 	"time"
 
-	monobank "github.com/OlexiyOdarchuk/go-monobank-sdk/v2"
 	"github.com/OlexiyOdarchuk/go-monobank-sdk/v2/auth"
 	"github.com/OlexiyOdarchuk/go-monobank-sdk/v2/corporate"
 )
@@ -34,9 +32,8 @@ func ExampleClient_Auth() {
 
 	// Ask the bank to start a client-data access flow. The client opens
 	// AcceptURL in mono's app and approves; meanwhile we poll CheckAuth.
-	tok, err := cli.Auth(context.Background(),
-		"https://yourapp.example.com/cb",
-		auth.PermSt, auth.PermPI)
+	// An empty callback URL means no X-Callback: polling only.
+	tok, err := cli.Auth(context.Background(), "", auth.PermSt, auth.PermPI)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -47,8 +44,7 @@ func ExampleClient_Auth() {
 		if err == nil {
 			break // approved
 		}
-		var apiErr *monobank.APIError
-		if errors.As(err, &apiErr) && apiErr.StatusCode == 403 {
+		if corporate.IsAuthPending(err) { // 401: not approved yet
 			time.Sleep(5 * time.Second)
 			continue
 		}

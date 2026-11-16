@@ -118,6 +118,18 @@ func TestAcquiring_errorPaths(t *testing.T) {
 		_, err := errorClient(t).SplitReceivers(ctx)
 		assertAPIError(t, err)
 	})
+	t.Run("SplitReceiverByID", func(t *testing.T) {
+		_, err := errorClient(t).SplitReceiverByID(ctx, "sr1")
+		assertAPIError(t, err)
+	})
+	t.Run("POSTransactionCancelWithResponse", func(t *testing.T) {
+		_, err := errorClient(t).POSTransactionCancelWithResponse(ctx, &POSTransactionCancelRequest{RRN: "r", Amount: 1})
+		assertAPIError(t, err)
+	})
+	t.Run("POSTransactionCancelStatus", func(t *testing.T) {
+		_, err := errorClient(t).POSTransactionCancelStatus(ctx, "ref")
+		assertAPIError(t, err)
+	})
 	t.Run("Terminals", func(t *testing.T) {
 		_, err := errorClient(t).Terminals(ctx)
 		assertAPIError(t, err)

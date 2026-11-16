@@ -9,10 +9,12 @@ import (
 )
 
 // Settings is the payload of /personal/corp/settings: the profile of
-// the company registered with Mono. Permission is a string of
-// permission letters that may be requested in [Client.Auth] (for
-// example "spf" means Statements, PersonalInfo, and FOP). Webhook is
-// the currently configured URL (nil when none is set).
+// the company registered with Mono. Permission is the list of rights
+// the service may request in [Client.Auth]; the spec says only "1
+// letter per permission". The SDK's constants map the letters as
+// [auth.PermSt] = "s", [auth.PermPI] = "p", [auth.PermFOP] = "f", so
+// "spf" would mean all three. Webhook is the currently configured URL
+// (nil when none is set).
 type Settings struct {
 	// ID is the company/registration identifier. The spec lists it as
 	// required but ships no property schema; omitempty so an absent
@@ -28,6 +30,10 @@ type Settings struct {
 // GetSettings returns the profile of the company registered with the
 // bank. Useful for diagnostics (which permissions are approved, and
 // whether the webhook is configured).
+//
+// The spec lists a required X-Request-Id header here, yet its X-Sign
+// covers only "X-Time | URL" and no company-level request-id exists;
+// the SDK sends no X-Request-Id. Unverified against the live API.
 // https://api.monobank.ua/docs/corporate.html#tag/Avtoryzaciya-ta-nalashtuvannya-kompaniyi/paths/~1personal~1corp~1settings/get
 func (c *Client) GetSettings(ctx context.Context) (*Settings, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "/personal/corp/settings", http.NoBody)
@@ -51,10 +57,17 @@ type webhookRequest struct {
 // (one per user), a corporate webhook is one per service. The event
 // carries an AccountID so you can map it back to the client.
 //
-// Pass an empty string to UNSUBSCRIBE — the bank deletes the
-// existing subscription. This is a destructive operation across
-// every client of the service; if you only meant to validate the
-// URI, do not pass "".
+// Per the spec, the call sends "a test POST request to this address;
+// if it is not answered with 200 OK, the API call fails" — so the
+// endpoint must already be live and answering 200 when you call this.
+//
+// The spec's 200 response reads "webhook set or deleted", but it does
+// not say how deletion is requested. Passing "" is the likely way and
+// would affect every client of the service; this is not verified.
+//
+// The spec also lists a required X-Request-Id header here (with an
+// X-Sign over "X-Time | URL" only); the SDK sends none, as for
+// [Client.GetSettings]. Unverified against the live API.
 // https://api.monobank.ua/docs/corporate.html#tag/Avtoryzaciya-ta-nalashtuvannya-kompaniyi/paths/~1personal~1corp~1webhook/post
 func (c *Client) SetWebHook(ctx context.Context, uri string) error {
 	body, err := json.Marshal(webhookRequest{WebHookURL: uri})

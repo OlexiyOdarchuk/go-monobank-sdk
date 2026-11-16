@@ -61,15 +61,44 @@ func TestTransactionsRangeIter_breakStopsEarly(t *testing.T) {
 	assert.Equal(t, int32(1), hits.Load(), "після break не має робити нові HTTP-виклики")
 }
 
-func TestTransactionsRangeIter_zeroOrNegativeRange(t *testing.T) {
-	c := New("x")
+func TestTransactionsRangeIter_toNotAfterFrom(t *testing.T) {
+	c := New("x") // no request may be made
 	now := time.Now()
-	for _, err := range c.TransactionsRangeIter(context.Background(), "acc", now, time.Time{}) {
-		t.Fatal("expected zero yields, got", err)
-	}
 	for _, err := range c.TransactionsRangeIter(context.Background(), "acc", now, now.Add(-time.Hour)) {
 		t.Fatal("expected zero yields, got", err)
 	}
+}
+
+func TestTransactionsRangeIter_zeroToMeansNow(t *testing.T) {
+	now := time.Unix(1_700_000_000, 0)
+	var last string
+	c := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		last = r.URL.Path
+		_, _ = w.Write([]byte(`[{"id":"a","time":1699999000,"amount":1}]`))
+	})
+	c.now = func() time.Time { return now }
+
+	var n int
+	for _, err := range c.TransactionsRangeIter(context.Background(), "acc", now.Add(-time.Hour), time.Time{}) {
+		require.NoError(t, err)
+		n++
+	}
+	assert.Equal(t, 1, n)
+	assert.True(t, strings.HasSuffix(last, "/"+strconv.FormatInt(now.Unix(), 10)))
+}
+
+func TestTransactionsRangeIter_paces(t *testing.T) {
+	c := newTestClient(t, func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`[]`))
+	})
+	clk := &fakeClock{now: time.Unix(1_800_000_000, 0)}
+	clk.install(c)
+
+	from := time.Unix(1_700_000_000, 0)
+	for _, err := range c.TransactionsRangeIter(context.Background(), "acc", from, from.Add(40*24*time.Hour)) {
+		require.NoError(t, err)
+	}
+	assert.Len(t, clk.sleeps, 1)
 }
 
 func TestTransactionsRangeIter_propagatesError(t *testing.T) {

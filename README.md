@@ -263,7 +263,7 @@ finalize), рекурент через токенізовані картки, р
 (для мерчантів з PCI DSS scope), monopay-кнопка (`MonoPayKeyImport/Delete/List`),
 розщеплення платежів (`SplitReceivers`), T2P-термінали (`Terminals`,
 `T2PPaymentStatus`), повернення за POS-транзакцією
-(`POSTransactionCancel`).
+(`POSTransactionCancelWithResponse`, `POSTransactionCancelStatus`).
 
 ## Швидкий старт: Installment («Покупка частинами»)
 
@@ -339,6 +339,10 @@ short, _ := cli.ByShortID(ctx, "clientIdFromShareLink")
   повага до `Retry-After`, ретраїться лише на 5xx/429.
 - `WithRateLimiter(RateLimiter)` — клієнтський throttle (див. розділ
   «Rate limits» нижче).
+- `WithStatementPacing(d)` — пауза між запитами діапазонних виписок
+  `personal` (типово 60 с, `0` вимикає).
+- `acquiring.WithCMS(name, version)` — заголовки `X-Cms` / `X-Cms-Version`
+  для CMS-модулів.
 - `WithUnsafeRetries(bool)` — за замовчуванням POST/PATCH ретраяться
   ЛИШЕ за наявності заголовка `Idempotency-Key` (інакше 502 від
   балансера може створити дублікат операції). Вмикайте, якщо точно
@@ -381,7 +385,9 @@ cli := personal.New(token,
 ```
 
 Та сама гарда у `installment.New`, `jar.New`, `corporate.Client.Auth`
-(для `X-Callback URL`). Кожен з пакетів має власну
+(для `X-Callback URL`; колбек необовʼязковий — без нього підтвердження
+відстежується опитуванням `CheckAuth`, де очікування — це 401, див.
+`corporate.IsAuthPending`). Кожен з пакетів має власну
 `WithInsecureBaseURL` / `AllowInsecureCallback` для opt-out.
 
 ### Token redaction у логах
@@ -409,10 +415,17 @@ country+last4, card masks → `****`+last4), а також
 ### Rate limits
 
 Mono обмежує більшість endpoint-ів — наприклад, `/personal/client-info`
-і `/personal/statement/{account}/…` дозволяють лише 1 виклик на 60 секунд
-(на токен/акаунт відповідно). Поза лімітом сервер повертає `429` з
-`Retry-After`, який `WithRetry` поважає автоматично. corp-api замість
-нього шле `X-Rate-Limit-Retry-After-Seconds` — його враховано так само.
+і `/personal/statement/{account}/…` дозволяють «не частіше ніж 1 раз у
+60 секунд». Чи рахується ліміт виписки на токен чи на рахунок,
+специфікація не каже. Поза лімітом сервер повертає `429`; заголовок
+`Retry-After` для personal API не задокументований, але якщо він
+прийде, `WithRetry` його врахує (кожна пауза обмежена `maxDelay`,
+типово 30 с, тож сам по собі retry 60 секунд не перечекає). corp-api
+шле `X-Rate-Limit-Retry-After-Seconds` — його враховано так само.
+
+`personal.Client.TransactionsRange` / `TransactionsRangeIter` самі
+витримують паузу між своїми запитами (`WithStatementPacing`, типово
+60 с); окремі виклики й клієнти між собою не координуються.
 
 > При систематичному перевищенні лімітів edge Mono (AWS) може віддати
 > `403` з HTML-тілом (а не JSON `errorDescription`) і заблокувати IP
@@ -444,7 +457,7 @@ cli := personal.New(token,
 сумісна з `*golang.org/x/time/rate.Limiter` — підставляйте, якщо вам
 потрібні дрібніші налаштування.
 
-Для per-account обмежень (виписка по кожному рахунку — окремий ліміт)
+Якщо ліміт рахується на рахунок (специфікація цього не уточнює),
 використовуйте `KeyedLimiter`:
 
 ```go
@@ -656,14 +669,18 @@ amt = installment.MoneyFromMajor(2499.99) // round half away from zero
 Усі ендпоінти, де є природний курсор, мають `iter.Seq2`-обгортки:
 
 - `personal.Client.TransactionsRangeIter` — виписка за довільний період,
-  ліниво по 31-денних вікнах. Вікна, де більше за ліміт у 500 транзакцій
-  на відповідь, добираються прозоро (Mono віддає максимум 500 рядків і не
-  має offset-курсора — SDK переанкорує `to` на найстарішу секунду й
-  дедупить за id, як `business.StatementAll`).
-- `corporate.Client.TransactionsRangeIter` — те саме для corp-API.
+  ліниво по 31-денних вікнах; нульовий `to` означає «до зараз». Вікна,
+  де більше за 500 транзакцій на відповідь, добираються прозоро (на
+  практиці Mono віддає максимум 500 рядків, спочатку новіші, і не має
+  offset-курсора; специфікація цього не описує — SDK переанкорує `to` на
+  найстарішу секунду й дедупить за id).
+- `corporate.Client.TransactionsRangeIter` — те саме для corp-API (без
+  пауз: corporate-специфікація ліміту на виписку не задає).
 - `business.Client.ContactsAll` / `SearchContactsAll` — зарплатні
   контакти.
-- `business.Client.StatementAll` — виписка через DOWN-курсор по часу.
+- `business.Client.StatementAll` — виписка з курсором по часу; працює
+  за будь-якого порядку сторінок (специфікація описує `direction`
+  інакше, ніж спостерігалось раніше, і позначає його застарілим).
 - `acquiring.Client.SubscriptionListAll` / `SubscriptionPaymentsAll` —
   списки підписок та їх платежів.
 

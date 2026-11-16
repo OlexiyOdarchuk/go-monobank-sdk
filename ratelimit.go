@@ -20,13 +20,16 @@ type RateLimiter interface {
 // every every; up to burst tokens are stored at once. Safe for
 // concurrent use.
 //
-// Mono's default limits:
+// Mono's documented limits:
 //
 //   - /personal/client-info — 1 call per 60 s (every=time.Minute, burst=1)
-//   - /personal/statement/{account}/… — 1 call per account per 60 s
+//   - /personal/statement/{account}/… — 1 call per 60 s
 //
-// For per-account limits, create a separate [Limiter] (and a separate
-// client) for each account, or implement a custom [RateLimiter].
+// The spec does not say whether the statement limit counts per account
+// or per token. A single [Limiter] shared by all statement calls is
+// the conservative choice; per-account buckets ([KeyedLimiter]) allow
+// more throughput if the limit turns out to be per account, at the
+// risk of 429 if it is per token.
 type Limiter struct {
 	mu     sync.Mutex
 	every  time.Duration
@@ -113,10 +116,13 @@ func limiterKeyFrom(ctx context.Context) string {
 	return v
 }
 
-// KeyedLimiter lazily creates a separate [Limiter] per key — typically
-// the accountID, because Mono limits /personal/statement/{account}/…
-// independently per account. Implements [RateLimiter]: the key is
-// taken from the context via [WithLimiterKey].
+// KeyedLimiter lazily creates a separate [Limiter] per key — for
+// example the accountID. Note that the spec states the
+// /personal/statement limit ("не частіше ніж 1 раз у 60 секунд")
+// without saying it is per account; per-account keys are an
+// assumption that may yield 429 if Mono counts per token. Implements
+// [RateLimiter]: the key is taken from the context via
+// [WithLimiterKey].
 //
 //	// idleTTL=10*time.Minute — buckets that have not been used for
 //	// 10 min are removed by a background sweeper so the map does

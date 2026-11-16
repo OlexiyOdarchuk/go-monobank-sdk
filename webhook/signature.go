@@ -3,10 +3,16 @@
 // with automatic key rotation, plus an in-memory deduper that
 // absorbs Mono's 60-second and 600-second redeliveries.
 //
-// Mono signs each webhook body with ECDSA on the secp256k1 curve and
-// sends the key identifier in X-Key-Id and the signature itself in
-// X-Sign. The key is rotated occasionally; the bank publishes the
-// current one at /bank/sync ([bank.Client.ServerKey]).
+// The SDK expects each webhook body to be signed with ECDSA on the
+// secp256k1 curve, with the key identifier in X-Key-Id and the
+// signature in X-Sign, verified against the key the bank publishes at
+// /bank/sync ([bank.Client.ServerKey]). Note that the personal API
+// spec (v250818) documents neither these headers nor any signature on
+// /personal/webhook events — it describes /bank/sync only as the
+// bank's public key, its id and the server time. The scheme follows
+// community documentation; if events arrive unsigned, [Handler]
+// answers 401 to all of them and Mono switches the webhook off after
+// three failed deliveries (see [Handler]).
 //
 // For "batteries included" use [NewHandler] — it keeps the key in a
 // cache, refetches it when X-Key-Id stops matching, verifies the

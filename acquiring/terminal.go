@@ -24,41 +24,50 @@ type TerminalListResponse struct {
 	List []Terminal `json:"list"`
 }
 
-// T2PPaymentType tells a T2P charge apart from its refund. The wire
-// values differ from [PaymentType] (debit/hold), which describes how
-// an invoice captures money rather than which way it moves.
+// T2PPaymentType is the kind of T2P operation. The wire values differ
+// from [PaymentType] (debit/hold), which describes how an invoice
+// captures money rather than which way it moves.
 type T2PPaymentType string
 
-// Possible T2PPaymentType values.
+// Possible T2PPaymentType values, as listed on the status endpoint's
+// page. The docs do not explain how reverse differs from refund.
 const (
 	T2PPurchase T2PPaymentType = "purchase"
 	T2PRefund   T2PPaymentType = "refund"
+	T2PReverse  T2PPaymentType = "reverse"
 )
 
 // T2PStatus is the state of a T2P payment. It is deliberately not
 // [ProcessingStatus], whose failure value is "failure".
 //
-// The docs contradict themselves about the failure value and the SDK
-// does not paper over it. The callback table prose says the status is
-// "success або failed", yet the sample payload right beside it sends
-// "rejected", and the status endpoint's page also speaks of rejected
-// plus an unenumerated family of "*_not_completed" values, with
-// pending until the payment settles. All four constants are declared
-// and any unknown value is preserved verbatim.
+// The status endpoint's page enumerates pending, success, rejected,
+// txp_does_not_answer and transaction_not_completed, and says the
+// payment stays pending until it reaches a final state "success /
+// rejected / *_not_completed". It does not say whether
+// txp_does_not_answer is final. The callback table on the integration
+// pages still says "success або failed", while its own failure sample
+// sends "rejected"; "failed" appears in no enum or sample.
 //
-// So do not test against a single failure constant. Treat anything
-// that is neither [T2PStatusSuccess] nor [T2PStatusPending] as "not
-// successful", and anything you do not recognize as not yet final.
+// So: [T2PStatusPending] is the only documented non-final state;
+// [T2PStatusSuccess] is the only success. Treat everything else as
+// "not successful". Any value not listed here is preserved verbatim.
 type T2PStatus string
 
 // Possible T2PStatus values.
 const (
 	T2PStatusPending T2PStatus = "pending"
 	T2PStatusSuccess T2PStatus = "success"
-	// T2PStatusRejected is what the docs' own failure sample sends.
+	// T2PStatusRejected is a final failure; the docs' failure sample
+	// sends it.
 	T2PStatusRejected T2PStatus = "rejected"
-	// T2PStatusFailed is what the callback table's prose names. No
-	// sample in the docs uses it.
+	// T2PStatusTxpDoesNotAnswer is listed in the status enum; the docs
+	// do not say whether it is final.
+	T2PStatusTxpDoesNotAnswer T2PStatus = "txp_does_not_answer"
+	// T2PStatusTransactionNotCompleted is a final failure (one of the
+	// documented "*_not_completed" values).
+	T2PStatusTransactionNotCompleted T2PStatus = "transaction_not_completed"
+	// T2PStatusFailed is named only in the callback table's prose. It
+	// is in no enum and no sample; kept for compatibility.
 	T2PStatusFailed T2PStatus = "failed"
 )
 
@@ -67,14 +76,15 @@ const (
 // state outright that the body is identical to the one the bank POSTs
 // to callbackSuccess/callbackFail — that is the point of the
 // endpoint, so an integrator need not run a webhook server at all.
-// The field set below therefore follows the documented callback
-// table; monobank publishes no machine-readable schema for either.
+// The fields below follow the status endpoint's response schema,
+// which matches the integration pages' callback table.
 //
 // MaskedPan, CardMask, ApprovalCode, RRN, ResponseCode and
 // CountryCard are filled in only once the bank has built the
-// statement entry — see [Client.T2PPaymentStatus] for the timing.
-// On a failed payment most of the other fields may be absent and
-// ErrorMessage carries the reason.
+// statement entry — see [Client.T2PPaymentStatus] for the timing —
+// and TransactionID is likewise documented as "filled after the
+// statement". On a failed payment most of the other fields may be
+// absent and ErrorMessage carries the reason.
 //
 // https://monobank.ua/api-docs/acquiring/integrations/t2p-ios/get--api--merchant--t2p--terminal--payment--external--status
 type T2PPaymentStatusResponse struct {
@@ -110,8 +120,10 @@ type T2PPaymentStatusResponse struct {
 	CardMask     string `json:"cardMask,omitempty"`
 	ApprovalCode string `json:"approvalCode,omitempty"`
 	RRN          string `json:"rrn,omitempty"`
-	// DataTime is the transaction timestamp. The misspelling is the
-	// bank's — the wire field really is `dataTime`.
+	// DataTime is when the payment was created, documented as
+	// "YYYY-MM-DD HH:MM:SS" in UTC (the integration pages' callback
+	// table calls it the transaction date and time). The misspelling
+	// is the bank's — the wire field really is `dataTime`.
 	DataTime string `json:"dataTime"`
 	// ResponseCode is the authorization response code; "1" means
 	// success. Typical declines: "06" PIN/3DS required, "22"
@@ -174,13 +186,13 @@ func (c *Client) Terminals(ctx context.Context) ([]Terminal, error) {
 //
 // A success is not immediately complete: MaskedPan, CardMask,
 // ApprovalCode, RRN, ResponseCode and CountryCard only appear once
-// the bank has built the statement entry. The docs advise repeating
+// the bank has built the statement entry (TransactionID too, per the
+// field description). The docs advise repeating
 // the request 10–30 seconds after the payment reaches Status ==
 // [T2PStatusSuccess] if you need those fields — treat their absence
 // before then as "not ready", not as an error.
 //
-// See [T2PStatus] for the disagreement between the two status lists
-// the docs publish.
+// See [T2PStatus] for which states are final.
 func (c *Client) T2PPaymentStatus(ctx context.Context, externalPaymentID string) (*T2PPaymentStatusResponse, error) {
 	if externalPaymentID == "" {
 		return nil, ErrEmptyID

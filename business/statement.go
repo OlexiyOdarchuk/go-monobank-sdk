@@ -11,13 +11,15 @@ import (
 )
 
 // Statement returns operations on account within [from, to]
-// (inclusive). A zero to means "up to now". limit and direction map
-// to the matching query parameters; pass StatementDirection("") for
-// the API default.
+// (inclusive). A zero to omits the path segment, which the spec
+// describes as "буде підставлено поточний час" (the current time).
+// limit and direction map to the matching query parameters; pass
+// StatementDirection("") for the API default (DOWN). The spec caps
+// limit at 500 (default 10); see [StatementDirection] for the order.
 //
-// Unlike the Personal/Corporate Open API, there is no 31-day
-// constraint here — corp-api returns as much as you ask for within
-// limit.
+// The spec states no maximum window, unlike the 31-day limit of the
+// Personal/Corporate Open API; it is not known whether the server
+// enforces one.
 // https://corp-api.monobank.ua/docs/#operation/get-statement
 func (c *Client) Statement(ctx context.Context, account string, from, to time.Time,
 	direction StatementDirection, limit int) (StatementItems, error) {

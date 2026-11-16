@@ -28,18 +28,30 @@ func TestClientInfo_apiError(t *testing.T) {
 }
 
 // CheckAuth returns nil only on 200. While waiting for approval the bank
-// returns 403, which surfaces as a non-nil error caller can inspect.
-func TestCheckAuth_403WhileWaiting(t *testing.T) {
-	c := newTestClient(t, func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusForbidden)
-		_, _ = w.Write([]byte(`{"errorDescription":"request is pending"}`))
-	})
+// returns 401 "Request is unauthorized yet"; IsAuthPending recognizes
+// it, and does not mistake 403 / 404 for pending.
+func TestCheckAuth_pendingIs401(t *testing.T) {
+	for _, tc := range []struct {
+		status  int
+		pending bool
+	}{
+		{http.StatusUnauthorized, true},
+		{http.StatusForbidden, false},
+		{http.StatusNotFound, false},
+	} {
+		c := newTestClient(t, func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(tc.status)
+			_, _ = w.Write([]byte(`{"errorDescription":"x"}`))
+		})
 
-	err := c.CheckAuth(context.Background(), "rq-1")
-	require.Error(t, err)
-	var apiErr *monobank.APIError
-	require.ErrorAs(t, err, &apiErr)
-	assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
+		err := c.CheckAuth(context.Background(), "rq-1")
+		require.Error(t, err)
+		var apiErr *monobank.APIError
+		require.ErrorAs(t, err, &apiErr)
+		assert.Equal(t, tc.status, apiErr.StatusCode)
+		assert.Equal(t, tc.pending, IsAuthPending(err), tc.status)
+	}
+	assert.False(t, IsAuthPending(nil))
 }
 
 func TestTransactions_retriesOn5xx(t *testing.T) {

@@ -18,10 +18,11 @@
 // go out over a mutually-authenticated connection. Build the
 // transport with [NewMTLSHTTPClient] (or
 // [NewMTLSHTTPClientFromFiles]) and hand it to the client via
-// [monobank.WithHTTPClient]. Without a valid QWAC the bank drops the
-// connection during the handshake — the failure surfaces as a
-// transport error, never as an HTTP status, so do not expect a 401 to
-// tell you the certificate is wrong.
+// [monobank.WithHTTPClient]. Without a valid QWAC the bank is
+// expected to drop the connection during the handshake, which
+// surfaces as a transport error rather than an HTTP status. The spec
+// does declare 401 "Необхідна авторизація" on most operations without
+// saying when it is returned, so handle both.
 //
 // The only Berlin Group protocol header the SDK adds on its own is
 // X-Request-ID, which the spec marks mandatory on all fifteen
@@ -78,8 +79,9 @@
 //
 // A consent declares frequencyPerDay — a budget the TPP commits to
 // itself. The spec does not document how the bank reacts when it is
-// exhausted: the account-information operations declare only
-// 200/400/401/500, and the single 429 in the whole spec belongs to
+// exhausted: the account-information operations declare at most
+// 200/400/401/500 (the transactions read declares only 200), and the
+// single 429 in the whole spec belongs to
 // [Client.RequestTestCertificate]. Budget on your side rather than
 // waiting for a status code to tell you.
 package openbanking
@@ -116,7 +118,8 @@ const (
 	// desk ([Client.RequestTestCertificate] and
 	// [Client.TestCertificateStatus]). The spec exposes it purely for
 	// that purpose and does not say whether the production operations
-	// answer there.
+	// answer there. (Its only other appearance is a non-normative
+	// Location header example on a consent resource.)
 	BaseURLSandbox = "https://ob-ext.mono.st4g3.com"
 )
 
@@ -353,10 +356,11 @@ const DefaultTimeout = 30 * time.Second
 // handshake. Pass the result to [monobank.WithHTTPClient].
 //
 // Authentication is the handshake — there is no token and no
-// Authorization header. A missing, expired or revoked certificate
-// makes the bank tear the connection down before any HTTP is
-// exchanged, so the error you get back is a *url.Error wrapping a TLS
-// alert, not a [monobank.APIError] with a 401.
+// Authorization header. A missing, expired or revoked certificate is
+// expected to make the bank tear the connection down before any HTTP
+// is exchanged, giving a *url.Error wrapping a TLS alert. The spec
+// also declares a 401 on most operations without saying when, so a
+// [monobank.APIError] with StatusCode 401 is possible too.
 func NewMTLSHTTPClient(cfg MTLSConfig) (*http.Client, error) {
 	if len(cfg.CertPEM) == 0 || len(cfg.KeyPEM) == 0 {
 		return nil, ErrNoClientCert

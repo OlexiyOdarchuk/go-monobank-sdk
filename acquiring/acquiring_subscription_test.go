@@ -70,14 +70,42 @@ func TestSplitReceivers(t *testing.T) {
 	c := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, http.MethodGet, r.Method)
 		assert.Equal(t, "/api/merchant/split-receiver/list", r.URL.Path)
-		_, _ = w.Write([]byte(`{"list":[{"splitReceiverId":"sr1","okpo":"12345678","name":"Sub LLC"}]}`))
+		// Field names as documented: id / edrpou / name.
+		_, _ = w.Write([]byte(`{"list":[{"id":"sr_aB3dC5eF7g","edrpou":"1234567890","name":"Sub LLC"}]}`))
 	})
 
 	out, err := c.SplitReceivers(context.Background())
 	require.NoError(t, err)
 	require.Len(t, out, 1)
-	assert.Equal(t, "sr1", out[0].SplitReceiverID)
+	assert.Equal(t, "sr_aB3dC5eF7g", out[0].SplitReceiverID)
+	assert.Equal(t, "1234567890", out[0].OKPO)
 	assert.Equal(t, "Sub LLC", out[0].Name)
+}
+
+func TestSplitReceiverByID(t *testing.T) {
+	c := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodGet, r.Method)
+		assert.Equal(t, "/api/merchant/split-receiver/get-by-id", r.URL.Path)
+		assert.Equal(t, "sr_aB3dC5eF7g", r.URL.Query().Get("splitReceiverId"))
+		_, _ = w.Write([]byte(`{"id":"sr_aB3dC5eF7g","edrpou":"1234567890","name":"Іванов Іван",` +
+			`"status":"blocked","iban":"UA213223130000026007233566001"}`))
+	})
+
+	out, err := c.SplitReceiverByID(context.Background(), "sr_aB3dC5eF7g")
+	require.NoError(t, err)
+	assert.Equal(t, "sr_aB3dC5eF7g", out.SplitReceiverID)
+	assert.Equal(t, "1234567890", out.OKPO)
+	assert.Equal(t, "Іванов Іван", out.Name)
+	assert.Equal(t, SplitReceiverBlocked, out.Status)
+	assert.Equal(t, "UA213223130000026007233566001", out.IBAN)
+}
+
+func TestSplitReceiverByID_emptyID(t *testing.T) {
+	c := newTestClient(t, func(_ http.ResponseWriter, _ *http.Request) {
+		t.Error("unexpected request for an empty id")
+	})
+	_, err := c.SplitReceiverByID(context.Background(), "")
+	assert.ErrorIs(t, err, ErrEmptyID)
 }
 
 func TestTerminals(t *testing.T) {

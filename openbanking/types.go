@@ -144,7 +144,8 @@ type AccessRight string
 
 // Possible AccessRight values.
 const (
-	// AccessAccountDetails unlocks the account in [Client.Accounts].
+	// AccessAccountDetails — the spec lists the code without saying
+	// what it unlocks.
 	AccessAccountDetails AccessRight = "accountDetails"
 	// AccessBalances unlocks [Client.Balances].
 	AccessBalances AccessRight = "balances"
@@ -193,18 +194,20 @@ const (
 
 // SCAApproach is how the PSU is taken through authentication.
 //
-// The bank picks it from the PSU's own type and only treats
-// [InitiationOptions] / [AuthorisationOptions] preferences as a hint:
-// natural persons and sole proprietors always get [SCARedirect],
-// legal entities always get [SCADecoupled].
+// For payment authorisation the spec fixes it by the PSU's type and
+// treats the TPP-SCA-Approach-Preference header only as a hint:
+// natural persons and sole proprietors get only [SCARedirect], legal
+// entities only [SCADecoupled]. The spec states no such rule for
+// consent authorisation, which has no preference header.
 type SCAApproach string
 
 // Possible SCAApproach values.
 const (
 	// SCARedirect — the TPP sends the PSU to _links.scaRedirect.
 	SCARedirect SCAApproach = "REDIRECT"
-	// SCADecoupled — the PSU confirms in their own banking app; no
-	// redirect link is returned and the TPP polls the SCA status.
+	// SCADecoupled — the PSU confirms in their own banking app and the
+	// TPP polls the SCA status. For payment authorisation the spec says
+	// scaRedirect is present only under REDIRECT.
 	SCADecoupled SCAApproach = "DECOUPLED"
 )
 
@@ -238,19 +241,27 @@ const PSUIDTypeIBAN PSUIDType = "IBAN"
 // CreditorIDType classifies [Creditor.CreditorID].
 type CreditorIDType string
 
-// Possible CreditorIDType values. The spec lists the codes without
-// expanding them; the comments below reflect the Ukrainian payment
-// vocabulary they come from.
+// Possible CreditorIDType values. The spec gives the expected
+// [Creditor.CreditorID] format for USRC, RNRCT, PSPT and OT only; the
+// remaining codes are listed without a description.
 const (
-	// CreditorRNRCT — РНОКПП, an individual taxpayer number.
+	// CreditorRNRCT — РНОКПП, an individual taxpayer number: exactly
+	// 10 digits, not all zeros.
 	CreditorRNRCT CreditorIDType = "RNRCT"
-	// CreditorPassport — a passport.
+	// CreditorPassport — a Ukrainian passport without separators:
+	// either a booklet's series and number (2 uppercase Ukrainian
+	// letters and 6 digits, e.g. "АВ874562") or an ID card number
+	// (9 digits).
 	CreditorPassport CreditorIDType = "PSPT"
-	// CreditorOther — some other identifier.
+	// CreditorOther — despite the constant's name, the spec uses OT
+	// for a foreign travel passport: series and number without
+	// separators, 2 uppercase Latin letters and 6 digits (e.g.
+	// "FE123456").
 	CreditorOther CreditorIDType = "OT"
 	// CreditorUnknown — the identifier type is not known.
 	CreditorUnknown CreditorIDType = "UNKN"
-	// CreditorUSRC — ЄДРПОУ, a legal entity registration code.
+	// CreditorUSRC — ЄДРПОУ, a legal entity registration code: exactly
+	// 8 digits, not all zeros.
 	CreditorUSRC CreditorIDType = "USRC"
 	// CreditorTransit — a transit account identifier.
 	CreditorTransit CreditorIDType = "TRAN"
@@ -304,8 +315,9 @@ type AccountAccess struct {
 }
 
 // AccountDetails is one account as [Client.Accounts] returns it.
-// Balances is filled only when the call asked for it and the consent
-// grants [AccessBalances].
+// Balances can be filled when the call set
+// [AccountsOptions.WithBalance]; the spec does not say how that
+// interacts with the rights the consent granted.
 type AccountDetails struct {
 	// ResourceID is the {accountId} used by [Client.Balances] and
 	// [Client.Transactions]. It is not the IBAN. The spec says
@@ -351,6 +363,10 @@ type Party struct {
 
 // Creditor is the beneficiary of a payment. All three fields are
 // mandatory when initiating one.
+//
+// CreditorID must match the format the spec sets for CreditorIDType;
+// see the [CreditorIDType] constants (ЄДРПОУ for USRC, РНОКПП for
+// RNRCT, passport or ID card for PSPT, foreign passport for OT).
 type Creditor struct {
 	Name           string         `json:"name"`
 	CreditorID     string         `json:"creditorId"`
@@ -394,7 +410,10 @@ type AccountReportLinks struct {
 	Next *Href `json:"next,omitempty"`
 }
 
-// AccountReport is one page of a statement.
+// AccountReport is one page of a statement. The spec defines only
+// the booked list and _links, even though [TransactionsOptions]
+// accepts bookingStatus "pending" and "both"; it does not say where
+// pending entries would appear.
 type AccountReport struct {
 	Booked TransactionList    `json:"booked,omitempty"`
 	Links  AccountReportLinks `json:"_links,omitzero"`
@@ -459,7 +478,9 @@ func Messages(err error) []ClientMessage {
 // person or sole proprietor is identified by ID/IDType, a legal
 // entity by CorporateID/CorporateIDType. IPAddress is the address of
 // the PSU's own device and is mandatory when creating a consent or a
-// payment. The spec does not say what the bank does with it, but
+// payment. The spec types PSU-IP-Address as format ipv4 everywhere,
+// so it gives no way to pass an IPv6 address; the SDK forwards the
+// value unchecked. The spec does not say what the bank does with it, but
 // forwarding your own server's address instead of the customer's
 // makes the field meaningless.
 type PSU struct {

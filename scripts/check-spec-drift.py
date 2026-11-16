@@ -7,13 +7,25 @@ delete endpoints ended up expecting HTTP 200 for an endpoint documented
 as 204. This script pins each spec by a content hash so the drift shows
 up as a failing job instead of a bug report.
 
-Two kinds of source:
+Three kinds of source:
 
   * a plain file (corp-api) — hashed as served;
-  * a ReDoc page, where the spec is embedded in the page as
-    `__redoc_state`. The HTML wrapper changes for reasons that have
-    nothing to do with the API, so the spec object is extracted and
-    re-serialised canonically before hashing.
+  * a ReDoc page, where the spec is embedded in the page — as
+    `__redoc_state` (ReDoc 2) or `__redoc_definition` (Redoc 3). The
+    HTML wrapper changes for reasons that have nothing to do with the
+    API, so the spec object is extracted and re-serialised canonically
+    before hashing;
+  * the monobank.ua docs portal, which serves its OpenAPI documents as
+    JSON from one endpoint; the spec under the given key is extracted
+    and hashed canonically. The Покупка Частинами spec is reachable only
+    this way (its origin, u2.monobank.com.ua, answers 503 to the public).
+
+Not covered: the acquiring pages on the portal
+(monobank.ua/api-docs/acquiring) are rendered server-side from a spec
+that is not published as a document. The ReDoc acquiring page pinned
+here lags behind them (it has no subscriptions, monopay keys, split,
+POS or T2P endpoints), so acquiring needs a manual re-check against the
+portal.
 
 Usage:  check-spec-drift.py [--update]
 """
@@ -33,6 +45,7 @@ SOURCES = {
     "acquiring":  ("https://api.monobank.ua/docs/acquiring.html", "redoc"),
     "corporate":  ("https://api.monobank.ua/docs/corporate.html", "redoc"),
     "openbanking": ("https://ob.mono.bank/", "redoc"),
+    "installment": ("https://monobank.ua/api-front/openapi/specs", "portal:chast"),
 }
 
 
@@ -44,9 +57,14 @@ def fetch(url: str) -> bytes:
 
 def redoc_spec(html: str) -> dict:
     """Pull the OpenAPI document out of a ReDoc page."""
+    m = re.search(r"__redoc_definition\s*=\s*", html)
+    if m:
+        # Redoc 3 embeds the bare definition.
+        spec, _ = json.JSONDecoder().raw_decode(html, html.index("{", m.end()))
+        return spec
     m = re.search(r"__redoc_state\s*=\s*", html)
     if not m:
-        raise ValueError("no __redoc_state in page")
+        raise ValueError("no __redoc_state or __redoc_definition in page")
     start = html.index("{", m.end())
     depth, in_str, esc, i = 0, False, False, start
     while i < len(html):
@@ -70,12 +88,23 @@ def redoc_spec(html: str) -> dict:
     return json.loads(html[start:i + 1])["spec"]["data"]
 
 
+def portal_spec(body: bytes, key: str) -> dict:
+    """Pick one spec out of the portal's spec listing."""
+    for entry in json.loads(body)["result"]["specs"]:
+        if entry.get("key") == key:
+            return entry["spec"]
+    raise ValueError(f"no spec with key {key!r} on the portal")
+
+
 def digest(name: str) -> tuple[str, str]:
     url, kind = SOURCES[name]
     body = fetch(url)
     if kind == "raw":
         return hashlib.sha256(body).hexdigest(), ""
-    spec = redoc_spec(body.decode("utf-8", "replace"))
+    if kind.startswith("portal:"):
+        spec = portal_spec(body, kind.split(":", 1)[1])
+    else:
+        spec = redoc_spec(body.decode("utf-8", "replace"))
     canonical = json.dumps(spec, sort_keys=True, ensure_ascii=False).encode()
     return hashlib.sha256(canonical).hexdigest(), str(spec.get("info", {}).get("version", ""))
 

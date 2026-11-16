@@ -43,7 +43,7 @@
 //     [Client.QRResetAmount] for terminal-like scenarios.
 //   - Refunds: [Client.CancelInvoice] (full or partial); for a sale
 //     made on a physical POS terminal there is no invoiceId, so the
-//     refund goes through [Client.POSTransactionCancel] by RRN.
+//     refund goes through [Client.POSTransactionCancelWithResponse] by RRN.
 //   - T2P payments: the callbackSuccess/callbackFail webhook is the
 //     main channel; [Client.T2PPaymentStatus] is the fallback when it
 //     is missed.
@@ -76,6 +76,7 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"strings"
 
 	monobank "github.com/OlexiyOdarchuk/go-monobank-sdk/v2"
 )
@@ -84,7 +85,7 @@ import (
 // without is empty: a path or query parameter (invoiceID,
 // subscriptionID, qrID, cardToken, keyID, walletID), or a required
 // identifier in a request body (the RRN of
-// [Client.POSTransactionCancel]). Catching it locally saves an HTTP
+// [Client.POSTransactionCancelWithResponse]). Catching it locally saves an HTTP
 // round-trip that is certain to fail, and for the URL-borne ones it
 // also prevents a malformed URL like
 // "/api/merchant/invoice/status/?invoiceId=" from going on the wire.
@@ -141,6 +142,54 @@ func (a TokenAuth) SetAuth(r *http.Request) error {
 		r.Header.Set("Accept", "application/json")
 	}
 	return nil
+}
+
+// cmsPaths are the endpoints whose docs list the optional X-Cms and
+// X-Cms-Version headers.
+var cmsPaths = []string{
+	"/api/merchant/invoice/create",
+	"/api/merchant/invoice/payment-direct",
+	"/api/merchant/wallet/payment",
+}
+
+// WithCMS sets the optional X-Cms (CMS name) and X-Cms-Version
+// headers, which the docs ask for when you build a payment module for
+// a CMS. They are added only to the endpoints that document them:
+// invoice create, payment-direct and wallet/payment. Empty values are
+// not sent.
+//
+//	cli := acquiring.New(token, acquiring.WithCMS("WooCommerce", "8.9"))
+//
+// It chains onto the client's request hook, so pass it after any
+// [monobank.WithRequestHook] — a later WithRequestHook replaces the
+// hook chain.
+func WithCMS(name, version string) monobank.Option {
+	return func(c *monobank.Client) {
+		if name == "" && version == "" {
+			return
+		}
+		c.ChainRequestHook(func(r *http.Request) {
+			if r.URL == nil || !isCMSPath(r.URL.Path) {
+				return
+			}
+			if name != "" {
+				r.Header.Set("X-Cms", name)
+			}
+			if version != "" {
+				r.Header.Set("X-Cms-Version", version)
+			}
+		})
+	}
+}
+
+func isCMSPath(path string) bool {
+	for _, p := range cmsPaths {
+		if strings.HasSuffix(path, p) {
+			return true
+		}
+	}
+
+	return false
 }
 
 // LogValue hides the token in slog output.

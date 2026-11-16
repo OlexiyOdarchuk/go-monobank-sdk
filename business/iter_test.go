@@ -238,9 +238,12 @@ func TestStatementAll_sameSecondOverflow_yieldsAll(t *testing.T) {
 		got[op.ID] = struct{}{}
 	}
 	// The iterator can yield at most pageSize items in this synthetic
-	// fake, but it MUST NOT loop forever — calls.Load() must be ≤ 2
-	// (one fetch + one re-fetch that finds only seen IDs and stops).
-	assert.LessOrEqual(t, calls.Load(), int32(2),
+	// fake, but it MUST NOT loop forever: one fetch, one re-fetch of the
+	// same second that finds only seen IDs, and one fetch after stepping
+	// past that second (which this fake, ignoring the window, answers
+	// with the same page again). TestStatementAll_sameSecondOverflow_
+	// continuesPastIt covers the same case against a window-aware fake.
+	assert.LessOrEqual(t, calls.Load(), int32(3),
 		"same-second overflow must not produce an infinite refetch loop")
 	assert.Equal(t, pageSize, len(got))
 }

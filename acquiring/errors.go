@@ -16,17 +16,61 @@ import (
 // (which is free-form and localized).
 type ErrCode string
 
-// Documented acquiring error codes (see the "Common Error Responses"
-// section of the acquiring API docs). The list is intentionally
-// open — an unknown code is preserved verbatim in [APIError.Code]
-// rather than being dropped.
+// Documented acquiring error codes, grouped by the HTTP status the
+// docs list them under (every endpoint page of
+// monobank.ua/api-docs/acquiring carries the same table). The list is
+// intentionally open — an unknown code is preserved verbatim in
+// [APIError.Code] rather than being dropped.
 const (
-	CodeBadRequest       ErrCode = "BAD_REQUEST"        // 400
-	CodeForbidden        ErrCode = "FORBIDDEN"          // 403
-	CodeNotFound         ErrCode = "NOT_FOUND"          // 404
-	CodeMethodNotAllowed ErrCode = "METHOD_NOT_ALLOWED" // 405
-	CodeTooManyRequests  ErrCode = "TMR"                // 429
-	CodeInternalError    ErrCode = "INTERNAL_ERROR"     // 500
+	// 400 — the request is invalid.
+	CodeBadRequest ErrCode = "BAD_REQUEST"
+	// CodeBadRequest1001 is documented with the same meaning as
+	// BAD_REQUEST. On /subscription/remove the docs also use it for
+	// "a payment has already been made for this subscriptionId".
+	CodeBadRequest1001 ErrCode = "1001"
+	// CodeInvalidMerchantPaymInfo: an invalid value inside
+	// merchantPaymInfo (invoice create, token payments, payment
+	// by card details).
+	CodeInvalidMerchantPaymInfo ErrCode = "INVALID_MERCHANT_PAYM_INFO"
+	// CodeOrderInProgress: the amount set on a QR cash desk is already
+	// being paid, so it cannot be reset.
+	CodeOrderInProgress ErrCode = "ORDER_IN_PROGRESS"
+	// CodeHoldInvoiceNotFinalized: the invoice was created with
+	// paymentType=hold and paid but not finalized yet; returned when
+	// asking for extended details of a successful payment.
+	CodeHoldInvoiceNotFinalized ErrCode = "HOLD_INVOICE_NOT_FINALIZED"
+	// CodeWrongCancelAmount: a cancel carried a wrong amount, or the
+	// payment has already been cancelled.
+	CodeWrongCancelAmount ErrCode = "WRONG_CANCEL_AMOUNT"
+	// CodeTokenNotFound: the card token given in the request was not
+	// found.
+	CodeTokenNotFound ErrCode = "TOKEN_NOT_FOUND"
+
+	// 403 — invalid X-Token.
+	CodeForbidden ErrCode = "FORBIDDEN"
+
+	// 404 — a lookup by one of the request parameters found nothing.
+	CodeNotFound ErrCode = "NOT_FOUND"
+	// CodeNotFound1004 is documented with the same meaning as
+	// NOT_FOUND.
+	CodeNotFound1004 ErrCode = "1004"
+
+	// 405 — wrong HTTP method.
+	CodeMethodNotAllowed ErrCode = "METHOD_NOT_ALLOWED"
+
+	// 429 — too many requests.
+	CodeTooManyRequests ErrCode = "TMR"
+
+	// 500 — unexpected server-side failure.
+	CodeInternalError ErrCode = "INTERNAL_ERROR"
+	// CodeCancelNotAvailable: the payment cannot be cancelled;
+	// returned by cancel requests.
+	CodeCancelNotAvailable ErrCode = "CANCEL_NOT_AVAILABLE"
+
+	// CodeExternalError appears only in the Google Pay guide's error
+	// table (sample errText "mdes.decrypt 500"), without an HTTP
+	// status, so no Is* predicate covers it.
+	CodeExternalError ErrCode = "EXTERNAL_ERROR"
 )
 
 // APIError is the typed view of an acquiring error response. The
@@ -135,37 +179,59 @@ func Code(err error) ErrCode {
 	return ""
 }
 
-// is reports whether err is an acquiring API error matching the
-// given code OR HTTP status. Matching on either side makes the
-// predicates robust: Mono is consistent about the status code even
-// on the rare response where the body lacks an errCode.
-func is(err error, code ErrCode, status int) bool {
+// Documented codes per HTTP status, used by the Is* predicates.
+var (
+	badRequestCodes = []ErrCode{
+		CodeBadRequest, CodeBadRequest1001, CodeInvalidMerchantPaymInfo,
+		CodeOrderInProgress, CodeHoldInvoiceNotFinalized,
+		CodeWrongCancelAmount, CodeTokenNotFound,
+	}
+	notFoundCodes      = []ErrCode{CodeNotFound, CodeNotFound1004}
+	internalErrorCodes = []ErrCode{CodeInternalError, CodeCancelNotAvailable}
+)
+
+// is reports whether err is an acquiring API error with the given
+// HTTP status OR one of the codes the docs list under that status.
+// The status alone is enough: each documented status carries several
+// codes (a 404 may say NOT_FOUND or 1004), so matching a single code
+// would miss documented responses. The code side catches a documented
+// code on an unexpected status.
+func is(err error, status int, codes ...ErrCode) bool {
 	e, ok := AsAPIError(err)
 	if !ok {
 		return false
 	}
-	if e.Code != "" {
-		return e.Code == code
+	if e.StatusCode == status {
+		return true
 	}
-	return e.StatusCode == status
+	for _, c := range codes {
+		if e.Code == c {
+			return true
+		}
+	}
+
+	return false
 }
 
-// IsBadRequest reports whether err is a 400 / BAD_REQUEST from the
-// acquiring API (malformed request, validation failure).
+// IsBadRequest reports whether err is a 400 from the acquiring API, or
+// carries one of the codes documented for 400: BAD_REQUEST, 1001,
+// INVALID_MERCHANT_PAYM_INFO, ORDER_IN_PROGRESS,
+// HOLD_INVOICE_NOT_FINALIZED, WRONG_CANCEL_AMOUNT, TOKEN_NOT_FOUND.
+// Use [Code] to tell them apart.
 func IsBadRequest(err error) bool {
-	return is(err, CodeBadRequest, http.StatusBadRequest)
+	return is(err, http.StatusBadRequest, badRequestCodes...)
 }
 
-// IsForbidden reports whether err is a 403 / FORBIDDEN (the token
-// lacks rights for this endpoint or merchant).
+// IsForbidden reports whether err is a 403 / FORBIDDEN (the docs
+// describe it as an invalid X-Token).
 func IsForbidden(err error) bool {
-	return is(err, CodeForbidden, http.StatusForbidden)
+	return is(err, http.StatusForbidden, CodeForbidden)
 }
 
-// IsNotFound reports whether err is a 404 / NOT_FOUND (unknown
-// invoiceId, qrId, subscriptionId, ...).
+// IsNotFound reports whether err is a 404, or carries NOT_FOUND or
+// 1004 (unknown invoiceId, qrId, subscriptionId, ...).
 func IsNotFound(err error) bool {
-	return is(err, CodeNotFound, http.StatusNotFound)
+	return is(err, http.StatusNotFound, notFoundCodes...)
 }
 
 // IsTooManyRequests reports whether err is a 429 / TMR. The caller
@@ -173,11 +239,13 @@ func IsNotFound(err error) bool {
 // statuses with backoff, so seeing this means the budget is
 // genuinely exhausted).
 func IsTooManyRequests(err error) bool {
-	return is(err, CodeTooManyRequests, http.StatusTooManyRequests)
+	return is(err, http.StatusTooManyRequests, CodeTooManyRequests)
 }
 
-// IsInternalError reports whether err is a 500 / INTERNAL_ERROR on
-// Mono's side — generally safe to retry an idempotent read.
+// IsInternalError reports whether err is a 500, or carries
+// INTERNAL_ERROR or CANCEL_NOT_AVAILABLE. A 500 with INTERNAL_ERROR is
+// generally safe to retry for an idempotent read; CANCEL_NOT_AVAILABLE
+// means the cancel itself is not possible, so retrying will not help.
 func IsInternalError(err error) bool {
-	return is(err, CodeInternalError, http.StatusInternalServerError)
+	return is(err, http.StatusInternalServerError, internalErrorCodes...)
 }

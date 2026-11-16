@@ -1,8 +1,11 @@
 // Package corporate is the client for monobank's Corporate Open API,
 // including monoKEP (digital document signatures). Every request is
-// ECDSA-signed (X-Key-Id, X-Time, X-Sign); the per-call scope is
-// either a request-id (after the client has approved) or a set of
-// permissions (for the initial /personal/auth/request).
+// ECDSA-signed with X-Time and X-Sign. The SDK also sends X-Key-Id on
+// every call, although the spec lists it for neither registration
+// endpoint (there is no approved key id yet at that point). Calls
+// about an approved client also carry its request-id in X-Request-Id;
+// the initial /personal/auth/request carries the requested
+// permissions in X-Permissions (see [Client.Auth]).
 //
 // Full client onboarding:
 //
@@ -15,7 +18,8 @@
 //     limited by permissions ([auth.PermSt], [auth.PermPI],
 //     [auth.PermFOP]). Show the returned AcceptURL to the client.
 //  4. [Client.CheckAuth] — poll periodically until the client
-//     approves (or wait for the bank to POST to your X-Callback URL).
+//     approves (a 401 means still pending, see [IsAuthPending]), or
+//     wait for the bank's GET request to your X-Callback URL.
 //  5. [Client.ClientInfo] / [Client.Transactions] / [Client.SetWebHook]
 //     — call with the request-id from step 3.
 //
@@ -31,6 +35,7 @@ package corporate
 import (
 	"errors"
 	"net/http"
+	"time"
 
 	monobank "github.com/OlexiyOdarchuk/go-monobank-sdk/v2"
 	"github.com/OlexiyOdarchuk/go-monobank-sdk/v2/auth"
@@ -50,6 +55,17 @@ type Client struct {
 	// allowInsecureCallback bypasses the https check for X-Callback
 	// in [Client.Auth]. Default false.
 	allowInsecureCallback bool
+
+	// now is a test seam for the range helpers; nil means time.Now.
+	now func() time.Time
+}
+
+func (c *Client) clock() time.Time {
+	if c.now != nil {
+		return c.now()
+	}
+
+	return time.Now()
 }
 
 // New returns a corporate [Client] that uses authMaker to sign every

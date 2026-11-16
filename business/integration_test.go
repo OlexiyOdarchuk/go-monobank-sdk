@@ -86,11 +86,12 @@ func TestIntegration_Statement_ultimateDebit(t *testing.T) {
 	t.Logf("%d of %d statement entries carried ultimateDebit", seen, len(items))
 }
 
-// StatementAll pages backwards from `to` and relies on DOWN returning
-// the newest operation first. The published spec (1.0.2) describes
-// `direction` the other way round — "UP: new operations first, DOWN:
-// old operations first" — and marks it deprecated. This pins down what the server actually does; the
-// window needs at least two operations at different seconds.
+// The published spec (1.0.2) marks `direction` deprecated and
+// describes it as "UP: new operations first, DOWN: old operations
+// first"; earlier SDK versions assumed the opposite. StatementAll no
+// longer depends on the order, so this only records what the server
+// actually does; the window needs at least two operations at
+// different seconds.
 func TestIntegration_Statement_directionOrder(t *testing.T) {
 	iban := envOrSkip(t, "MONO_BUSINESS_IBAN")
 	cli := liveClient(t)
@@ -113,9 +114,7 @@ func TestIntegration_Statement_directionOrder(t *testing.T) {
 	}
 
 	down, up := order(business.StatementDown), order(business.StatementUp)
-	t.Logf("DOWN → %s, UP → %s", down, up)
-	assert.Equal(t, "newest first", down,
-		"StatementAll assumes DOWN is newest-first; if this fails, it skips operations")
+	t.Logf("DOWN → %s, UP → %s (spec: DOWN oldest first, UP newest first)", down, up)
 }
 
 // ImportStatus for a period with no import tells us how the bank

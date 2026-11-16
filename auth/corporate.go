@@ -22,8 +22,13 @@ import (
 )
 
 // Permission represents the permissions for corporate authorization.
-// They are sent in the X-Permissions header on /personal/auth/request
-// and define which data becomes visible after the client confirms.
+// The SDK sends them in the X-Permissions header on
+// /personal/auth/request and includes them in the signed string. The
+// current corporate spec (v260831) does not list that header for the
+// endpoint and defines its X-Sign as "X-Time | URL", so this wire
+// behavior comes from earlier documentation and is unverified against
+// the live API. The spec only describes the format of the permission
+// list in responses: "1 letter per permission".
 //
 // The typed string protects against accidental typos: the compiler
 // will not let you pass "x" where a [Permission] is expected. When
@@ -31,8 +36,9 @@ import (
 // convert explicitly: string(p).
 type Permission string
 
-// Standard permissions. The list is complete at the time of writing;
-// if Mono adds new ones, use Permission("...") directly.
+// Standard permissions. The spec documents no letter meanings (only
+// "1 letter per permission"); the mapping below is the SDK's. If Mono
+// adds new letters, use Permission("...") directly.
 const (
 	// PermSt — statements (transactions) and clientInfo of an
 	// individual.
@@ -74,8 +80,8 @@ type CorpAuthMakerAPI interface {
 	New(requestID string) Authorizer
 
 	// NewPermissions returns an Authorizer for /personal/auth/request,
-	// passing permissions in X-Permissions. An empty list means
-	// "all permissions".
+	// passing permissions in X-Permissions. The effect of an empty list
+	// is not documented (see [Permission]).
 	NewPermissions(permissions ...Permission) Authorizer
 }
 
@@ -141,9 +147,13 @@ func (c *CorpAuthMaker) LogValue() slog.Value {
 }
 
 // New returns a [Corp] authorizer bound to the given requestID. An
-// empty requestID is valid for endpoints that require neither a
-// request-id nor permissions (for example /personal/corp/settings,
-// /personal/auth/registration).
+// empty requestID is used for endpoints signed without one (for
+// example /personal/corp/settings, /personal/auth/registration):
+// their X-Sign is "X-Time | URL". Such requests still carry X-Key-Id,
+// which the spec does not list for the registration endpoints, and
+// carry no X-Request-Id, which the spec marks required for
+// /personal/corp/settings and /personal/corp/webhook; neither is
+// verified against the live API.
 func (c *CorpAuthMaker) New(requestID string) Authorizer {
 	return Corp{maker: c, requestID: requestID}
 }
@@ -213,6 +223,11 @@ func (a Corp) SetAuth(r *http.Request) error {
 // sign computes Sign = base64(ECDSA(SHA-256(X-Time | actor | URL.Path))),
 // where actor is the X-Request-Id or X-Permissions value (empty for
 // endpoints that have neither). Concatenation uses no separators.
+//
+// Only the path is signed, never the query string. The spec lists the
+// monoKEP status/cancel paths with "?requestId={requestId}" and
+// defines X-Sign as "X-Time | URL" without saying whether "URL"
+// includes the query; unverified against the live API.
 func (a Corp) sign(timestamp, actor, urlPath string) (string, error) {
 	return a.signString(timestamp + actor + urlPath)
 }

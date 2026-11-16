@@ -185,3 +185,9 @@ func TestWithHTTPDoer_usedForRequests(t *testing.T) {
 	require.NotNil(t, doer.last)
 	assert.Equal(t, "/path", doer.last.URL.Path)
 }
+
+func TestStatementPacing(t *testing.T) {
+	assert.Equal(t, DefaultStatementPacing, New().StatementPacing(), "unset → default")
+	assert.Equal(t, time.Duration(0), New(WithStatementPacing(0)).StatementPacing(), "explicit 0 disables")
+	assert.Equal(t, 5*time.Second, New(WithStatementPacing(5*time.Second)).StatementPacing())
+}

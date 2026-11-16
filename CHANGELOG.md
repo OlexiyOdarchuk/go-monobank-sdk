@@ -7,12 +7,124 @@
 
 ## [Unreleased]
 
+Повна звірка всіх пакетів з документацією станом на 2026-11-16:
+corp-api (нова ревізія без зміни версії `1.0.2`), corporate `v260831`,
+personal `v250818`, Open Banking `2026.11.10` (була `2026.09.18`),
+специфікація Покупки Частинами з порталу monobank.ua/api-docs (раніше
+не відстежувалась) і сторінки еквайрингу на тому ж порталі — ReDoc
+еквайрингу (`v2410`) не містить підписок, monopay, спліту, POS і T2P.
+Неоднозначні місця документації не вгадувались: поведінку збережено,
+а коментарі цитують, що саме сказано і що лишається неперевіреним.
+
+Нові методи додано в інтерфейси `acquiring.API` і `installment.API`:
+власні реалізації (моки) треба доповнити.
+
+### Added
+
+- **`acquiring`: деталі спліт-отримувача.** [Client.SplitReceiverByID]
+  (`GET /split-receiver/get-by-id`) повертає отримувача в будь-якому
+  статусі разом з IBAN (`SplitReceiverDetails`, `SplitReceiverStatus`).
+- **`acquiring`: POS-повернення з відповіддю і статусом.**
+  `POSTransactionCancelWithResponse` повертає `status` / `tranId` і
+  надсилає обовʼязковий `Accept-Language` (поле `Language`, типово
+  `uk`). `POSTransactionCancelStatus` — `GET
+  /pos-transaction-cancel/status` (`POSRefundStatus`).
+- **`acquiring`: поля спліту й агентської комісії.**
+  `CancelItem.SplitReceiverID` (обовʼязковий для часткового повернення
+  за схемою розщеплення), `StatementInvoice.AgentFee` і
+  `SplitReceiverList` (`StatementSplitReceiver`) — раніше губилися при
+  декодуванні виписки.
+- **`acquiring`: `WalletPaymentRequest.GToken` / `AToken`** для сирих
+  токенів Google Pay / Apple Pay через `wallet/payment`; `CardToken`
+  більше не надсилається порожнім. Опція `WithCMS(name, version)` —
+  заголовки `X-Cms` / `X-Cms-Version`.
+- **`acquiring`: константи `Code*` для всіх задокументованих кодів
+  помилок** і нові значення T2P: `T2PReverse`,
+  `T2PStatusTxpDoesNotAnswer`, `T2PStatusTransactionNotCompleted`.
+- **`installment`: `CreateQRCartWithResponse`** повертає `id` кошика з
+  відповіді 201 (`QRCartIdentifierResponse`) — це `order_id` для
+  `OrderState` і зіставлення колбеків.
+- **`installment`: перевірка підпису гарантійного листа.**
+  `OrderData.SignedString()` збирає рядок, на який банк накладає
+  `sign`; суми беруться з нових `InvoiceAmountRaw`, `CreditAmountRaw`,
+  `CustomerPayAmountRaw` у тому вигляді, як прийшли. Константа
+  `SubConfirmTimeExpired` (`FAIL/CONFIRM_TIME_EXPIRED`).
+- **`business`: `additionalPurpose` у зарплатних відомостях.**
+  `SalaryRecipient.AdditionalPurpose`,
+  `SalaryRegistryType.AdditionalPurposeAllowed` і
+  `ErrCodeSalaryAdditionalPurposeNotSupported`. Статуси `RegistryFailed`
+  / `RegistrySucceeded` і методи `RegistryStatus.Terminal()` /
+  `Failed()`, які приймають і старі значення.
+- **`corporate`: `IsAuthPending`** — за специфікацією очікування
+  підтвердження в `CheckAuth` — це 401 «Request is unauthorized yet»;
+  `SignatureStatusResponse.RequestID`.
+- **`WithStatementPacing` / `DefaultStatementPacing`** — пауза між
+  запитами діапазонних виписок `personal` (типово 60 с, `0` вимикає).
+- **`jar.APIError.ErrorDescription` і `Body`.**
+
 ### Changed
 
 - **`otelmonobank/v1.0.2`** вимагає SDK `v2.2.0` (було `v2.0.2`) і
   `go.opentelemetry.io/otel` `v1.47.0`. Споживачі submodule, які не
   вимагають SDK явно, отримають виправлення з 2.1.0 і 2.2.0 лише з
   цим тегом.
+- **`personal`: діапазонні виписки тримають ліміт «1 раз у 60
+  секунд».** `TransactionsRange` / `TransactionsRangeIter` чекають між
+  своїми запитами (враховуючи `ctx`), тож квартал займає кілька хвилин
+  замість `429` на другому запиті.
+- **`personal`, `corporate`: нульовий `to` означає «до зараз».**
+  `Transactions` пропускає сегмент `{to}` (раніше надсилав
+  `-62135596800`), а `TransactionsRange` / `TransactionsRangeIter`
+  беруть поточний час замість порожнього результату. На помилці
+  `TransactionsRange` повертає вже отримані транзакції разом з нею.
+- **`corporate`: `Auth` приймає порожній `callbackURL`** — `X-Callback`
+  за специфікацією необовʼязковий; тоді підтвердження відстежується
+  через `CheckAuth`.
+- **`acquiring`: предикати помилок покривають усі задокументовані
+  коди.** `IsNotFound` / `IsBadRequest` / `IsInternalError` спрацьовують
+  за HTTP-статусом або будь-яким кодом, який документація наводить для
+  нього (`1004`, `WRONG_CANCEL_AMOUNT`, `CANCEL_NOT_AVAILABLE`…).
+- **`acquiring`: `Basket`** приймає позиції із `sum = 0`, а `Build` не
+  звіряє суму з рахунком, коли є знижки.
+- **`business`: `StatementAll` не залежить від порядку сторінок.**
+  Специфікація описує `DOWN` як «спочатку старі», протилежно до
+  припущення SDK; ітератор визначає порядок із самих сторінок, а після
+  секунди, що не вмістилася в сторінку, читає решту вікна замість
+  зупинки.
+- **`installment`: `available_parts_count`** приймається і числом, і
+  рядком.
+- **`scripts/check-spec-drift.py`** читає Redoc 3 (`__redoc_definition`
+  — ob.mono.bank перейшов на нього, і перевірка Open Banking падала) і
+  відстежує специфікацію Покупки Частинами через портал. Pin-и в
+  `testdata/spec-checksums.json` оновлено.
+
+### Deprecated
+
+- `acquiring.Client.POSTransactionCancel` — відкидає `tranId`; на заміну
+  `POSTransactionCancelWithResponse`.
+- `installment.Client.CreateQRCart` — відкидає `id` кошика; на заміну
+  `CreateQRCartWithResponse`.
+- `business.RegistryFail` / `RegistryPaymentsDone` — специфікація
+  більше не документує ці значення (тепер `FAILED` / `SUCCEEDED`).
+
+### Fixed
+
+- **`acquiring`: спліт-отримувачі розбиралися з порожнім ID.**
+  `SplitReceiver` читав `splitReceiverId` / `okpo`, а API повертає `id`
+  / `edrpou`.
+- **`jar`: помилки у форматі `{errorDescription}` або не-JSON** більше
+  не втрачають текст.
+- **Документація звірена зі специфікаціями в усіх пакетах.** Серед
+  іншого: колбек `corporate.Auth` — GET з `X-Request-Id`, а не POST;
+  ліміт призначення платежу Open Banking — 420 символів, а не 140;
+  `OT` у `CreditorIDType` — закордонний паспорт; вікно виписки — 31
+  доба + 1 година; `/bank/currency` варто кешувати щонайменше 5 хвилин;
+  графік повторів вебхука еквайрингу не задокументований; формат і
+  підпис колбеків підписок не описані, а `endDate` описано суперечливо;
+  T2P-статуси `*_not_completed` фінальні; stage Покупки Частинами має
+  спільні тестові дані. Прибрано твердження, яких немає в документації
+  (ліміт 500 рядків як «задокументований», підпис персональних
+  вебхуків, «порожній URL відписує» тощо).
 
 ## [2.2.0] — 2026-10-15
 

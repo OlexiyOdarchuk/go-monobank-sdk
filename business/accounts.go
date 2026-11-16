@@ -7,8 +7,8 @@ import (
 	"net/url"
 )
 
-// Accounts returns every account of the company (UAH, USD, EUR etc.
-// — one row per currency).
+// Accounts returns every account of the company, one row per account
+// (a company may hold several accounts in the same currency).
 // https://corp-api.monobank.ua/docs/#operation/get-all-accounts
 func (c *Client) Accounts(ctx context.Context) (Accounts, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "/ext/v1/accounts", http.NoBody)

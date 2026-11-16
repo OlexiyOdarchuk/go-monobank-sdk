@@ -10,7 +10,7 @@
 // .github/workflows/integration.yaml.
 //
 // Read-only by default. The one call that moves money
-// ([Client.POSTransactionCancel]) additionally requires an explicit
+// ([Client.POSTransactionCancelWithResponse]) additionally requires an explicit
 // opt-in and an RRN the operator chose; it will never pick one itself.
 package acquiring_test
 
@@ -128,8 +128,9 @@ func TestIntegration_POSTransactionCancel(t *testing.T) {
 	require.NoError(t, err, "MONO_POS_AMOUNT must be an integer in minor units")
 	require.Positive(t, amount, "a refund of zero or less makes no sense")
 
-	err = liveClient(t).POSTransactionCancel(liveContext(t),
+	out, err := liveClient(t).POSTransactionCancelWithResponse(liveContext(t),
 		&acquiring.POSTransactionCancelRequest{RRN: rrn, Amount: amount})
 	require.NoError(t, err, "live POS refund must be accepted")
-	t.Logf("refund of %d minor units accepted for RRN %s", amount, rrn)
+	t.Logf("refund of %d minor units accepted for RRN %s: status=%s tranId=%s",
+		amount, rrn, out.Status, out.TranID)
 }

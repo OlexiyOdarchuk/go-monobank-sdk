@@ -8,21 +8,23 @@ import (
 	"net/http"
 	"net/url"
 
+	monobank "github.com/OlexiyOdarchuk/go-monobank-sdk/v2"
 	"github.com/OlexiyOdarchuk/go-monobank-sdk/v2/auth"
 )
 
 // ErrInsecureCallback is returned by [Client.Auth] when the
 // callbackURL points at a non-loopback host over an http:// scheme.
-// Mono will POST your full requestID to that URL when the client
-// approves access — over plain http, anyone on the path can read it
-// and impersonate your service. Override with
-// [Client.AllowInsecureCallback] when you really need an http
-// callback (debugging through a proxy).
+// Once the client approves access, Mono calls that URL with a GET
+// request carrying your requestID in the X-Request-Id header — over
+// plain http, anyone on the path can read it and impersonate your
+// service. Override with [Client.AllowInsecureCallback] when you
+// really need an http callback (debugging through a proxy).
 var ErrInsecureCallback = errors.New("corporate: X-Callback must be https for non-loopback hosts")
 
-// ErrInvalidCallback is returned by [Client.Auth] when callbackURL
-// is empty, missing a scheme, or fails to parse.
-var ErrInvalidCallback = errors.New("corporate: X-Callback is empty or unparseable")
+// ErrInvalidCallback is returned by [Client.Auth] when a non-empty
+// callbackURL is missing a scheme or fails to parse. An empty
+// callbackURL is valid: it means "no callback, I will poll".
+var ErrInvalidCallback = errors.New("corporate: X-Callback is unparseable")
 
 // TokenRequest is the response from POST /personal/auth/request.
 // RequestID is the short-lived access-request identifier; AcceptURL
@@ -45,15 +47,24 @@ func (c *Client) AllowInsecureCallback(allow bool) {
 	c.allowInsecureCallback = allow
 }
 
-// Auth initiates a request for access to a client's data. callbackURL
-// is sent in X-Callback — Mono POSTs to it when the client approves
-// access (an alternative to polling via [Client.CheckAuth]). An empty
-// permissions list means "all permissions"; pass a combination of
-// [auth.PermSt], [auth.PermPI], [auth.PermFOP] to narrow the scope.
+// Auth initiates a request for access to a client's data.
 //
-// SECURITY: callbackURL must be https on non-loopback hosts. Over
-// plain http the requestID Mono returns in the callback can be
-// captured and replayed against the bank to mimic your service.
+// callbackURL is optional. When set, it is sent in X-Callback and,
+// per the spec, Mono calls it "after the client approves access (GET
+// request with the X-Request-Id header)". When empty, no X-Callback
+// header is sent and you learn about the approval by polling
+// [Client.CheckAuth].
+//
+// permissions are sent in the X-Permissions header (see
+// [auth.CorpAuthMaker.NewPermissions]). The current spec does not
+// list that header for this endpoint, so neither its effect nor the
+// meaning of an empty list is documented; pass a combination of
+// [auth.PermSt], [auth.PermPI], [auth.PermFOP] to state the scope
+// explicitly.
+//
+// SECURITY: a non-empty callbackURL must be https on non-loopback
+// hosts. Over plain http the requestID Mono sends in the callback can
+// be captured and replayed against the bank to mimic your service.
 // Override deliberately via [Client.AllowInsecureCallback] for
 // debugging through a recorded proxy.
 // https://api.monobank.ua/docs/corporate.html#tag/Klyentski-personalni-dani/paths/~1personal~1auth~1request/post
@@ -65,7 +76,9 @@ func (c *Client) Auth(ctx context.Context, callbackURL string, permissions ...au
 	if err != nil {
 		return nil, fmt.Errorf("create request: %w", err)
 	}
-	req.Header.Set("X-Callback", callbackURL)
+	if callbackURL != "" {
+		req.Header.Set("X-Callback", callbackURL)
+	}
 
 	var out TokenRequest
 	if err := c.do(req, c.authMaker.NewPermissions(permissions...), &out, http.StatusOK); err != nil {
@@ -74,12 +87,13 @@ func (c *Client) Auth(ctx context.Context, callbackURL string, permissions ...au
 	return &out, nil
 }
 
-// validateCallbackURL refuses empty / unparseable URLs and http:// on
-// non-loopback hosts unless explicitly allowed. Mirrors the loopback
-// definition used by [monobank.WithBaseURL].
+// validateCallbackURL accepts an empty URL (no callback), refuses
+// unparseable URLs and http:// on non-loopback hosts unless explicitly
+// allowed. Mirrors the loopback definition used by
+// [monobank.WithBaseURL].
 func validateCallbackURL(callbackURL string, allowInsecure bool) error {
 	if callbackURL == "" {
-		return fmt.Errorf("%w: empty", ErrInvalidCallback)
+		return nil
 	}
 	u, err := url.Parse(callbackURL)
 	if err != nil || u == nil || u.Scheme == "" {
@@ -102,10 +116,11 @@ func validateCallbackURL(callbackURL string, allowInsecure bool) error {
 }
 
 // CheckAuth checks the status of an access request by requestID. It
-// returns nil when the client has approved access; otherwise it
-// returns a [monobank.APIError] with StatusCode 403 (request not yet
-// approved) or another code for more fatal failures. Polling every
-// 3-5 seconds is a typical strategy.
+// returns nil when the client has approved access. Otherwise it
+// returns a [monobank.APIError]; the spec documents 401 "Request is
+// unauthorized yet" (still pending — keep polling, see
+// [IsAuthPending]), 404 "Request is not exist" and 403 "Forbidden".
+// Polling every 3-5 seconds is a typical strategy.
 // https://api.monobank.ua/docs/corporate.html#tag/Klyentski-personalni-dani/paths/~1personal~1auth~1request/get
 func (c *Client) CheckAuth(ctx context.Context, requestID string) error {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, urlPathAuth, http.NoBody)
@@ -113,4 +128,12 @@ func (c *Client) CheckAuth(ctx context.Context, requestID string) error {
 		return fmt.Errorf("create request: %w", err)
 	}
 	return c.do(req, c.authMaker.New(requestID), nil, http.StatusOK)
+}
+
+// IsAuthPending reports whether err from [Client.CheckAuth] means the
+// client has not approved the access request yet: the spec documents
+// that state as HTTP 401 "Request is unauthorized yet". Any other
+// error (404 unknown request, 403, transport failures) is not pending.
+func IsAuthPending(err error) bool {
+	return errors.Is(err, monobank.ErrUnauthorized)
 }

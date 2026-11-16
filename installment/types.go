@@ -50,6 +50,10 @@ const (
 	SubRejectedByStore          OrderSubState = "REJECTED_BY_STORE"
 	SubFail                     OrderSubState = "FAIL"
 	SubRestrictedByRisks        OrderSubState = "RESTRICTED_BY_RISKS"
+	// SubConfirmTimeExpired: a QR cart was not scanned within its
+	// 15-minute lifetime. Documented only in the QR-flow prose, not in
+	// the order_sub_state enum of the schema.
+	SubConfirmTimeExpired OrderSubState = "CONFIRM_TIME_EXPIRED"
 )
 
 // InvoiceSource is the sales channel for CreateOrderRequest.Invoice.
@@ -104,16 +108,17 @@ type Product struct {
 // CreateQRCartRequest is the body of POST /api/v1/qr/cart. The cart
 // is attached to a QR code that already belongs to the store, so
 // there is no phone number and no program list — the client picks
-// the installment terms in the app after scanning.
-//
-// Products reuses [Product]. The docs render this field as an
-// untyped "array of object" and never expand the element, so the
-// shape is taken from [CreateOrderRequest.Products] by analogy with
-// /api/order/create — a decision, not something monobank documents.
-// A mismatch would surface as a 400.
+// the installment terms in the app after scanning. All four fields
+// are required.
 type CreateQRCartRequest struct {
-	QRID           string    `json:"qr_id"`
-	StoreOrderID   string    `json:"store_order_id"`
+	QRID string `json:"qr_id"`
+	// StoreOrderID is documented with format uuid (unlike the
+	// free-form store_order_id of /api/order/create) and must be
+	// unique per cart: reusing one returns 409, even after the cart
+	// was cancelled.
+	StoreOrderID string `json:"store_order_id"`
+	// Products is the same [Product] schema as in /api/order/create;
+	// at least one item is required.
 	Products       []Product `json:"products"`
 	ResultCallback string    `json:"result_callback"`
 }
@@ -389,6 +394,12 @@ type Invoice struct {
 	InvoiceNumber string `json:"invoice_number,omitempty"`
 	InvoiceDate   string `json:"invoice_date,omitempty"`
 	InvoiceAmount Money  `json:"invoice_amount,omitempty"`
+	// InvoiceAmountRaw is invoice_amount exactly as the response
+	// carried it (number text, or the contents of a string), which
+	// [OrderData.SignedString] needs: the bank signs amounts "as in
+	// the response", and [Money] re-formats them. Filled only by
+	// decoding; never sent.
+	InvoiceAmountRaw string `json:"-"`
 }
 
 // Payment holds the recipient's payment details.
@@ -402,14 +413,23 @@ type Payment struct {
 
 // Bank holds the creditor-bank information.
 type Bank struct {
-	Agreement           string `json:"agreement,omitempty"`
-	AgreementDate       string `json:"agreement_date,omitempty"`
-	CreditAmount        Money  `json:"credit_amount,omitempty"`
-	CustomerPayAmount   Money  `json:"customer_pay_amount,omitempty"`
-	ProductTypes        string `json:"product_types,omitempty"`
-	BankID              string `json:"bank_id,omitempty"`
-	BankName            string `json:"bank_name,omitempty"`
-	BankExecutive       string `json:"bank_executive,omitempty"`
+	Agreement         string `json:"agreement,omitempty"`
+	AgreementDate     string `json:"agreement_date,omitempty"`
+	CreditAmount      Money  `json:"credit_amount,omitempty"`
+	CustomerPayAmount Money  `json:"customer_pay_amount,omitempty"`
+	ProductTypes      string `json:"product_types,omitempty"`
+	BankID            string `json:"bank_id,omitempty"`
+	BankName          string `json:"bank_name,omitempty"`
+	BankExecutive     string `json:"bank_executive,omitempty"`
+	// AvailablePartsCount is an integer in the schema, but the
+	// documented XML example quotes it ("7"); decoding accepts both.
 	AvailablePartsCount int    `json:"available_parts_count,omitempty"`
 	CreditProduct       string `json:"credit_product,omitempty"`
+
+	// CreditAmountRaw and CustomerPayAmountRaw hold credit_amount and
+	// customer_pay_amount exactly as the response carried them, for
+	// [OrderData.SignedString]; see [Invoice.InvoiceAmountRaw]. Filled
+	// only by decoding; never sent.
+	CreditAmountRaw      string `json:"-"`
+	CustomerPayAmountRaw string `json:"-"`
 }

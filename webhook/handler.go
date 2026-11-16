@@ -43,6 +43,10 @@ type Options struct {
 	// OnEvent is required. It receives the verified and parsed
 	// payload. If it returns a non-nil error, the handler responds
 	// 500 and Mono retries delivery; nil → 200 (ack).
+	//
+	// OnEvent runs synchronously inside the HTTP request, and the spec
+	// gives the whole response 5 s ("Якщо сервіс користувача не
+	// відповість протягом 5с…"). Hand slow work off to a queue.
 	OnEvent func(ctx context.Context, event *Response) error
 
 	// OnUnknownType is optional. It is invoked for payloads that
@@ -83,11 +87,20 @@ type Options struct {
 // Behavior:
 //
 //   - GET /your-path returns 200. Mono pings the URL with a GET on
-//     subscription to verify that it is alive.
+//     subscription to verify it, and the spec requires "строго HTTP
+//     статус-кодом 200".
 //   - POST reads the body, verifies X-Sign against the cached key
 //     (calling [KeyProvider.ServerKey] again if X-Key-Id changed),
 //     parses the payload and runs OnEvent. Bad signature → 401;
-//     OnEvent returned an error → 500 (Mono retries); otherwise 200.
+//     malformed body → 400; body too large → 413; OnEvent returned an
+//     error → 500; otherwise 200.
+//
+// Any answer other than 200 within 5 s counts as a failed delivery.
+// Per the spec Mono retries after 60 and 600 s, and if the third
+// attempt also fails "функція буде вимкнута": the webhook is switched
+// off and must be set again (personal.Client.SetWebHook). So every
+// non-200 status above, including a 401 for a signature the handler
+// cannot verify, moves the subscription toward being disabled.
 //
 // Mounts on any router: net/http, chi, gin via http.HandlerFunc — it
 // is a regular http.Handler.
@@ -266,13 +279,12 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	id := event.Data.Transaction.ID
 	if id == "" {
-		// Mono very rarely sends a webhook whose Transaction.ID is
-		// empty (older event types, jar top-ups in some flows).
-		// Without an ID dedup is a no-op, so every Mono retry of the
-		// same body would fire OnEvent again. Warn the caller —
-		// they can decide whether to write to a fallback dedup key
-		// based on a hash of the body — but still ack 200 so the
-		// bank stops retrying.
+		// The spec gives every statement item an id, but nothing
+		// guarantees it is non-empty on the wire. Without an ID dedup
+		// is a no-op, so every Mono retry of the same body would fire
+		// OnEvent again. Warn the caller — they can decide whether to
+		// write to a fallback dedup key based on a hash of the body —
+		// and continue as for any other event.
 		h.reportError(errors.New("webhook: empty Transaction.ID, dedup skipped"))
 	} else if h.opts.Dedup != nil && h.opts.Dedup.Has(id) {
 		w.WriteHeader(http.StatusOK)
@@ -281,8 +293,9 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	if err := h.opts.OnEvent(r.Context(), event); err != nil {
 		h.reportError(fmt.Errorf("OnEvent: %w", err))
-		// 5xx → mono will retry (after 60s and 600s). We deliberately do
-		// NOT mark id as seen — let the retry actually run OnEvent again.
+		// Non-200 → Mono retries (after 60 s and 600 s, then disables the
+		// webhook). We deliberately do NOT mark id as seen — let the
+		// retry actually run OnEvent again.
 		http.Error(w, "callback failed", http.StatusInternalServerError)
 		return
 	}

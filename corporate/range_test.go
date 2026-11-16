@@ -47,11 +47,47 @@ func TestTransactionsRange_paginates31DayWindows(t *testing.T) {
 	}
 }
 
-func TestTransactionsRange_zeroToReturnsNil(t *testing.T) {
-	c, _ := New(stubMaker{})
-	out, err := c.TransactionsRange(context.Background(), "rq", "acc", time.Now(), time.Time{})
+// A zero to means "until now": the last window ends at the client's
+// clock, and every request carries an explicit {to}.
+func TestTransactionsRange_zeroToMeansNow(t *testing.T) {
+	now := time.Unix(1_700_000_000, 0)
+	var lastTo int64
+	c := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		segs := strings.Split(strings.TrimPrefix(r.URL.Path, "/"), "/")
+		require.Len(t, segs, 5)
+		lastTo, _ = strconv.ParseInt(segs[4], 10, 64)
+		_, _ = w.Write([]byte(`[]`))
+	})
+	c.now = func() time.Time { return now }
+
+	_, err := c.TransactionsRange(context.Background(), "rq", "acc", now.Add(-40*24*time.Hour), time.Time{})
 	require.NoError(t, err)
-	assert.Nil(t, out)
+	assert.Equal(t, now.Unix(), lastTo)
+
+	lastTo = 0
+	for _, err := range c.TransactionsRangeIter(context.Background(), "rq", "acc", now.Add(-time.Hour), time.Time{}) {
+		require.NoError(t, err)
+	}
+	assert.Equal(t, now.Unix(), lastTo)
+}
+
+// A failure in a later window keeps what earlier windows returned.
+func TestTransactionsRange_partialOnError(t *testing.T) {
+	var hits atomic.Int32
+	c := newTestClient(t, func(w http.ResponseWriter, _ *http.Request) {
+		if hits.Add(1) > 1 {
+			w.WriteHeader(http.StatusInternalServerError)
+			_, _ = w.Write([]byte(`{"errorDescription":"boom"}`))
+
+			return
+		}
+		_, _ = w.Write([]byte(`[{"id":"a","time":1700000000,"amount":0}]`))
+	})
+	from := time.Unix(1_700_000_000, 0)
+	got, err := c.TransactionsRange(context.Background(), "rq", "acc", from, from.Add(40*24*time.Hour))
+	require.Error(t, err)
+	require.Len(t, got, 1)
+	assert.Equal(t, "a", got[0].ID)
 }
 
 func TestTransactionsRange_toBeforeFrom(t *testing.T) {
@@ -76,8 +112,8 @@ func TestAuth_setsXCallback(t *testing.T) {
 }
 
 // Regression: Auth must reject an http:// callback on a non-loopback
-// host before signing any request, because Mono will POST a usable
-// requestID into it.
+// host before signing any request, because Mono will send a usable
+// requestID to it.
 func TestAuth_rejectsInsecureCallback(t *testing.T) {
 	c := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
 		t.Fatal("Auth must not reach the server with a bad callback")
@@ -111,12 +147,26 @@ func TestAuth_insecureCallbackOptOut(t *testing.T) {
 	assert.NoError(t, err)
 }
 
-// Empty / unparseable callbacks are rejected before signing.
+// An empty callback is optional per the spec: no X-Callback header is
+// sent and the caller polls CheckAuth instead.
+func TestAuth_emptyCallbackOmitsHeader(t *testing.T) {
+	var present bool
+	c := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		_, present = r.Header["X-Callback"]
+		_, _ = w.Write([]byte(`{"tokenRequestId":"r","acceptUrl":"u"}`))
+	})
+	tok, err := c.Auth(context.Background(), "")
+	require.NoError(t, err)
+	assert.Equal(t, "r", tok.RequestID)
+	assert.False(t, present, "X-Callback must be omitted when empty")
+}
+
+// Unparseable callbacks are rejected before signing.
 func TestAuth_invalidCallback(t *testing.T) {
 	c := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
 		t.Fatal("Auth must not reach the server with invalid callback")
 	})
-	for _, bad := range []string{"", "not-a-url", "no-scheme/foo"} {
+	for _, bad := range []string{"not-a-url", "no-scheme/foo"} {
 		_, err := c.Auth(context.Background(), bad)
 		assert.ErrorIs(t, err, ErrInvalidCallback, bad)
 	}

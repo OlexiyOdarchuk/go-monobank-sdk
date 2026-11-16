@@ -64,8 +64,9 @@ type HTTPDoer interface {
 // characters of the body for diagnostics.
 //
 // If the response body is JSON of the shape {"errorDescription": "..."}
-// (the standard Mono error format for the personal/corporate/business/
-// acquiring APIs), the [APIError.ErrorDescription] field holds the
+// (the Mono error format for the personal, corporate and business
+// APIs — acquiring uses {"errCode", "errText"}, which the acquiring
+// package parses itself), the [APIError.ErrorDescription] field holds the
 // parsed message, and [APIError.ErrorCode] the errorCode field where
 // the API sends one (corp-api does); otherwise both are empty and the
 // original bytes remain in [APIError.Body].
@@ -112,9 +113,9 @@ func (e *APIError) Is(target error) bool {
 }
 
 // errorBody is the JSON shape of the error that Mono returns from the
-// personal/corporate/business/acquiring APIs. Other sub-packages (for
-// example, installment) have their own formats and use their own
-// error types.
+// personal, corporate and business APIs. Other sub-packages (acquiring
+// with errCode/errText, installment with message) have their own
+// formats and parse them themselves.
 type errorBody struct {
 	ErrorDescription string `json:"errorDescription"`
 	ErrorCode        string `json:"errorCode"`
@@ -147,12 +148,18 @@ func truncate(b []byte, n int) string {
 // construct this type directly — use the sub-package factories
 // ([personal.New], [bank.New] etc.).
 type Client struct {
-	http      HTTPDoer
-	auth      auth.Authorizer
-	baseURL   *url.URL
-	retry     retryPolicy
-	limiter   RateLimiter
-	userAgent string
+	http    HTTPDoer
+	auth    auth.Authorizer
+	baseURL *url.URL
+	retry   retryPolicy
+	limiter RateLimiter
+
+	// statementPacing is set by [WithStatementPacing];
+	// statementPacingSet distinguishes an explicit 0 (disabled) from
+	// "not configured" (DefaultStatementPacing).
+	statementPacing    time.Duration
+	statementPacingSet bool
+	userAgent          string
 
 	// unsafeRetries allows retrying POST/PATCH without an
 	// Idempotency-Key. Default is false: methods that are not provably
@@ -267,6 +274,18 @@ func (c *Client) Close() error {
 		closer.Stop()
 	}
 	return nil
+}
+
+// StatementPacing returns the interval configured by
+// [WithStatementPacing], or [DefaultStatementPacing] when the option
+// was not used. A value <= 0 means pacing is disabled. Sub-packages
+// call it from their statement range helpers.
+func (c Client) StatementPacing() time.Duration {
+	if !c.statementPacingSet {
+		return DefaultStatementPacing
+	}
+
+	return c.statementPacing
 }
 
 // Do executes req against c.baseURL and decodes the response into v.

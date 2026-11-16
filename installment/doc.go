@@ -3,17 +3,14 @@
 // interest-free installment orders, track their status, hand over
 // the goods, issue refunds, produce guarantee letters, and attach a
 // QR cart to a store QR code for the client to scan
-// ([Client.CreateQRCart] / [Client.CancelQRCart]).
+// ([Client.CreateQRCartWithResponse] / [Client.CancelQRCart]).
 //
 // Authorization uses an HMAC-SHA256 signature of the request body
 // paired with the headers store-id (store identifier) and signature
 // (base64 of the HMAC). The bank issues the secret separately for
 // the sandbox, stage, and production environments.
 //
-// Environments (these are API hostnames, not documentation pages;
-// opening them in a browser is pointless — sandbox-root returns 404,
-// stage/prod return 503 because they are closed without
-// store-id+signature):
+// Environments (these are API hostnames, not documentation pages):
 //
 //   - Sandbox          — https://u2-demo-ext.mono.st4g3.com
 //     Publicly accessible, works with the demo credentials
@@ -21,11 +18,13 @@
 //     Swagger UI:
 //     https://u2-demo-ext.mono.st4g3.com/docs/index.html
 //   - Stage (pre-prod) — https://u2-ext.mono.st4g3.com
-//     Available only after the bank opens your store-id; otherwise
-//     503.
+//     Integration with the real Mono app. The docs publish shared
+//     credentials COMFY / sign_key and a list of test QR ids (see
+//     the "Інтеграція через QR" section). The COMFY store is shared by
+//     all partners: on a 409 for a QR code pick another one, cancel
+//     only your own carts, and use a fresh store_order_id per request.
 //   - Production       — https://u2.monobank.com.ua
-//     Available only with production credentials issued by the bank;
-//     otherwise 503.
+//     Production credentials are issued by the bank after testing.
 //
 // Override the base URL via [WithBaseURL]; the default is production.
 //
@@ -33,18 +32,20 @@
 //
 //  1. [Client.CreateOrder] — create an order with items and the
 //     client's phone number; you receive an order_id.
-//  2. The client receives a push in the Mono app and confirms the
-//     contract.
+//  2. The client receives a push in the Mono app, confirms the
+//     contract, and the first payment is charged.
 //  3. The merchant gets a callback (POST to result_callback) or
 //     polls [Client.OrderState] until it reaches
 //     IN_PROCESS/WAITING_FOR_STORE_CONFIRM.
-//  4. The merchant ships the goods and calls [Client.ConfirmOrder]
-//     — this activates the installment and the first payment is
-//     charged.
+//  4. The merchant hands over the goods and calls
+//     [Client.ConfirmOrder]; the order moves to SUCCESS/ACTIVE and
+//     the installment becomes active.
 //  5. On rejection — [Client.RejectOrder]; for returns —
 //     [Client.ReturnOrder].
 //
-// Every monetary field is hryvnias-with-kopecks as a `number`
-// (float64). Unlike the other go-monobank-sdk APIs, the installment API
-// does not use minor units; pass 2499.99, not 249999.
+// On the wire every monetary field is a JSON number of hryvnias with
+// kopecks (2499.99), not minor units as in the other monobank APIs.
+// The SDK models them as [Money], an exact count of kopecks:
+// [NewMoney](2499, 99) or [MoneyFromKopecks](249999) both send
+// 2499.99.
 package installment

@@ -16,6 +16,7 @@ func TestPOSTransactionCancel(t *testing.T) {
 		assert.Equal(t, http.MethodPost, r.Method)
 		assert.Equal(t, "/api/merchant/pos-transaction-cancel", r.URL.Path)
 		assert.Equal(t, "acq-token", r.Header.Get("X-Token"))
+		assert.Equal(t, DefaultPOSLanguage, r.Header.Get("Accept-Language"))
 		body, _ := io.ReadAll(r.Body)
 		var got POSTransactionCancelRequest
 		require.NoError(t, json.Unmarshal(body, &got))
@@ -31,8 +32,8 @@ func TestPOSTransactionCancel(t *testing.T) {
 	require.NoError(t, err)
 }
 
-// The docs publish no 200 body for this endpoint, so an empty
-// response must still read as success.
+// The deprecated method discards the body; an empty one must still
+// read as success.
 func TestPOSTransactionCancel_emptyBodyIsSuccess(t *testing.T) {
 	c := newTestClient(t, func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -66,5 +67,72 @@ func TestPOSTransactionCancel_notFound(t *testing.T) {
 
 	err := c.POSTransactionCancel(context.Background(), &POSTransactionCancelRequest{RRN: "nope", Amount: 1})
 	require.Error(t, err)
+	assert.True(t, IsNotFound(err))
+}
+
+func TestPOSTransactionCancelWithResponse(t *testing.T) {
+	c := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodPost, r.Method)
+		assert.Equal(t, "/api/merchant/pos-transaction-cancel", r.URL.Path)
+		assert.Equal(t, "en", r.Header.Get("Accept-Language"))
+		body, _ := io.ReadAll(r.Body)
+		// Language is a header, never part of the body.
+		assert.JSONEq(t, `{"rrn":"060189181768","amount":4200}`, string(body))
+		_, _ = w.Write([]byte(`{"status":"ok","tranId":"acq123456789"}`))
+	})
+
+	out, err := c.POSTransactionCancelWithResponse(context.Background(), &POSTransactionCancelRequest{
+		RRN: "060189181768", Amount: 4200, Language: "en",
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "ok", out.Status)
+	assert.Equal(t, "acq123456789", out.TranID)
+}
+
+func TestPOSTransactionCancelWithResponse_validation(t *testing.T) {
+	c := newTestClient(t, func(_ http.ResponseWriter, _ *http.Request) {
+		t.Error("unexpected request")
+	})
+	_, err := c.POSTransactionCancelWithResponse(context.Background(), nil)
+	assert.ErrorIs(t, err, ErrNilRequest)
+	_, err = c.POSTransactionCancelWithResponse(context.Background(), &POSTransactionCancelRequest{Amount: 1})
+	assert.ErrorIs(t, err, ErrEmptyID)
+}
+
+func TestPOSTransactionCancelStatus(t *testing.T) {
+	c := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodGet, r.Method)
+		assert.Equal(t, "/api/merchant/pos-transaction-cancel/status", r.URL.Path)
+		assert.Equal(t, "1234567890", r.URL.Query().Get("cancelRef"))
+		_, _ = w.Write([]byte(`{"amount":4200,"cancelRef":"1234567890",` +
+			`"createTime":"2026-10-01T10:30:00Z","modifyTime":"2026-10-01T11:30:00Z",` +
+			`"originalTranId":"acq123456789","rrn":"060189181768","status":"new"}`))
+	})
+
+	out, err := c.POSTransactionCancelStatus(context.Background(), "1234567890")
+	require.NoError(t, err)
+	assert.Equal(t, int64(4200), out.Amount)
+	assert.Equal(t, "1234567890", out.CancelRef)
+	assert.Equal(t, "2026-10-01T10:30:00Z", out.CreateTime)
+	assert.Equal(t, "2026-10-01T11:30:00Z", out.ModifyTime)
+	assert.Equal(t, "acq123456789", out.OriginalTranID)
+	assert.Equal(t, "060189181768", out.RRN)
+	assert.Equal(t, POSRefundNew, out.Status)
+}
+
+func TestPOSTransactionCancelStatus_emptyRef(t *testing.T) {
+	c := newTestClient(t, func(_ http.ResponseWriter, _ *http.Request) {
+		t.Error("unexpected request for an empty cancelRef")
+	})
+	_, err := c.POSTransactionCancelStatus(context.Background(), "")
+	assert.ErrorIs(t, err, ErrEmptyID)
+}
+
+func TestPOSTransactionCancelStatus_notFound(t *testing.T) {
+	c := newTestClient(t, func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+		_, _ = w.Write([]byte(`{"errCode":"NOT_FOUND","errText":"not found"}`))
+	})
+	_, err := c.POSTransactionCancelStatus(context.Background(), "nope")
 	assert.True(t, IsNotFound(err))
 }

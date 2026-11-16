@@ -55,11 +55,14 @@ type API interface {
 
 	// Split receivers (payment splitting) and T2P terminals.
 	SplitReceivers(ctx context.Context) ([]SplitReceiver, error)
+	SplitReceiverByID(ctx context.Context, splitReceiverID string) (*SplitReceiverDetails, error)
 	Terminals(ctx context.Context) ([]Terminal, error)
 	T2PPaymentStatus(ctx context.Context, externalPaymentID string) (*T2PPaymentStatusResponse, error)
 
 	// POS terminals.
 	POSTransactionCancel(ctx context.Context, in *POSTransactionCancelRequest) error
+	POSTransactionCancelWithResponse(ctx context.Context, in *POSTransactionCancelRequest) (*POSTransactionCancelResponse, error)
+	POSTransactionCancelStatus(ctx context.Context, cancelRef string) (*POSTransactionCancelStatusResponse, error)
 }
 
 // Compile-time assert: *Client satisfies [API].

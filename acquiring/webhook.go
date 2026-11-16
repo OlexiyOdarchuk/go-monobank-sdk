@@ -98,9 +98,10 @@ func (k *ServerKey) Public() (*ecdsa.PublicKey, error) {
 // corresponds to pub. The signature in the webhook is base64-encoded
 // in the X-Sign header.
 //
-// The algorithm is ECDSA with SHA-256 in ASN.1 format — the way the
-// Mono acquiring gateway signs webhooks. Fetch the key via
-// [Client.PubKey] and cache it (it rotates rarely, unlike /bank/sync).
+// The algorithm is ECDSA with SHA-256 in ASN.1 format, as in the
+// Go verification sample of the acquiring docs. Fetch the key via
+// [Client.PubKey] and cache it; the docs say to re-request it only
+// when verification with the current key stops working.
 //
 //	pubResp, _ := cli.PubKey(ctx)
 //	pub, _ := pubResp.Public()
@@ -109,10 +110,10 @@ func (k *ServerKey) Public() (*ecdsa.PublicKey, error) {
 //	}
 //
 // IMPORTANT: a valid signature only proves the body came from Mono
-// — not when. Mono itself re-sends webhooks (60s and 600s after the
-// initial delivery for transient 5xx). To guard against replay, the
-// caller MUST persistently deduplicate by (invoiceId, modifiedDate)
-// across process restarts. The signature does not encode a
+// — not when. Mono itself re-sends a webhook up to three more times
+// when the receiver does not answer HTTP 200 OK (the docs give no
+// timing). To guard against replay, the caller MUST persistently
+// deduplicate by (invoiceId, modifiedDate) across process restarts. The signature does not encode a
 // timestamp; nothing in this signature check prevents an attacker
 // from re-submitting an old captured (body, X-Sign) pair. See
 // [VerifyWebhookFresh] for a freshness-bounded variant.
@@ -160,9 +161,11 @@ func parseModifiedDate(s string) (time.Time, error) {
 // Tradeoffs:
 //   - The signature check still runs first; an attacker cannot use
 //     this entry point as a partial-trust oracle.
-//   - maxAge needs slack for legitimate retries: Mono itself re-sends
-//     after 60s and 600s on a 5xx. A maxAge of ~15 minutes is a sane
-//     starting point for production.
+//   - maxAge needs slack for legitimate retries: Mono re-sends up to
+//     three times on any non-200 answer, and the docs do not say how
+//     far apart. A maxAge of ~15 minutes is a starting point, not a
+//     documented bound — widen it if you see stale rejections of
+//     genuine retries.
 //   - This is NOT a substitute for persistent dedup on (invoiceId,
 //     modifiedDate) — within maxAge a duplicate is still a duplicate.
 //
@@ -195,7 +198,14 @@ func VerifyWebhookFresh(pub *ecdsa.PublicKey, body []byte, xSign string, maxAge 
 
 // ParseWebhook decodes the body of an acquiring webhook into
 // [InvoiceStatusResponse] — the same shape that [Client.InvoiceStatus]
-// returns. Mono sends the full invoice state on every change.
+// returns. Mono sends the full invoice state on every status change
+// except "expired" (which sends no webhook), and also when the status
+// of a card tokenized via SaveCardData changes.
+//
+// Delivery order is not guaranteed: a success webhook may arrive
+// before the processing one. The docs advise relying on modifiedDate —
+// the webhook with the larger modifiedDate is the current one — so do
+// not let an older state overwrite a newer one.
 //
 // Always verify the signature with [VerifyWebhook] before parsing —
 // otherwise anyone can send a fake payload.

@@ -21,6 +21,7 @@ type API interface {
 	GuaranteeLetterDataV2(ctx context.Context, in *OrderDataRequest) (*OrderData, error)
 
 	// QR cart.
+	CreateQRCartWithResponse(ctx context.Context, in *CreateQRCartRequest) (*QRCartIdentifierResponse, error)
 	CreateQRCart(ctx context.Context, in *CreateQRCartRequest) error
 	CancelQRCart(ctx context.Context, qrID string) error
 

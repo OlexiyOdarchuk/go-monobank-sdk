@@ -55,6 +55,8 @@ var ErrPollTimeout = errors.New("acquiring: invoice did not reach a terminal sta
 // [PollOptions.TreatHoldAsTerminal] is set) and returns that final
 // state. It is the reconciliation fallback for a missed webhook (and
 // the only way to observe "expired", which never triggers a webhook).
+// The docs warn against using the status endpoint as the main way to
+// track invoices, so prefer webhooks and keep Interval modest.
 //
 // It returns:
 //   - the terminal [InvoiceStatusResponse] and nil on success;

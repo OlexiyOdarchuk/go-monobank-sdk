@@ -6,8 +6,8 @@ import (
 )
 
 // GuaranteeLetterPDF returns the PDF bytes of the guarantee letter
-// for an order. Passing invoice (number + date) is optional — some
-// merchants embed it in the document name.
+// for an order. The invoice (number + date) in the request is
+// optional.
 //
 // POST /api/order/guarantee/letter  (200 → application/pdf)
 func (c *Client) GuaranteeLetterPDF(ctx context.Context, in *OrderDataRequest) ([]byte, error) {
@@ -37,7 +37,9 @@ func (c *Client) GuaranteeLetterData(ctx context.Context, in *OrderDataRequest) 
 
 // GuaranteeLetterDataV2 is the version 2 of GuaranteeLetterData: it
 // returns the same [OrderData] structure but with contract_number
-// and contract_date additionally populated in Header.
+// and contract_date additionally populated in Header. Use
+// [OrderData.SignedString] to rebuild the string the bank's
+// Expansion.Sign covers.
 //
 // POST /api/v2/order/data/for/guarantee/letter  (200 → OrderData)
 func (c *Client) GuaranteeLetterDataV2(ctx context.Context, in *OrderDataRequest) (*OrderData, error) {

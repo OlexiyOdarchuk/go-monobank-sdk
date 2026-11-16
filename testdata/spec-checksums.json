@@ -1,6 +1,6 @@
 {
   "corp-api": {
-    "sha256": "b777efab8eb79b1126bd8ce59cef8e9a2238cc1be647d11c7cda7a8cd565e252",
+    "sha256": "9ce4a10e32ac64ef6273202c8463a6fcb1ff47b106ea64c8a81b94a74493c633",
     "version": ""
   },
   "personal": {
@@ -16,7 +16,11 @@
     "version": "v260831"
   },
   "openbanking": {
-    "sha256": "fa78c51e42f13825fbca95448a0f79b218767889e0614806263f55efe87eecef",
-    "version": "2026.09.18"
+    "sha256": "5fa6ae01c2bd08a8c590cfc6e3e69fe2e206598f14bbf783f098f351c3af4f12",
+    "version": "2026.11.10"
+  },
+  "installment": {
+    "sha256": "1fc05f5b5d538d0aa37942649802d1ad7b11e38ace44a48caad72772f5f277f9",
+    "version": "1 "
   }
 }

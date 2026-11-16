@@ -15,6 +15,11 @@ import (
 // repeats the same modifiedDate. [DedupKey] builds the composite key
 // from an [InvoiceStatusResponse].
 //
+// Deduplication does not order events: the docs warn that webhooks
+// may arrive out of order and that the one with the larger
+// modifiedDate is current. Compare modifiedDate against your stored
+// state in OnEvent as well.
+//
 // The handler calls Has(key) before OnEvent and Add(key) only after
 // OnEvent succeeds — recording before would "poison" the key so a
 // transient 5xx is never retried.
@@ -38,6 +43,14 @@ type Deduper interface {
 // When modifiedDate is empty (rare, older payloads) the key degrades
 // to invoiceId alone — distinct states then collapse, which is safer
 // than treating every retry as new.
+//
+// Known gap: invoices created with SaveCardData also get a webhook
+// when the tokenized card's status changes. The docs do not say
+// whether modifiedDate changes for that event; if it does not, such a
+// webhook shares the key of the earlier one and is acknowledged
+// without reaching OnEvent. If you rely on WalletData updates, check
+// [Client.InvoiceStatus] or build your own key that includes
+// WalletData.Status.
 func DedupKey(inv *InvoiceStatusResponse) string {
 	if inv == nil {
 		return ""
