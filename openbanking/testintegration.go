@@ -84,7 +84,8 @@ type CertificateStatusResponse struct {
 //
 // Per the spec the issued test certificate carries the PSD2 roles
 // PSP_AI and PSP_PI, is valid for two years, and works against
-// [BaseURLStage].
+// [BaseURLStage]. The spec also names a test account:
+// UA973220010000026204373247216, currency UAH.
 func (c *Client) RequestTestCertificate(
 	ctx context.Context, in *CertificateRequest,
 ) (*CertificateRequestResponse, error) {

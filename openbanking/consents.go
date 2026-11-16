@@ -125,9 +125,10 @@ func (c *Client) CreateConsent(
 }
 
 // StartConsentAuthorisation opens the SCA process for a consent. The
-// PSU then has to confirm it: under [SCARedirect] send them to
-// Links.SCARedirect, under [SCADecoupled] they confirm in their own
-// banking app and nothing is returned to redirect to.
+// PSU then has to confirm it. When Links.SCARedirect is present, send
+// them there; the spec defines only that link in the 201 response and
+// gives no rule for when it is present (the "REDIRECT only" rule is
+// stated for payment authorisation, not here).
 //
 // Track the outcome with [Client.ConsentStatus] — the consent becomes
 // usable at [ConsentValid].
@@ -171,9 +172,9 @@ func (c *Client) Consent(ctx context.Context, consentID string) (*Consent, error
 
 // ConsentStatus reads only the status of a consent. Prefer it to
 // [Client.Consent] when polling an authorisation: the payload is a
-// single field, but the call still counts against the consent's
-// frequencyPerDay, so poll with a backoff rather than in a tight
-// loop.
+// single field. The spec does not say which calls count against the
+// consent's frequencyPerDay, so poll with a backoff rather than in a
+// tight loop.
 func (c *Client) ConsentStatus(ctx context.Context, consentID string) (*ConsentStatusResponse, error) {
 	if badPathSegment(consentID) {
 		return nil, ErrEmptyID

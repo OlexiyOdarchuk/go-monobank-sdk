@@ -29,7 +29,9 @@ type CreatePaymentRequest struct {
 	// authorised from. The spec states no ownership rule beyond that.
 	DebtorAccount PaymentAccountReference `json:"debtorAccount"`
 	// RemittanceInformationUnstructured is the payment purpose. The
-	// spec allows exactly one element of at most 140 characters.
+	// spec allows exactly one element of at most 420 characters (the
+	// 140-character limit applies only to the same field on statement
+	// entries, [Transaction]).
 	RemittanceInformationUnstructured []string `json:"remittanceInformationUnstructured,omitempty"`
 }
 
