@@ -22,7 +22,11 @@ func newTestClient(t *testing.T, h http.HandlerFunc) *Client {
 	t.Helper()
 	srv := httptest.NewServer(h)
 	t.Cleanup(srv.Close)
-	return New("test-token", monobank.WithBaseURL(srv.URL), monobank.WithHTTPClient(srv.Client()))
+	c := New("test-token", monobank.WithBaseURL(srv.URL), monobank.WithHTTPClient(srv.Client()))
+	// Keep the default pacing logic but never sleep for real.
+	c.sleep = func(ctx context.Context, _ time.Duration) error { return ctx.Err() }
+
+	return c
 }
 
 func TestClientInfo_sendsToken(t *testing.T) {
@@ -102,12 +106,132 @@ func TestTransactionsRange_noBoundaryDuplicate(t *testing.T) {
 	assert.GreaterOrEqual(t, calls.Load(), int32(2))
 }
 
-func TestTransactionsRange_zeroOrNegative(t *testing.T) {
-	c := New("x")
+func TestTransactionsRange_toNotAfterFrom(t *testing.T) {
+	c := New("x") // no request may be made
 	now := time.Now()
-	out, err := c.TransactionsRange(context.Background(), "x", now, time.Time{})
+	out, err := c.TransactionsRange(context.Background(), "x", now, now.Add(-time.Hour))
 	require.NoError(t, err)
 	assert.Nil(t, out)
+	out, err = c.TransactionsRange(context.Background(), "x", now, now)
+	require.NoError(t, err)
+	assert.Nil(t, out)
+}
+
+// The spec makes {to} optional: "якщо відсутній, буде використовуватись
+// поточний час". A zero to must drop the segment, not send year 1.
+func TestTransactions_zeroToOmitsSegment(t *testing.T) {
+	var seenPath string
+	c := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		seenPath = r.URL.Path
+		_, _ = w.Write([]byte(`[]`))
+	})
+	_, err := c.Transactions(context.Background(), "0", time.Unix(1_700_000_000, 0), time.Time{})
+	require.NoError(t, err)
+	assert.Equal(t, "/personal/statement/0/1700000000", seenPath)
+}
+
+func TestTransactionsRange_zeroToMeansNow(t *testing.T) {
+	now := time.Unix(1_700_000_000, 0)
+	var paths []string
+	c := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		paths = append(paths, r.URL.Path)
+		_, _ = w.Write([]byte(`[]`))
+	})
+	c.now = func() time.Time { return now }
+
+	_, err := c.TransactionsRange(context.Background(), "acc", now.Add(-40*24*time.Hour), time.Time{})
+	require.NoError(t, err)
+	require.Len(t, paths, 2, "40 days = two 31-day windows")
+	assert.True(t, strings.HasSuffix(paths[1], "/"+strconv.FormatInt(now.Unix(), 10)),
+		"the last window must end at now, got %s", paths[1])
+}
+
+// fakeClock drives the pacing seams without real sleeps.
+type fakeClock struct {
+	now    time.Time
+	sleeps []time.Duration
+}
+
+func (f *fakeClock) install(c *Client) {
+	c.now = func() time.Time { return f.now }
+	c.sleep = func(ctx context.Context, d time.Duration) error {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		f.sleeps = append(f.sleeps, d)
+		f.now = f.now.Add(d)
+
+		return nil
+	}
+}
+
+func TestTransactionsRange_pacesRequests(t *testing.T) {
+	var hits atomic.Int32
+	c := newTestClient(t, func(w http.ResponseWriter, _ *http.Request) {
+		hits.Add(1)
+		_, _ = w.Write([]byte(`[]`))
+	})
+	clk := &fakeClock{now: time.Unix(1_800_000_000, 0)}
+	clk.install(c)
+
+	from := time.Unix(1_700_000_000, 0)
+	_, err := c.TransactionsRange(context.Background(), "acc", from, from.Add(70*24*time.Hour))
+	require.NoError(t, err)
+	assert.Equal(t, int32(3), hits.Load())
+	assert.Equal(t, []time.Duration{monobank.DefaultStatementPacing, monobank.DefaultStatementPacing}, clk.sleeps,
+		"no wait before the first request, 60 s before each of the next two")
+}
+
+func TestTransactionsRange_pacingDisabled(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`[]`))
+	}))
+	t.Cleanup(srv.Close)
+	c := New("tok", monobank.WithBaseURL(srv.URL), monobank.WithHTTPClient(srv.Client()),
+		monobank.WithStatementPacing(0))
+	clk := &fakeClock{now: time.Unix(1_800_000_000, 0)}
+	clk.install(c)
+
+	from := time.Unix(1_700_000_000, 0)
+	_, err := c.TransactionsRange(context.Background(), "acc", from, from.Add(70*24*time.Hour))
+	require.NoError(t, err)
+	assert.Empty(t, clk.sleeps)
+}
+
+func TestTransactionsRange_pacingHonoursContext(t *testing.T) {
+	c := newTestClient(t, func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`[{"id":"a","time":1700000000,"amount":1}]`))
+	})
+	ctx, cancel := context.WithCancel(context.Background())
+	c.sleep = func(context.Context, time.Duration) error {
+		cancel()
+
+		return context.Canceled
+	}
+
+	from := time.Unix(1_700_000_000, 0)
+	out, err := c.TransactionsRange(ctx, "acc", from, from.Add(70*24*time.Hour))
+	require.ErrorIs(t, err, context.Canceled)
+	assert.Len(t, out, 1, "the first window is kept")
+}
+
+func TestTransactionsRange_returnsPartialOnError(t *testing.T) {
+	var hits atomic.Int32
+	c := newTestClient(t, func(w http.ResponseWriter, _ *http.Request) {
+		if hits.Add(1) == 1 {
+			_, _ = w.Write([]byte(`[{"id":"a","time":1700000000,"amount":1}]`))
+
+			return
+		}
+		w.WriteHeader(http.StatusTooManyRequests)
+		_, _ = w.Write([]byte(`{"errorDescription":"Too many requests"}`))
+	})
+
+	from := time.Unix(1_700_000_000, 0)
+	out, err := c.TransactionsRange(context.Background(), "acc", from, from.Add(40*24*time.Hour))
+	require.ErrorIs(t, err, monobank.ErrTooManyRequests)
+	require.Len(t, out, 1)
+	assert.Equal(t, "a", out[0].ID)
 }
 
 // accountID мусить бути url.PathEscape-нутим у path-сегменті

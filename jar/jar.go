@@ -8,9 +8,12 @@
 //     the response carries longJarId/extJarId for later use with
 //     [Client.ByLongID].
 //
-// Both endpoints are documented only in community notes (see the
-// pinned message in the @api_mono_chat channel). This is a read-only
-// API: jars cannot be created or edited through it.
+// Neither endpoint is in monobank's published specs; both are known
+// only from community notes (the pinned message in the @api_mono_chat
+// channel and community-maintained docs such as
+// https://github.com/andrew-demb/monobank-api-community-docs). Their
+// shape, error format and limits can change without notice. This is a
+// read-only API: jars cannot be created or edited through it.
 //
 // The rate limits on send.monobank.ua are more aggressive than those
 // on /bank/jar — for repeated requests, cache longJarId and use only
@@ -62,17 +65,47 @@ var ErrInsecureBaseURL = errors.New("jar: base URL must be https for non-loopbac
 // are tiny (<10 KiB); 1 MiB leaves plenty of headroom.
 const MaxResponseBytes = 1 << 20
 
-// APIError is the structured error from the monobank response body
-// (errCode/errText).
+// APIError is a non-success response from either jar endpoint. The
+// error format of these undocumented endpoints is itself undocumented:
+// send.monobank.ua has been seen to answer {errCode, errText}, while
+// api.monobank.ua's documented format is {errorDescription}. Whichever
+// fields the body carries are filled; Body always holds the raw
+// response (up to [MaxResponseBytes]).
 type APIError struct {
 	StatusCode int
 	ErrCode    string `json:"errCode"`
 	ErrText    string `json:"errText"`
+	// ErrorDescription is the errorDescription field, the error format
+	// api.monobank.ua documents for its other endpoints.
+	ErrorDescription string `json:"errorDescription"`
+	// Body is the raw response body.
+	Body []byte `json:"-"`
 }
 
 // Error implements error.
 func (e *APIError) Error() string {
-	return fmt.Sprintf("jar: %d %s: %s", e.StatusCode, e.ErrCode, e.ErrText)
+	detail := e.ErrText
+	if detail == "" {
+		detail = e.ErrorDescription
+	}
+	if detail == "" {
+		detail = truncateBody(e.Body, 256)
+	}
+	if e.ErrCode != "" {
+		return fmt.Sprintf("jar: %d %s: %s", e.StatusCode, e.ErrCode, detail)
+	}
+
+	return fmt.Sprintf("jar: %d: %s", e.StatusCode, detail)
+}
+
+// truncateBody returns at most n bytes of b as a string, marking the
+// cut with an ellipsis.
+func truncateBody(b []byte, n int) string {
+	if len(b) <= n {
+		return string(b)
+	}
+
+	return string(b[:n]) + "…"
 }
 
 // Info is the stable subset of fields from /bank/jar/{longJarId}.
@@ -329,6 +362,7 @@ func (c *Client) ByShortID(ctx context.Context, clientID string) (*SendInfo, err
 			StatusCode: resp.StatusCode,
 			ErrCode:    probe.ErrCode,
 			ErrText:    probe.ErrText,
+			Body:       respBody,
 		}
 	}
 	var out SendInfo
@@ -338,11 +372,13 @@ func (c *Client) ByShortID(ctx context.Context, clientID string) (*SendInfo, err
 	return &out, nil
 }
 
+// decodeAPIError builds an [APIError] from a non-success response. A
+// body that is not JSON (or JSON of an unknown shape) still yields an
+// APIError carrying the status and the raw body.
 func decodeAPIError(status int, body []byte) error {
 	var e APIError
-	if err := json.Unmarshal(body, &e); err != nil {
-		return fmt.Errorf("jar: http %d: %s", status, string(body))
-	}
+	_ = json.Unmarshal(body, &e) // best effort; Body keeps the original
 	e.StatusCode = status
+	e.Body = body
 	return &e
 }

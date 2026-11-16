@@ -9,10 +9,12 @@ import "time"
 // transactions in the requested window were truncated and have to be
 // fetched again with a smaller `to`.
 //
-// This cap is part of Mono's documented /personal/statement contract
-// (max 500 rows, newest-first; window <= 2682000s; 1 call / 60s) and is
-// reproduced by independent community clients:
-// https://github.com/andrew-demb/monobank-api-community-docs
+// The current spec (personal v250818, corporate v260831) documents the
+// window (2682000 s) and the 1-call-per-60-s limit, but not the
+// 500-row cap or the newest-first order. Both come from earlier
+// versions of Mono's docs and from independent community clients
+// (https://github.com/andrew-demb/monobank-api-community-docs); treat
+// them as observed behavior rather than a published contract.
 const StatementMaxRows = 500
 
 // StatementFetcher fetches a single statement window [from, to]
@@ -24,7 +26,9 @@ type StatementFetcher func(from, to time.Time) (Transactions, error)
 // working around Mono's [StatementMaxRows]-per-response cap.
 //
 // Mono returns transactions newest-first and silently truncates the
-// response to the newest StatementMaxRows rows without an offset cursor.
+// response to the newest StatementMaxRows rows without an offset cursor
+// (observed behavior, not stated in the current spec — see
+// [StatementMaxRows]). The re-anchoring below relies on that order.
 // When a response is full, DrainWindow re-anchors the upper bound to the
 // oldest second it just saw and fetches again, deduplicating by
 // transaction id so the overlap on that boundary second is not

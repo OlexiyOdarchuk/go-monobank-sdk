@@ -142,6 +142,39 @@ func TestByShortID_emptyID(t *testing.T) {
 	require.Error(t, err)
 }
 
+func TestByLongID_errorDescriptionFormat(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusTooManyRequests)
+		_, _ = w.Write([]byte(`{"errorDescription":"Too many requests"}`))
+	}))
+	defer srv.Close()
+
+	c, errNew := jar.New(jar.WithAPIBaseURL(srv.URL))
+	require.NoError(t, errNew)
+	_, err := c.ByLongID(context.Background(), "x")
+	var apiErr *jar.APIError
+	require.ErrorAs(t, err, &apiErr)
+	assert.Equal(t, "Too many requests", apiErr.ErrorDescription)
+	assert.Equal(t, `{"errorDescription":"Too many requests"}`, string(apiErr.Body))
+	assert.Equal(t, "jar: 429: Too many requests", err.Error())
+}
+
+func TestByLongID_nonJSONError(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusBadGateway)
+		_, _ = w.Write([]byte(`<html>bad gateway</html>`))
+	}))
+	defer srv.Close()
+
+	c, errNew := jar.New(jar.WithAPIBaseURL(srv.URL))
+	require.NoError(t, errNew)
+	_, err := c.ByLongID(context.Background(), "x")
+	var apiErr *jar.APIError
+	require.ErrorAs(t, err, &apiErr)
+	assert.Equal(t, http.StatusBadGateway, apiErr.StatusCode)
+	assert.Contains(t, err.Error(), "bad gateway")
+}
+
 func TestAPIError_Error(t *testing.T) {
 	e := &jar.APIError{StatusCode: 429, ErrCode: "TMR", ErrText: "boom"}
 	assert.Contains(t, e.Error(), "429")

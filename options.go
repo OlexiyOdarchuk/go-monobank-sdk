@@ -241,6 +241,13 @@ func isInsecureBaseURL(uri string) bool {
 // Only transient failures (5xx, 429) are retried; 4xx errors come
 // back as [APIError] without a retry, because they are genuine
 // client-side errors.
+//
+// Every sleep, including one requested by Retry-After, is capped at
+// maxDelay. With the default 30 s cap a retry cannot outlast Mono's
+// 60-second limit on /personal/statement and /personal/client-info,
+// and the personal spec documents no Retry-After header for those
+// endpoints; pass maxDelay >= time.Minute, or avoid the 429 with
+// [WithRateLimiter] / [WithStatementPacing].
 func WithRetry(attempts int, baseDelay, maxDelay time.Duration) Option {
 	return func(c *Client) {
 		if attempts == 0 {
@@ -295,7 +302,7 @@ func WithUserAgent(ua string) Option {
 //
 // Weigh that per client, not per application: a duplicated invoice is
 // an annoyance, but the same switch also covers
-// [acquiring.Client.POSTransactionCancel], which moves money outward
+// [acquiring.Client.POSTransactionCancelWithResponse], which moves money outward
 // and for which Mono documents no idempotency key at all — there a
 // retry can pay the customer twice.
 func WithUnsafeRetries(enabled bool) Option {
@@ -325,6 +332,34 @@ func WithRateLimiter(l RateLimiter) Option {
 			return
 		}
 		c.limiter = l
+	}
+}
+
+// DefaultStatementPacing is the pause the statement range helpers
+// (for example personal.Client.TransactionsRange) keep between
+// consecutive statement requests unless [WithStatementPacing] says
+// otherwise. It follows the spec's limit for /personal/statement: "не
+// частіше ніж 1 раз у 60 секунд".
+const DefaultStatementPacing = time.Minute
+
+// WithStatementPacing sets the minimum interval between the
+// consecutive statement requests a single range call makes (window
+// after window, and the re-fetches of a window that hit the row cap).
+// The first request of a range call is never delayed; waiting honors
+// the context. every <= 0 disables pacing — use that when a
+// [RateLimiter] passed to [WithRateLimiter] already spaces statement
+// calls, or in tests.
+//
+// Pacing is per range call: it does not coordinate separate calls or
+// separate clients. The spec does not say whether the 60-second limit
+// counts per account or per token, so concurrent range calls for
+// different accounts may still hit 429.
+//
+//	cli := personal.New(token, monobank.WithStatementPacing(0)) // no pacing
+func WithStatementPacing(every time.Duration) Option {
+	return func(c *Client) {
+		c.statementPacing = every
+		c.statementPacingSet = true
 	}
 }
 

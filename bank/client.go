@@ -32,8 +32,10 @@ func New(opts ...monobank.Option) *Client {
 func (c *Client) Close() error { return c.c.Close() }
 
 // Rates fetches the current exchange-rate table from /bank/currency.
-// Mono rate-limits this endpoint — cache the result for a minute or
-// two. Docs: https://api.monobank.ua/docs/#operation/getCurrency
+// Per the spec the data "кешується та оновлюється не частіше 1 разу на
+// 5 хвилин", so cache the result for at least 5 minutes: fetching more
+// often returns the same table and invites 429.
+// Docs: https://api.monobank.ua/docs/#operation/getCurrency
 func (c *Client) Rates(ctx context.Context) (Rates, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "/bank/currency", http.NoBody)
 	if err != nil {
