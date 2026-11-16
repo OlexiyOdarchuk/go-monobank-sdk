@@ -94,9 +94,11 @@ func (c *Client) DeleteImport(ctx context.Context, period string) error {
 	return c.c.Do(req, nil, http.StatusNoContent, http.StatusOK)
 }
 
-// SendPayslipsToMobile sends payslips for the period to employees'
-// mobile apps. Call after a successful [Client.UploadPayslips].
-// Returns EmployeesSent — how many actually received the push.
+// SendPayslipsToMobile makes the period's payslips available to
+// employees in the mobile app; the import status then becomes SENT.
+// Call after a successful [Client.UploadPayslips]. EmployeesSent is the
+// number of employees the payslips were sent to — the spec does not
+// describe it as a delivery or read confirmation.
 // https://corp-api.monobank.ua/docs/#operation/sendToMobile
 func (c *Client) SendPayslipsToMobile(ctx context.Context, period string) (*SendResult, error) {
 	q := url.Values{}

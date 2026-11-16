@@ -54,7 +54,9 @@ func (c *Client) CreateSalaryRegistry(ctx context.Context, idempotencyKey string
 // SalaryRegistryTypes returns the list of available salary-registry
 // types (for example, SALARY_ADVANCE — "salary advance"). One of
 // these aliases must be passed in
-// CreateSalaryRegistryRequest.SalaryRegistryType.
+// CreateSalaryRegistryRequest.SalaryRegistryType. AdditionalPurposeAllowed
+// says whether recipients of that type may carry
+// [SalaryRecipient.AdditionalPurpose].
 // https://corp-api.monobank.ua/docs/#operation/get-salary-registries-types
 func (c *Client) SalaryRegistryTypes(ctx context.Context) ([]SalaryRegistryType, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet,
@@ -70,8 +72,11 @@ func (c *Client) SalaryRegistryTypes(ctx context.Context) ([]SalaryRegistryType,
 }
 
 // SalaryRegistryStatus returns the current state of a salary
-// registry by its ID. For terminal statuses (FAIL / PAYMENTS_DONE)
-// DeclineReason explains what went wrong (when FAIL).
+// registry by its ID. The documented statuses are SAVED, IN_PROGRESS,
+// PREPARED, CHANGE_REQUIRED, FAILED and SUCCEEDED; use
+// [RegistryStatus.Terminal] to stop polling, since it also accepts the
+// FAIL / PAYMENTS_DONE spelling of earlier spec versions. For a
+// declined registry DeclineReason explains why.
 // https://corp-api.monobank.ua/docs/#operation/get-salary-registries-status
 func (c *Client) SalaryRegistryStatus(ctx context.Context, id string) (*SalaryRegistryStatus, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet,

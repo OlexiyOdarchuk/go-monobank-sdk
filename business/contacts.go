@@ -17,9 +17,10 @@ var ErrNilRequest = errors.New("request body is nil")
 
 // ErrIdempotencyKeyRequired is returned by [Client.PreparePayment],
 // [Client.CreateSalaryRegistry] and [Client.SubmitSalaryRegistryBatch]
-// when the idempotencyKey argument is empty. The bank treats an empty Idempotency-Key as
-// "no dedupe", so a network retry would create a duplicate payment
-// — explicit failure is safer than implicit duplication.
+// when the idempotencyKey argument is empty. The spec marks the
+// idempotency-key header as required on all three endpoints (a UUID
+// for the salary registries, 3–256 characters for payment prepare), so
+// the SDK refuses to send a request without one.
 var ErrIdempotencyKeyRequired = errors.New("business: Idempotency-Key is required")
 
 // ErrInvalidTimeRange is returned by [Client.Statement] and

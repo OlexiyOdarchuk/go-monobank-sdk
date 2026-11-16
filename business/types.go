@@ -105,7 +105,24 @@ type SalaryRecipient struct {
 	IBAN           string       `json:"iban"`
 	// Amount is in minor units (kopecks for UAH).
 	Amount int64 `json:"amount"`
+	// AdditionalPurpose is appended to the registry's payment purpose
+	// for this recipient as is, without a separator — start it with a
+	// space if one is needed. Only registry types whose
+	// [SalaryRegistryType.AdditionalPurposeAllowed] is true accept it;
+	// otherwise the whole request is rejected with 400 and errorCode
+	// [ErrCodeSalaryAdditionalPurposeNotSupported]. Allowed characters:
+	// Latin, Cyrillic (including ґ, є, і, ї), digits, space, ASCII
+	// punctuation and №. The full purpose including this text may not
+	// exceed 420 characters; text with forbidden characters or too long
+	// is flagged as an error for this recipient.
+	AdditionalPurpose string `json:"additionalPurpose,omitempty"`
 }
+
+// ErrCodeSalaryAdditionalPurposeNotSupported is the errorCode of the
+// 400 returned when a recipient carries AdditionalPurpose but the
+// registry type does not allow it. Compare it with
+// [github.com/OlexiyOdarchuk/go-monobank-sdk/v2.APIError].ErrorCode.
+const ErrCodeSalaryAdditionalPurposeNotSupported = "SALARY_ADDITIONAL_PURPOSE_NOT_SUPPORTED"
 
 // CreateSalaryRegistryRequest is the body of POST /ext/v1/payments/salary/registries.
 type CreateSalaryRegistryRequest struct {
@@ -159,32 +176,67 @@ type SalaryRegistryBatchAccepted struct {
 type SalaryRegistryType struct {
 	Alias       string `json:"alias"`
 	Description string `json:"description"`
+	// AdditionalPurposeAllowed reports whether recipients of this type
+	// may carry [SalaryRecipient.AdditionalPurpose]. The bank omits the
+	// field when they may not.
+	AdditionalPurposeAllowed bool `json:"additionalPurposeAllowed,omitempty"`
 }
 
 // RegistryStatus is the lifecycle state of a salary registry.
 type RegistryStatus string
 
-// Possible RegistryStatus values.
+// Possible RegistryStatus values. The status endpoint documents SAVED,
+// IN_PROGRESS, PREPARED, CHANGE_REQUIRED, FAILED and SUCCEEDED.
 const (
 	RegistrySaved          RegistryStatus = "SAVED"
 	RegistryInProgress     RegistryStatus = "IN_PROGRESS"
 	RegistryPrepared       RegistryStatus = "PREPARED"
 	RegistryChangeRequired RegistryStatus = "CHANGE_REQUIRED"
-	RegistryFail           RegistryStatus = "FAIL"
-	RegistryPaymentsDone   RegistryStatus = "PAYMENTS_DONE"
+	// RegistryFailed: the registry was declined; see
+	// [SalaryRegistryStatus.DeclineReason].
+	RegistryFailed RegistryStatus = "FAILED"
+	// RegistrySucceeded: the registry's payments are done.
+	RegistrySucceeded RegistryStatus = "SUCCEEDED"
+
+	// Deprecated: the status endpoint now documents [RegistryFailed]
+	// ("FAILED"). Kept for code that compares against the old value;
+	// [RegistryStatus.Terminal] accepts both.
+	RegistryFail RegistryStatus = "FAIL"
+	// Deprecated: the status endpoint now documents
+	// [RegistrySucceeded] ("SUCCEEDED"). Kept for code that compares
+	// against the old value; [RegistryStatus.Terminal] accepts both.
+	RegistryPaymentsDone RegistryStatus = "PAYMENTS_DONE"
 
 	// RegistryAPILoading: batches are still being uploaded or
-	// processed (see [Client.SubmitSalaryRegistryBatch]).
+	// processed (see [Client.SubmitSalaryRegistryBatch]). The spec
+	// lists it, with [RegistryAdded], only for the batch-upload
+	// response's state, not for the status endpoint.
 	RegistryAPILoading RegistryStatus = "API_LOADING"
 	// RegistryAdded: a batch-uploaded registry is finalized.
 	RegistryAdded RegistryStatus = "ADDED"
 )
 
+// Terminal reports whether s is a final registry status: failed or
+// succeeded, under either the current or the deprecated spelling.
+func (s RegistryStatus) Terminal() bool {
+	return s == RegistryFailed || s == RegistrySucceeded ||
+		s == RegistryFail || s == RegistryPaymentsDone
+}
+
+// Failed reports whether s is the declined status, under either the
+// current ("FAILED") or the deprecated ("FAIL") spelling.
+func (s RegistryStatus) Failed() bool {
+	return s == RegistryFailed || s == RegistryFail
+}
+
 // SalaryRegistryStatus is the response to GET /ext/v1/payments/salary/registries/{id}/status.
 type SalaryRegistryStatus struct {
-	Status        RegistryStatus `json:"status"`
-	UpdatedAt     string         `json:"updatedAt"` // ISO-8601
-	DeclineReason string         `json:"declineReason,omitempty"`
+	Status    RegistryStatus `json:"status"`
+	UpdatedAt string         `json:"updatedAt"` // ISO-8601
+	// DeclineReason explains a declined registry. The spec ties it to
+	// "статус FAIL", a spelling its own status enum no longer lists;
+	// expect it with [RegistryFailed].
+	DeclineReason string `json:"declineReason,omitempty"`
 }
 
 // OperationStatus is the per-operation state reported by /ext/v1/statement.
@@ -243,13 +295,14 @@ func (s *StatementItem) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-// StatementDirection is the iteration direction passed to [Client.Statement].
-// UP returns items chronologically newer than `from`; DOWN — older.
-//
-// The published spec marks the parameter deprecated and describes it
-// the other way round (UP: newest first, DOWN: oldest first);
-// TestIntegration_Statement_directionOrder checks which one the server
-// follows. [Client.StatementAll] relies on DOWN being newest-first.
+// StatementDirection is the sort order passed to [Client.Statement].
+// Either value returns operations inside [from, to]; only the order
+// differs. The spec marks the parameter deprecated, defaults it to
+// DOWN, and describes it as "UP - Спочатку повертати нові операції,
+// DOWN - спочатку повертати старі операції" (UP: newest first, DOWN:
+// oldest first). Whether the server still honors it has not been
+// confirmed; TestIntegration_Statement_directionOrder records what it
+// does. [Client.StatementAll] works with either order.
 type StatementDirection string
 
 // Possible StatementDirection values.

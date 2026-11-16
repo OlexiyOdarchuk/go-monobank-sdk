@@ -37,6 +37,7 @@ func TestBusinessDTOs_LogValueRedacts(t *testing.T) {
 	}
 	recipient := business.SalaryRecipient{
 		FullName: fullName, INN: inn, DocumentNumber: docNum, IBAN: iban, Amount: 1234500,
+		AdditionalPurpose: " " + purpose,
 	}
 	item := business.StatementItem{
 		ID: "op-1", Description: purpose, CounterName: fullName,
