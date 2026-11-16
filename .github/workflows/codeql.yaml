@@ -36,7 +36,7 @@ jobs:
           go-version: '1.26.x'
           check-latest: true
           cache: true
-      - uses: github/codeql-action/init@5e316336eb4f107009e477d4bfbfff13d7250fae # v4
+      - uses: github/codeql-action/init@3ea37a44b6e4e6847c46edae209410d258d548d1 # v4
         with:
           languages: ${{ matrix.language }}
           # security-and-quality is the broader query suite — includes
