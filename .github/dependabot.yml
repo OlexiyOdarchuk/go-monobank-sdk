@@ -47,3 +47,10 @@ updates:
     commit-message:
       prefix: "ci"
       include: scope
+    # CodeQL refuses to run when its init/autobuild/analyze steps are on
+    # different versions, so separate PRs per step each fail CI and
+    # conflict with one another. Bump them together.
+    groups:
+      codeql-action:
+        patterns:
+          - "github/codeql-action*"
