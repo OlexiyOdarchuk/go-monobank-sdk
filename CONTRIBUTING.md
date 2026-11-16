@@ -71,7 +71,7 @@ MONO_ACQUIRING_TOKEN=… go test -tags=integration -run Integration ./acquiring/
 
 | Тест | Опт-ін | Що робить |
 |---|---|---|
-| `POSTransactionCancel` | `MONO_ALLOW_REFUND=yes-refund-real-money` + `MONO_POS_RRN`, `MONO_POS_AMOUNT` | справжнє повернення коштів |
+| `POSTransactionCancelWithResponse` | `MONO_ALLOW_REFUND=yes-refund-real-money` + `MONO_POS_RRN`, `MONO_POS_AMOUNT` | справжнє повернення коштів |
 | `DeleteImport` | `MONO_ALLOW_PAYSLIP_DELETE=yes-delete-payslips` + `MONO_BUSINESS_PAYSLIP_PERIOD` | видаляє імпорт розрахункових листів за період |
 | `RequestTestCertificate` | `OB_ALLOW_CERT_REQUEST=yes-request-certificate` | подає заявку, яку обробляє людина |
 

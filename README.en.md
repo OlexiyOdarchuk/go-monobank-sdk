@@ -263,7 +263,7 @@ refunds, fiscal receipts, statement export for reconciliation, direct PAN
 flows (for merchants in PCI DSS scope), monopay button
 (`MonoPayKeyImport/Delete/List`), split payments (`SplitReceivers`),
 T2P terminals (`Terminals`, `T2PPaymentStatus`), POS transaction
-refunds (`POSTransactionCancel`).
+refunds (`POSTransactionCancelWithResponse`, `POSTransactionCancelStatus`).
 
 ## Quick start: Installment ("Покупка частинами")
 
@@ -339,6 +339,10 @@ recurring updates.
   honors `Retry-After`, retries only 5xx/429.
 - `WithRateLimiter(RateLimiter)` — client-side throttle (see "Rate limits"
   below).
+- `WithStatementPacing(d)` — pause between the requests of `personal`
+  range statements (60 s by default, `0` turns it off).
+- `acquiring.WithCMS(name, version)` — `X-Cms` / `X-Cms-Version` headers
+  for CMS plugins.
 - `WithUnsafeRetries(bool)` — by default POST/PATCH retries are gated on
   the `Idempotency-Key` header (a load-balancer 502 may arrive after the
   upstream already processed the request, so a blind retry would create
@@ -382,7 +386,9 @@ cli := personal.New(token,
 ```
 
 The same guard lives in `installment.New`, `jar.New`, and
-`corporate.Client.Auth` (for the `X-Callback URL`). Each package has
+`corporate.Client.Auth` (for the `X-Callback URL`; the callback is
+optional — without it, poll `CheckAuth`, where pending is a 401, see
+`corporate.IsAuthPending`). Each package has
 its own `WithInsecureBaseURL` / `AllowInsecureCallback` for opt-out.
 
 ### Token redaction in logs
@@ -411,10 +417,18 @@ log aggregator.
 ### Rate limits
 
 Mono throttles most endpoints — for example, `/personal/client-info` and
-`/personal/statement/{account}/…` allow only 1 call per 60 seconds (per
-token / per account respectively). Past the limit the server returns `429`
-with `Retry-After`, which `WithRetry` honors automatically. corp-api sends
-`X-Rate-Limit-Retry-After-Seconds` instead; it is honored the same way.
+`/personal/statement/{account}/…` allow a call "не частіше ніж 1 раз у
+60 секунд" (at most once per 60 seconds). The spec does not say whether
+the statement limit counts per token or per account. Past the limit the
+server returns `429`; a `Retry-After` header is not documented for the
+personal API, but if one arrives `WithRetry` honors it (each sleep is
+capped at `maxDelay`, 30 s by default, so a retry alone will not wait
+out 60 seconds). corp-api sends `X-Rate-Limit-Retry-After-Seconds`; it
+is honored the same way.
+
+`personal.Client.TransactionsRange` / `TransactionsRangeIter` pause
+between their own requests (`WithStatementPacing`, 60 s by default);
+separate calls and clients are not coordinated.
 
 > Under sustained abuse Mono's edge (AWS) may return `403` with an HTML
 > body (not a JSON `errorDescription`) and block the IP for roughly a
@@ -446,7 +460,7 @@ never spent twice. `RateLimiter.Wait(ctx)` matches the signature of
 `*golang.org/x/time/rate.Limiter` — drop yours in if you need finer
 controls.
 
-For per-account limits (each account's statement has its own quota), use
+If the limit counts per account (the spec does not say), use
 `KeyedLimiter`:
 
 ```go
@@ -660,14 +674,18 @@ amt = installment.MoneyFromMajor(2499.99) // rounds half away from zero
 Every endpoint with a natural cursor ships an `iter.Seq2` wrapper:
 
 - `personal.Client.TransactionsRangeIter` — lazy paging over a
-  multi-window statement. Windows exceeding the 500-rows-per-response
-  cap are drained transparently (Mono returns at most 500 rows with no
-  offset cursor — the SDK re-anchors `to` to the oldest second and dedups
-  by id, like `business.StatementAll`).
-- `corporate.Client.TransactionsRangeIter` — same for corp-API.
+  multi-window statement; a zero `to` means "until now". Windows with
+  more than 500 rows per response are drained transparently (in practice
+  Mono returns at most 500 rows, newest first, with no offset cursor;
+  the spec does not describe this — the SDK re-anchors `to` to the
+  oldest second and dedups by id).
+- `corporate.Client.TransactionsRangeIter` — same for corp-API (no
+  pacing: the corporate spec sets no statement rate limit).
 - `business.Client.ContactsAll` / `SearchContactsAll` — salary
   contacts.
-- `business.Client.StatementAll` — DOWN-cursor over time.
+- `business.Client.StatementAll` — time cursor that works whatever the
+  page order (the spec describes `direction` differently from what was
+  observed before, and marks it deprecated).
 - `acquiring.Client.SubscriptionListAll` / `SubscriptionPaymentsAll` —
   subscriptions and their payments.
 
