@@ -7,6 +7,8 @@
 
 ## [Unreleased]
 
+## [2.3.0] — 2026-11-16
+
 Повна звірка всіх пакетів з документацією станом на 2026-11-16:
 corp-api (нова ревізія без зміни версії `1.0.2`), corporate `v260831`,
 personal `v250818`, Open Banking `2026.11.10` (була `2026.09.18`),
@@ -68,6 +70,7 @@ personal `v250818`, Open Banking `2026.11.10` (була `2026.09.18`),
   `go.opentelemetry.io/otel` `v1.47.0`. Споживачі submodule, які не
   вимагають SDK явно, отримають виправлення з 2.1.0 і 2.2.0 лише з
   цим тегом.
+- **`golang.org/x/sync`** оновлено до `v0.25.0`.
 - **`personal`: діапазонні виписки тримають ліміт «1 раз у 60
   секунд».** `TransactionsRange` / `TransactionsRangeIter` чекають між
   своїми запитами (враховуючи `ctx`), тож квартал займає кілька хвилин
@@ -1117,7 +1120,8 @@ defer klim.Stop()
 - `monobanktest` — мок-сервер на `httptest.Server` із fluent-builder-ами.
 - Пагінатори через `iter.Seq2` (Go 1.23+).
 
-[Unreleased]: https://github.com/OlexiyOdarchuk/go-monobank-sdk/compare/v2.2.0...HEAD
+[Unreleased]: https://github.com/OlexiyOdarchuk/go-monobank-sdk/compare/v2.3.0...HEAD
+[2.3.0]: https://github.com/OlexiyOdarchuk/go-monobank-sdk/compare/v2.2.0...v2.3.0
 [2.2.0]: https://github.com/OlexiyOdarchuk/go-monobank-sdk/compare/v2.1.0...v2.2.0
 [2.1.0]: https://github.com/OlexiyOdarchuk/go-monobank-sdk/compare/v2.0.2...v2.1.0
 [2.0.2]: https://github.com/OlexiyOdarchuk/go-monobank-sdk/compare/v2.0.1...v2.0.2
