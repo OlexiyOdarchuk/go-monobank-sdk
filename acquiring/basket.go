@@ -18,8 +18,10 @@ var (
 	ErrBasketCode = errors.New("acquiring: basket item code is required")
 	// ErrBasketQty indicates a non-positive Qty.
 	ErrBasketQty = errors.New("acquiring: basket item qty must be > 0")
-	// ErrBasketSum indicates a non-positive per-unit Sum.
-	ErrBasketSum = errors.New("acquiring: basket item sum must be > 0")
+	// ErrBasketSum indicates a negative per-unit Sum. A zero Sum (for
+	// example, a free gift line) is accepted: the docs only require the
+	// field, without a lower bound.
+	ErrBasketSum = errors.New("acquiring: basket item sum must not be negative")
 	// ErrBasketTotal indicates Total != round(Qty * Sum).
 	ErrBasketTotal = errors.New("acquiring: basket item total must equal qty*sum")
 )
@@ -36,11 +38,13 @@ func expectedTotal(qty float64, sum int64) int64 {
 	return int64(r - 0.5)
 }
 
-// Validate checks a single [BasketItem] against Mono's invariants:
-// Name and Code are present, Qty and Sum are positive, and — when
-// Total is set — Total equals round(Qty*Sum). A zero Total is treated
-// as "not specified" and is not cross-checked (use [BasketItem.Filled]
-// to populate it). Returns nil when the item is acceptable.
+// Validate checks a single [BasketItem]: Name and Code are present
+// (both required by the docs; code is needed for fiscalization), Qty
+// is positive, Sum is not negative, and — when Total is set — Total
+// equals round(Qty*Sum), following the docs' example (qty=2,
+// sum=2100, total=4200). A zero Total is treated as "not specified"
+// and is not cross-checked (use [BasketItem.Filled] to populate it).
+// Returns nil when the item is acceptable.
 func (it BasketItem) Validate() error {
 	if it.Name == "" {
 		return ErrBasketName
@@ -51,7 +55,7 @@ func (it BasketItem) Validate() error {
 	if it.Qty <= 0 || math.IsNaN(it.Qty) || math.IsInf(it.Qty, 0) {
 		return fmt.Errorf("%w (item %q): %v", ErrBasketQty, it.Name, it.Qty)
 	}
-	if it.Sum <= 0 {
+	if it.Sum < 0 {
 		return fmt.Errorf("%w (item %q): %d", ErrBasketSum, it.Name, it.Sum)
 	}
 	if it.Total != 0 {
@@ -77,7 +81,7 @@ func (it BasketItem) Filled() BasketItem {
 // units) — computing Total as round(qty*sum). Use [BasketOption]
 // values for the optional fiscalization metadata (unit, barcode,
 // tax, ...). It returns an error instead of a half-built item when a
-// required field is missing or non-positive.
+// required field is missing or invalid (see [BasketItem.Validate]).
 //
 //	it, err := acquiring.NewBasketItem("Кава", "SKU-1", 2, money.UAH(45).Minor,
 //	    acquiring.WithUnit("шт."), acquiring.WithBasketTax(20))
@@ -183,6 +187,18 @@ func (b *Basket) Total() int64 {
 	return sum
 }
 
+// hasDiscounts reports whether any accepted line carries discounts or
+// surcharges.
+func (b *Basket) hasDiscounts() bool {
+	for _, it := range b.items {
+		if len(it.Discounts) > 0 {
+			return true
+		}
+	}
+
+	return false
+}
+
 // Len returns the number of accepted items.
 func (b *Basket) Len() int { return len(b.items) }
 
@@ -200,16 +216,22 @@ func (b *Basket) Items() ([]BasketItem, error) {
 	return out, nil
 }
 
-// Build validates that the basket's line totals add up to wantTotal
-// (the invoice Amount) and returns the items. Pass wantTotal = 0 to
-// skip the cross-check and just return the items. A mismatch is the
-// classic "basket doesn't equal the charge" rejection from Mono;
-// catching it locally saves a round-trip.
+// Build checks that the basket's line totals add up to wantTotal (the
+// invoice Amount) and returns the items. Pass wantTotal = 0 to skip
+// the cross-check and just return the items.
+//
+// The cross-check is a local sanity check, not a rule the docs state:
+// the docs only show amount = total in their single-item example. It
+// is skipped automatically when any line carries Discounts, because a
+// discount or surcharge legitimately moves the charge away from the
+// sum of line totals. Basket-wide discounts
+// ([MerchantPaymInfo.Discounts]) are not visible to the Basket — pass
+// wantTotal = 0 when you use them.
 func (b *Basket) Build(wantTotal int64) ([]BasketItem, error) {
 	if b.err != nil {
 		return nil, b.err
 	}
-	if wantTotal != 0 {
+	if wantTotal != 0 && !b.hasDiscounts() {
 		if got := b.Total(); got != wantTotal {
 			return nil, fmt.Errorf("%w: basket total=%d, invoice amount=%d", ErrBasketTotal, got, wantTotal)
 		}

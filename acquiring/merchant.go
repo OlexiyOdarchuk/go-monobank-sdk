@@ -28,8 +28,9 @@ func (c *Client) MerchantDetails(ctx context.Context) (*MerchantDetails, error) 
 // Employees lists the merchant's active employees (for example,
 // tip recipients). IDs from this list go into
 // CreateInvoiceRequest.TipsEmployeeID.
-// Still linked to the older ReDoc mirror: monobank.ua/api-docs has
-// no page for this endpoint.
+// Described only in the older ReDoc spec: monobank.ua/api-docs has no
+// page for this endpoint, and its invoice pages no longer list
+// tipsEmployeeId.
 // https://api.monobank.ua/docs/acquiring.html#tag/Vyklyki-dlya-mercha/paths/~1api~1merchant~1employee~1list/get
 func (c *Client) Employees(ctx context.Context) ([]Employee, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "/api/merchant/employee/list", http.NoBody)
@@ -46,9 +47,10 @@ func (c *Client) Employees(ctx context.Context) ([]Employee, error) {
 // PubKey returns the merchant public key (a base64-encoded PEM x.509
 // ECDSA key on NIST P-256) used to verify acquiring webhook
 // signatures. Parse the Key field via [ServerKey.Public] or
-// [ParsePubKey] and cache it — the bank rotates the key rarely, but
-// it can change. Unlike /bank/sync, this is a separate key for the
-// acquiring webhooks.
+// [ParsePubKey] and cache it: the docs say the key can be cached and
+// re-requested once verification with the current key stops working,
+// rather than fetched on every webhook. Unlike /bank/sync, this is a
+// separate key for the acquiring webhooks.
 // https://monobank.ua/api-docs/acquiring/dev/webhooks/get--api--merchant--pubkey
 func (c *Client) PubKey(ctx context.Context) (*ServerKey, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "/api/merchant/pubkey", http.NoBody)
@@ -78,10 +80,11 @@ func (c *Client) Submerchants(ctx context.Context) ([]Submerchant, error) {
 	return out.List, nil
 }
 
-// Statement returns the statement for the period for this merchant.
-// A zero to means "up to now". code (optional) filters by submerchant.
-// Each row carries CancelList — the refund history for a specific
-// invoice.
+// Statement returns the statement for the period for this merchant,
+// ordered from the newest date to the oldest. A zero to means "up to
+// now". code (optional) filters by submerchant. Each row carries
+// CancelList — the refund history for a specific invoice — and, for
+// split payments, SplitReceiverList.
 // https://monobank.ua/api-docs/acquiring/methods/split/get--api--merchant--statement
 func (c *Client) Statement(ctx context.Context, from, to time.Time, code string) ([]StatementInvoice, error) {
 	q := url.Values{}

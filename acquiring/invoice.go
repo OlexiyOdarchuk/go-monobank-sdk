@@ -41,8 +41,12 @@ func (c *Client) CreateInvoice(ctx context.Context, in *CreateInvoiceRequest) (*
 
 // InvoiceStatus returns the invoice's current state: status (created
 // / processing / hold / success / failure / reversed / expired),
-// card and payment-system details, and the refund history. Use it
-// for polling when WebHookURL is not configured.
+// card and payment-system details, and the refund history.
+//
+// The docs position it as a resynchronization tool: "do not use the
+// service as the main mechanism for checking an invoice's status after
+// an operation" — prefer webhooks, and call this when you suspect you
+// missed one (see also [Client.PollInvoice]).
 // https://monobank.ua/api-docs/acquiring/methods/ia/get--api--merchant--invoice--status
 func (c *Client) InvoiceStatus(ctx context.Context, invoiceID string) (*InvoiceStatusResponse, error) {
 	if invoiceID == "" {
@@ -91,7 +95,9 @@ func (c *Client) CancelInvoice(ctx context.Context, in *CancelRequest) (*CancelR
 // previously authorized amount. You may pass Amount less than the
 // original — only that amount is then captured from the card, the
 // remainder of the authorized funds is released (partial
-// finalization).
+// finalization). The current docs mark Amount as required; see
+// [FinalizeRequest.Amount]. Items are needed for fiscalization when
+// the finalized amount differs from the original payment.
 // https://monobank.ua/api-docs/acquiring/methods/ia/post--api--merchant--invoice--finalize
 func (c *Client) FinalizeInvoice(ctx context.Context, in *FinalizeRequest) (*FinalizeResponse, error) {
 	if in == nil {
@@ -133,9 +139,10 @@ func (c *Client) RemoveInvoice(ctx context.Context, invoiceID string) error {
 	return c.c.Do(req, nil, http.StatusOK)
 }
 
-// FiscalChecks returns the fiscal checks attached to an invoice (via
-// Checkbox or Monopay). One invoice may have multiple checks: a sale
-// and a return.
+// FiscalChecks returns the fiscal checks attached to an invoice
+// (fiscalized via Checkbox, monopay or Vchasno.Kasa — see
+// [FiscalizationSource]). One invoice may have multiple checks: a
+// sale and a return.
 // https://monobank.ua/api-docs/acquiring/extras/prro/get--api--merchant--invoice--fiscal-checks
 func (c *Client) FiscalChecks(ctx context.Context, invoiceID string) ([]FiscalCheck, error) {
 	if invoiceID == "" {
@@ -159,7 +166,8 @@ func (c *Client) FiscalChecks(ctx context.Context, invoiceID string) ([]FiscalCh
 }
 
 // Receipt returns the base64-encoded PDF receipt for an invoice. If
-// email is non-empty, the bank also sends a copy by email.
+// email is non-empty, the bank also sends a copy by email. The docs
+// note that this method does not work with a test token.
 // https://monobank.ua/api-docs/acquiring/methods/ia/get--api--merchant--invoice--receipt
 func (c *Client) Receipt(ctx context.Context, invoiceID, email string) (*ReceiptResponse, error) {
 	if invoiceID == "" {
@@ -209,9 +217,14 @@ func (c *Client) PaymentDirect(ctx context.Context, in *PaymentDirectRequest) (*
 
 // SyncPayment is a synchronous charge for Apple Pay/Google Pay and
 // tokenized PAN flows. Requires extended merchant scope (PCI DSS).
-// Unlike [Client.PaymentDirect] (raw PAN+CVV), here the payload is
-// tokens that come straight from the Apple Pay / Google Pay SDK.
-// Still linked to the older ReDoc mirror: monobank.ua/api-docs has
+// Unlike [Client.PaymentDirect] (raw PAN+CVV), the Apple Pay / Google
+// Pay payloads here carry data already extracted from the wallet's
+// crypto-container (DPAN token, ECI, cryptogram) — see
+// [ApplePayPayload]. The current Apple Pay and Google Pay guides send
+// the raw encrypted token through [Client.WalletPayment] instead
+// (AToken / GToken).
+//
+// Described only in the older ReDoc spec: monobank.ua/api-docs has
 // no page for this endpoint.
 // https://api.monobank.ua/docs/acquiring.html#tag/Vyklyki-dlya-mercha-z-rozshyrenym-dostupom/paths/~1api~1merchant~1invoice~1sync-payment/post
 func (c *Client) SyncPayment(ctx context.Context, in *SyncPaymentRequest) (*SyncPaymentResponse, error) {

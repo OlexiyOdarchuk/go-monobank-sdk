@@ -36,8 +36,14 @@ func TestNewBasketItem_validation(t *testing.T) {
 	_, err = acquiring.NewBasketItem("Name", "C", 0, 100)
 	require.ErrorIs(t, err, acquiring.ErrBasketQty)
 
-	_, err = acquiring.NewBasketItem("Name", "C", 1, 0)
+	_, err = acquiring.NewBasketItem("Name", "C", 1, -1)
 	require.ErrorIs(t, err, acquiring.ErrBasketSum)
+
+	// A zero-priced line (for example, a gift) is allowed: the docs
+	// require sum but set no lower bound.
+	it, err := acquiring.NewBasketItem("Подарунок", "GIFT", 1, 0)
+	require.NoError(t, err)
+	assert.Equal(t, int64(0), it.Total)
 }
 
 func TestBasketItem_Validate_totalMismatch(t *testing.T) {
@@ -66,6 +72,16 @@ func TestBasket_Build_amountMismatch(t *testing.T) {
 	b := acquiring.NewBasket().AddItem("Кава", "SKU-1", 1, 4500)
 	_, err := b.Build(9999)
 	require.ErrorIs(t, err, acquiring.ErrBasketTotal)
+}
+
+func TestBasket_Build_skipsCheckWithDiscounts(t *testing.T) {
+	disc := acquiring.Adjustment{Type: acquiring.AdjustmentDiscount, Mode: acquiring.AdjustmentValue, Value: 500}
+	b := acquiring.NewBasket().
+		AddItem("Кава", "SKU-1", 1, 4500, acquiring.WithBasketDiscounts(disc))
+	// The charge after a 5.00 discount is 40.00, not the 45.00 line total.
+	items, err := b.Build(4000)
+	require.NoError(t, err)
+	require.Len(t, items, 1)
 }
 
 func TestBasket_firstErrorWins(t *testing.T) {

@@ -42,8 +42,10 @@ type WebhookHandlerOptions struct {
 
 	// OnEvent is required. It receives the verified, parsed invoice
 	// state (the same shape as [Client.InvoiceStatus]). Returning a
-	// non-nil error makes the handler respond 500 so Mono retries
-	// (after 60s and 600s); nil → 200 (ack).
+	// non-nil error makes the handler respond 500 so Mono retries (up
+	// to three more times; the docs give no timing); nil → 200 (ack).
+	// Events may arrive out of order — compare modifiedDate with what
+	// you stored before applying a state (see [ParseWebhook]).
 	OnEvent func(ctx context.Context, inv *InvoiceStatusResponse) error
 
 	// Dedup is optional but strongly recommended. When set, the
@@ -55,8 +57,9 @@ type WebhookHandlerOptions struct {
 
 	// MaxAge, when > 0, rejects payloads whose modifiedDate is older
 	// than MaxAge (via [VerifyWebhookFresh]) — a cheap replay
-	// mitigation. Leave room for Mono's own 60s/600s retries; ~15
-	// minutes is a sane production value. Zero disables the check.
+	// mitigation. Leave room for Mono's own retries, whose timing is
+	// undocumented; ~15 minutes is a starting point. Zero disables the
+	// check.
 	MaxAge time.Duration
 
 	// OnError is optional. It receives internal failures the handler
@@ -71,14 +74,18 @@ type WebhookHandlerOptions struct {
 
 // WebhookHandler is a ready http.Handler for acquiring webhooks.
 //
-//   - GET returns 200 — Mono pings the URL to confirm the
-//     subscription is alive.
+//   - GET returns 200. The acquiring docs describe no GET request to
+//     the webhook URL; this is a harmless convenience for health
+//     checks.
 //   - POST reads the body (size-capped), verifies X-Sign against the
 //     cached key (refetching the key once, throttled, if the first
 //     verify fails), optionally enforces freshness, parses the
 //     invoice state, filters duplicates via Dedup, and runs OnEvent.
-//     Bad signature → 401; stale → 401; OnEvent error → 500 (Mono
-//     retries); otherwise 200.
+//     Bad signature → 401; stale → 401; malformed body → 400;
+//     oversized body → 413; OnEvent error → 500; otherwise 200.
+//
+// Mono retries any non-200 answer up to three more times, so every
+// rejection above is followed by redeliveries of the same body.
 //
 // It is a plain http.Handler — mount it on net/http, chi, gin, etc.
 type WebhookHandler struct {
@@ -249,8 +256,9 @@ func (h *WebhookHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 // verify checks the signature against the cached key; on failure it
-// refetches the key once (throttled) and retries — the documented
-// recovery for a rotated key. When MaxAge is set, it then enforces
+// refetches the key once (throttled) and retries — the docs advise
+// requesting a new key when verification with the current one stops
+// working. When MaxAge is set, it then enforces
 // freshness on the parsed modifiedDate.
 func (h *WebhookHandler) verify(ctx context.Context, key *ecdsa.PublicKey, body []byte, xSign string) error {
 	err := VerifyWebhook(key, body, xSign)

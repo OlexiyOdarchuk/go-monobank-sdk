@@ -10,8 +10,13 @@ import (
 )
 
 // Wallet returns the list of cards stored under the given walletID.
-// Pass "" to receive every merchant card. WalletID is usually your
-// user-ID (one person — one wallet with their cards).
+// The docs mark walletId as optional but do not say what an empty one
+// returns; the SDK then omits the parameter.
+//
+// Pass the walletId the bank returned in [WalletData] once its status
+// is "created", not the one you sent: if the card was already
+// tokenized, the bank keeps the walletId of the first token and
+// ignores yours (see [SaveCardData.WalletID]).
 // https://monobank.ua/api-docs/acquiring/extras/tokens/get--api--merchant--wallet
 func (c *Client) Wallet(ctx context.Context, walletID string) ([]WalletCard, error) {
 	q := url.Values{}
@@ -50,10 +55,15 @@ func (c *Client) DeleteCard(ctx context.Context, cardToken string) error {
 	return c.c.Do(req, nil, http.StatusOK)
 }
 
-// WalletPayment charges a previously tokenized card (CardToken).
-// InitiationKind ("merchant" or "client") matters for compliance:
-// "merchant" — a repeat charge initiated by you (recurring),
-// "client" — the client explicitly consented here and now.
+// WalletPayment charges a previously tokenized card (CardToken), or a
+// raw Google Pay / Apple Pay token (GToken / AToken, per the wallet
+// guides). InitiationKind ("merchant" or "client") is required by the
+// schema: "merchant" — a merchant-initiated charge the client does not
+// confirm (for example, recurring); "client" — the client pays with a
+// saved card on demand. PaymentType accepts debit (default) or hold.
+//
+// Set the X-Cms / X-Cms-Version headers with [WithCMS] if you build a
+// payment module for a CMS.
 // https://monobank.ua/api-docs/acquiring/extras/tokens/post--api--merchant--wallet--payment
 func (c *Client) WalletPayment(ctx context.Context, in *WalletPaymentRequest) (*WalletPaymentResponse, error) {
 	if in == nil {
