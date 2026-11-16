@@ -143,3 +143,55 @@ func TestCancelQRCart_emptyQRID(t *testing.T) {
 	assert.ErrorIs(t, err, installment.ErrEmptyQRID)
 	assert.False(t, called)
 }
+
+func TestCreateQRCartWithResponse_returnsID(t *testing.T) {
+	cli, _ := newClient(t, func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "/api/v1/qr/cart", r.URL.Path)
+		w.WriteHeader(http.StatusCreated)
+		_, _ = w.Write([]byte(`{"id":"fa4a8249-336e-4e6d-9b85-79bc8be62377"}`))
+	})
+
+	out, err := cli.CreateQRCartWithResponse(context.Background(), &installment.CreateQRCartRequest{
+		QRID:         "qr-1",
+		StoreOrderID: "8d0f2f4e-1d1a-4c55-8c32-4f2b7c1e0a11",
+		Products:     []installment.Product{{Name: "Cat food", Count: 1, Sum: installment.NewMoney(10, 0)}},
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "fa4a8249-336e-4e6d-9b85-79bc8be62377", out.ID)
+}
+
+// 409: the store_order_id was reused or the QR code already has an
+// active cart.
+func TestCreateQRCartWithResponse_conflict(t *testing.T) {
+	cli, _ := newClient(t, func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusConflict)
+		_, _ = w.Write([]byte(`{"message":"cart already exists"}`))
+	})
+
+	out, err := cli.CreateQRCartWithResponse(context.Background(), &installment.CreateQRCartRequest{QRID: "qr-1"})
+	require.Error(t, err)
+	assert.Nil(t, out)
+	var apiErr *installment.APIError
+	require.ErrorAs(t, err, &apiErr)
+	assert.Equal(t, http.StatusConflict, apiErr.StatusCode)
+}
+
+func TestCreateQRCartWithResponse_validation(t *testing.T) {
+	cli, _ := newClient(t, func(http.ResponseWriter, *http.Request) {
+		t.Fatal("no request expected")
+	})
+	_, err := cli.CreateQRCartWithResponse(context.Background(), nil)
+	require.ErrorIs(t, err, installment.ErrNilRequest)
+	_, err = cli.CreateQRCartWithResponse(context.Background(), &installment.CreateQRCartRequest{})
+	require.ErrorIs(t, err, installment.ErrEmptyQRID)
+}
+
+// The deprecated method keeps ignoring the body, so an unparsable 201
+// is still a success.
+func TestCreateQRCart_ignoresBody(t *testing.T) {
+	cli, _ := newClient(t, func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusCreated)
+		_, _ = w.Write([]byte(`not json`))
+	})
+	require.NoError(t, cli.CreateQRCart(context.Background(), &installment.CreateQRCartRequest{QRID: "qr-1"}))
+}

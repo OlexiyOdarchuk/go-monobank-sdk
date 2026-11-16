@@ -235,10 +235,11 @@ func (c *Client) LogValue() slog.Value {
 // Mono uses this primitive both for outgoing requests (the SDK
 // computes it before sending) and for incoming callbacks (the SDK
 // verifies it via [Client.VerifyCallback]). If you need replay
-// protection on callbacks, deduplicate at your application layer
-// — for example by (order_id, state) or by Mono's own callback
-// nonce when one is supplied — because two different requests with
-// identical bodies will produce identical signatures.
+// protection on callbacks, deduplicate at your application layer —
+// for example by (order_id, state, order_sub_state), which is the
+// whole documented callback body; no nonce or timestamp is
+// documented — because two requests with identical bodies produce
+// identical signatures.
 func (c *Client) Sign(body []byte) string {
 	mac := hmac.New(sha256.New, c.secret)
 	mac.Write(body)

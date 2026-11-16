@@ -83,10 +83,9 @@ func TestIntegration_ValidateClient(t *testing.T) {
 	require.NoError(t, err, "live client validation must succeed")
 }
 
-// The QR cart is the pair this SDK added without ever calling it. The
-// create side is the interesting half: the docs publish no schema for
-// the 201 body and the element shape of `products` is an inference
-// from /api/order/create, so a 400 here means the inference was wrong.
+// The QR cart round trip: create must answer 201 with the cart id
+// (documented as QrCartIdentifierResponse), then the cart is
+// cancelled so the code is free again.
 //
 // MONO_QR_ID must be a QR code that belongs to CHAST_STORE_ID.
 func TestIntegration_QRCart(t *testing.T) {
@@ -97,7 +96,7 @@ func TestIntegration_QRCart(t *testing.T) {
 	}
 	cli, ctx := liveClient(t), liveContext(t)
 
-	err := cli.CreateQRCart(ctx, &installment.CreateQRCartRequest{
+	out, err := cli.CreateQRCartWithResponse(ctx, &installment.CreateQRCartRequest{
 		QRID:         qrID,
 		StoreOrderID: newUUID(t),
 		Products: []installment.Product{{
@@ -108,6 +107,7 @@ func TestIntegration_QRCart(t *testing.T) {
 		ResultCallback: callback,
 	})
 	require.NoError(t, err, "creating a QR cart must be accepted (201)")
+	assert.NotEmpty(t, out.ID, "the 201 body must carry the cart id")
 
 	// Always clean up: a cart left on the code would greet the next
 	// person who scans it.
