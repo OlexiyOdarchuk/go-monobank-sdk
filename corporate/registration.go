@@ -26,10 +26,11 @@ const (
 )
 
 // MaxRegistrationLogoBytes caps the size of [RegistrationRequest].Logo
-// the SDK is willing to ship: 1 MiB. Mono's manual review rejects
-// anything larger anyway, and the field travels over an
-// ECDSA-signed JSON body — accidentally embedding a multi-MB
-// screenshot would inflate every retry of the registration request.
+// the SDK is willing to ship: 1 MiB. This is the SDK's own guard, not
+// a documented bank limit — the spec sets no size or format for the
+// logo. The field travels in a signed JSON body, so accidentally
+// embedding a multi-MB screenshot would inflate every retry of the
+// registration request.
 const MaxRegistrationLogoBytes = 1 << 20
 
 // ErrLogoTooLarge is returned from [Client.Register] when
@@ -42,8 +43,13 @@ var ErrLogoTooLarge = errors.New("corporate: registration logo exceeds the size 
 //
 // Pubkey is a PEM-encoded secp256k1 public key (encoding/json
 // automatically base64-encodes []byte for the wire format). Logo is
-// the raw bytes of a PNG/JPEG image, also base64-encoded; the SDK
-// enforces a 1 MiB cap (see [MaxRegistrationLogoBytes]).
+// the raw bytes of the company logo image, also base64-encoded; the
+// spec names no image format. The SDK enforces a 1 MiB cap (see
+// [MaxRegistrationLogoBytes]).
+//
+// Per the spec, both registration endpoints take only X-Time and
+// X-Sign ("X-Time | URL"); the SDK additionally sends X-Key-Id (see
+// the package documentation).
 type RegistrationRequest struct {
 	Pubkey        []byte `json:"pubkey"`
 	Name          string `json:"name"`

@@ -12,10 +12,11 @@ import (
 )
 
 // ClientInfo returns the data of the client whose access was granted
-// via requestID. Which fields are populated depends on the
-// permissions [Client.Auth] requested: PermPI fills Name; PermSt
-// fills Accounts and unlocks statement reads; PermFOP exposes FOP
-// (sole-proprietor) accounts.
+// via requestID. Per the spec, "if the client has not granted the
+// right to read their personal data, only the list of accounts is
+// returned" — so Accounts comes back regardless of [auth.PermPI],
+// which is what fills Name. The spec does not say how [auth.PermSt]
+// or [auth.PermFOP] change the response.
 // https://api.monobank.ua/docs/corporate.html#tag/Klyentski-personalni-dani/paths/~1personal~1client-info/get
 func (c *Client) ClientInfo(ctx context.Context, requestID string) (*bank.ClientInfo, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "/personal/client-info", http.NoBody)
@@ -30,14 +31,21 @@ func (c *Client) ClientInfo(ctx context.Context, requestID string) (*bank.Client
 }
 
 // Transactions returns the statement for one of the accounts whose
-// access was granted via requestID. Same 31-day window limit as
-// [personal.Client.Transactions] — for wider ranges use
-// [Client.TransactionsRange].
+// access was granted via requestID. The spec caps one call at "31
+// days + 1 hour (2682000 seconds)"; the SDK's range helpers slice by
+// the more conservative [bank.MaxStatementWindow] — for wider ranges
+// use [Client.TransactionsRange].
+//
+// A zero to omits the {to} path segment; per the spec the bank then
+// uses the current time ("if not exist, will be using current
+// time").
 // https://api.monobank.ua/docs/corporate.html#tag/Klyentski-personalni-dani/paths/~1personal~1statement~1{account}~1{from}~1{to}/get
 func (c *Client) Transactions(ctx context.Context, requestID, accountID string, from, to time.Time) (bank.Transactions, error) {
 	uri := "/personal/statement/" + url.PathEscape(accountID) +
-		"/" + strconv.FormatInt(from.Unix(), 10) +
-		"/" + strconv.FormatInt(to.Unix(), 10)
+		"/" + strconv.FormatInt(from.Unix(), 10)
+	if !to.IsZero() {
+		uri += "/" + strconv.FormatInt(to.Unix(), 10)
+	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, uri, http.NoBody)
 	if err != nil {
@@ -51,15 +59,26 @@ func (c *Client) Transactions(ctx context.Context, requestID, accountID string, 
 }
 
 // TransactionsRange paginates [Client.Transactions] over an
-// arbitrary range, slicing it into consecutive 31-day windows and
-// concatenating the results. If to is zero or earlier than from,
-// it returns nil, nil.
+// arbitrary range, slicing it into consecutive
+// [bank.MaxStatementWindow] windows and concatenating the results.
+// A zero to means "until now", as in [Client.Transactions]. If to is
+// not after from, it returns nil, nil.
+//
+// On error the transactions fetched before the failure are returned
+// together with the error, so a caller can keep them and resume from
+// the last one.
+//
+// Unlike the personal API, the corporate spec states no per-call rate
+// limit for the statement, so consecutive windows are not paced.
 //
 // Mono's /personal/statement is inclusive on both ends, so the next
 // window starts at end+1s — a transaction at exactly the boundary
 // would otherwise appear in two chunks.
 func (c *Client) TransactionsRange(ctx context.Context, requestID, accountID string, from, to time.Time) (bank.Transactions, error) {
-	if to.IsZero() || !to.After(from) {
+	if to.IsZero() {
+		to = c.clock()
+	}
+	if !to.After(from) {
 		return nil, nil
 	}
 	var all bank.Transactions
@@ -74,7 +93,7 @@ func (c *Client) TransactionsRange(ctx context.Context, requestID, accountID str
 			},
 			func(tx bank.Transaction) bool { all = append(all, tx); return true },
 		); err != nil {
-			return nil, fmt.Errorf("range %s..%s: %w", cursor.Format(time.RFC3339), end.Format(time.RFC3339), err)
+			return all, fmt.Errorf("range %s..%s: %w", cursor.Format(time.RFC3339), end.Format(time.RFC3339), err)
 		}
 		next := end.Add(time.Second)
 		if !next.After(cursor) {

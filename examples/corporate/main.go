@@ -5,7 +5,7 @@
 //
 // Usage:
 //
-//	MONO_CORP_KEY=/path/to/priv.pem MONO_CALLBACK=https://yourapp/cb \
+//	MONO_CORP_KEY=/path/to/priv.pem [MONO_CALLBACK=https://yourapp/cb] \
 //	  go run ./examples/corporate
 //
 // The flow:
@@ -14,30 +14,29 @@
 //  2. corporate.Client.Auth(callbackURL, perms…) starts a request and
 //     returns AcceptURL — show this to the client (QR code or redirect).
 //  3. The client opens AcceptURL in their mono app and approves.
-//  4. Mono POSTs to your callback (or you poll CheckAuth).
+//  4. Mono sends a GET with X-Request-Id to your callback, if one was
+//     given; this example polls CheckAuth either way.
 //  5. With CheckAuth returning nil, call ClientInfo / Transactions /
 //     SetWebHook with the request id.
 package main
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log"
 	"os"
 	"strings"
 	"time"
 
-	monobank "github.com/OlexiyOdarchuk/go-monobank-sdk/v2"
 	"github.com/OlexiyOdarchuk/go-monobank-sdk/v2/auth"
 	"github.com/OlexiyOdarchuk/go-monobank-sdk/v2/corporate"
 )
 
 func main() {
 	keyPath := os.Getenv("MONO_CORP_KEY")
-	callback := os.Getenv("MONO_CALLBACK")
-	if keyPath == "" || callback == "" {
-		log.Fatal("MONO_CORP_KEY and MONO_CALLBACK env vars are required")
+	callback := os.Getenv("MONO_CALLBACK") // optional
+	if keyPath == "" {
+		log.Fatal("MONO_CORP_KEY env var is required")
 	}
 
 	pemBytes, err := os.ReadFile(keyPath)
@@ -85,9 +84,8 @@ func main() {
 			fmt.Println("Approved!")
 			break
 		}
-		var apiErr *monobank.APIError
-		if errors.As(err, &apiErr) && apiErr.StatusCode == 403 {
-			// 403 == not yet approved; keep polling.
+		if corporate.IsAuthPending(err) {
+			// 401 "Request is unauthorized yet": keep polling.
 			fmt.Print(".")
 			continue
 		}

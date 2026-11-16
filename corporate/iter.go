@@ -18,12 +18,16 @@ import (
 //	    process(tx)
 //	}
 //
-// If to is zero or earlier than from, yields nothing without an error.
+// A zero to means "until now". If to is not after from, the iterator
+// yields nothing and stops without an error.
 func (c *Client) TransactionsRangeIter(ctx context.Context, requestID, accountID string,
 	from, to time.Time) iter.Seq2[bank.Transaction, error] {
 
 	return func(yield func(bank.Transaction, error) bool) {
-		if to.IsZero() || !to.After(from) {
+		if to.IsZero() {
+			to = c.clock()
+		}
+		if !to.After(from) {
 			return
 		}
 		for cursor := from; !cursor.After(to); {

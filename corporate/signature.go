@@ -82,7 +82,7 @@ type Signer struct {
 // /personal/signature/create. Documents must contain 1..10 elements.
 // OneSigner defaults to true; false lets multiple signers sign the
 // documents. CallbackURL (optional) — Mono POSTs to it on status
-// changes.
+// changes, with a body shaped like [SignatureStatusResponse].
 type SignatureCreateRequest struct {
 	Documents   []Document `json:"documents"`
 	OneSigner   *bool      `json:"oneSigner,omitempty"`
@@ -98,9 +98,12 @@ type SignatureCreateResponse struct {
 }
 
 // SignatureStatusResponse is the body of GET
-// /personal/signature/status: an array of documents with their
-// current status and signer data.
+// /personal/signature/status: the request id plus an array of
+// documents with their current status and signer data. Per the spec,
+// the POST sent to [SignatureCreateRequest.CallbackURL] has the same
+// structure.
 type SignatureStatusResponse struct {
+	RequestID string     `json:"requestId,omitempty"`
 	Documents []Document `json:"documents"`
 }
 
@@ -132,6 +135,11 @@ func (c *Client) SignatureCreate(ctx context.Context, in *SignatureCreateRequest
 // SignatureStatus returns the current state of a monoKEP request by
 // requestID: the status of each document and signer data when
 // somebody has already signed.
+//
+// The spec defines X-Sign as "X-Time | URL" and lists this path with
+// its ?requestId= query; it does not say whether "URL" includes the
+// query string. The SDK signs the path only. Unverified against the
+// live API; the same applies to [Client.SignatureCancel].
 // https://api.monobank.ua/docs/corporate.html#tag/monoKEP/paths/~1personal~1signature~1status?requestId={requestId}/get
 func (c *Client) SignatureStatus(ctx context.Context, requestID string) (*SignatureStatusResponse, error) {
 	u := url.URL{

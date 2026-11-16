@@ -38,9 +38,15 @@ func TestTransactionsRangeIter_streams(t *testing.T) {
 	assert.Equal(t, int32(3), hits.Load())
 }
 
-func TestTransactionsRangeIter_zeroToReturnsZeroYields(t *testing.T) {
-	c, _ := New(stubMaker{})
-	for _, err := range c.TransactionsRangeIter(context.Background(), "rq", "acc", time.Now(), time.Time{}) {
+// A zero to means "until now"; with from at the clock's now the range
+// is empty, so nothing is requested and nothing is yielded.
+func TestTransactionsRangeIter_zeroToAtNowYieldsNothing(t *testing.T) {
+	c := newTestClient(t, func(http.ResponseWriter, *http.Request) {
+		t.Fatal("no request expected for an empty range")
+	})
+	now := time.Unix(1_700_000_000, 0)
+	c.now = func() time.Time { return now }
+	for _, err := range c.TransactionsRangeIter(context.Background(), "rq", "acc", now, time.Time{}) {
 		t.Fatal("expected zero yields, got", err)
 	}
 }

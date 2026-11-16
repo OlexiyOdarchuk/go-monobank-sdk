@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -119,13 +120,35 @@ func TestSignatureStatus(t *testing.T) {
 	c := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "/personal/signature/status", r.URL.Path)
 		assert.Equal(t, "r-42", r.URL.Query().Get("requestId"))
-		_, _ = w.Write([]byte(`{"documents":[{"name":"x","hash":"A","status":"signed"}]}`))
+		_, _ = w.Write([]byte(`{"requestId":"r-42","documents":[{"name":"x","hash":"A","status":"signed"}]}`))
 	})
 
 	out, err := c.SignatureStatus(context.Background(), "r-42")
 	require.NoError(t, err)
+	assert.Equal(t, "r-42", out.RequestID)
 	require.Len(t, out.Documents, 1)
 	assert.Equal(t, DocSigned, out.Documents[0].Status)
+}
+
+// The spec makes {to} optional ("if not exist, will be using current
+// time"): a zero to must drop the segment instead of sending the
+// zero time's Unix value.
+func TestTransactions_zeroToOmitsSegment(t *testing.T) {
+	from := time.Unix(1700000000, 0)
+	var paths []string
+	c := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		paths = append(paths, r.URL.Path)
+		_, _ = w.Write([]byte(`[]`))
+	})
+
+	_, err := c.Transactions(context.Background(), "rq", "acc", from, time.Time{})
+	require.NoError(t, err)
+	_, err = c.Transactions(context.Background(), "rq", "acc", from, from.Add(time.Hour))
+	require.NoError(t, err)
+	assert.Equal(t, []string{
+		"/personal/statement/acc/1700000000",
+		"/personal/statement/acc/1700000000/1700003600",
+	}, paths)
 }
 
 func TestSignatureCancel(t *testing.T) {
